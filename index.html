@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DigiLight — Painting Relighter</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314161a'/%3E%3Ccircle cx='11' cy='11' r='5' fill='%23ffca7a'/%3E%3Cpath d='M4 27c6-9 12-13 24-15v15z' fill='%234f8cff' opacity='.75'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --panel2: #23272f; --line: #2f343d;
+    --ink: #e8eaee; --dim: #9aa2b1; --accent: #4f8cff; --warn: #ffb020;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; grid-template-columns: minmax(0,1fr) 320px; overflow: hidden;
+  }
+  @media (max-width: 860px) { body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } }
+
+  /* ---- stage ---- */
+  /* min-height:0 lets this grid row actually shrink; without it the canvas
+     pushes the row taller than the viewport and slides under the panel. */
+  #stage { position: relative; display: grid; place-items: center; padding: 16px;
+           min-width: 0; min-height: 0; overflow: hidden; }
+  #wrap { position: relative; line-height: 0; box-shadow: 0 18px 60px rgba(0,0,0,.6); }
+  canvas { display: block; touch-action: none; }
+  .handle {
+    position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    border-radius: 50%; border: 2px solid rgba(255,255,255,.9);
+    cursor: grab; touch-action: none; transition: box-shadow .12s;
+  }
+  .handle.sel { box-shadow: 0 0 0 9px rgba(255,255,255,.18); }
+  .handle.off { opacity: .3; }
+  /* The chrome-sphere circle. Translucent so the highlight stays visible through
+     it — the point of the overlay is to check it sits on the sphere's outline. */
+  .sphere-ring {
+    position: absolute; transform: translate(-50%, -50%);
+    border-radius: 50%; border: 2px dashed rgba(120, 220, 255, .95);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.5);
+    pointer-events: none;
+  }
+  #hint {
+    position: absolute; left: 16px; right: 16px; bottom: 10px; color: var(--dim);
+    font: 11px/1.4 var(--mono); background: rgba(0,0,0,.72);
+    padding: 6px 9px; border-radius: 6px; max-width: 62ch; cursor: pointer;
+  }
+  #hint::after { content: ' ✕'; color: var(--ink); }
+  #hint.gone { display: none; }
+  @media (max-width: 860px) { #hint { font-size: 10px; max-height: 4.6em; overflow: hidden; } }
+
+  /* ---- panel ---- */
+  #panel { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding-bottom: 40px; }
+  @media (max-width: 860px) { #panel { border-left: 0; border-top: 1px solid var(--line); max-height: 52vh; } }
+  h2 {
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+    margin: 0; padding: 14px 14px 8px; border-bottom: 1px solid var(--line);
+  }
+  .grp { padding: 10px 14px 14px; border-bottom: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 92px 1fr 46px; gap: 8px; align-items: center; margin: 7px 0; }
+  .row label { color: var(--dim); font-size: 11.5px; }
+  .row output { font: 11px var(--mono); color: var(--ink); text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  select, button, input[type=color] {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 0 0 auto; }
+  .views { display: flex; flex-wrap: wrap; gap: 5px; }
+  .note { color: var(--dim); font-size: 11px; margin: 8px 0 0; }
+  .note b { color: var(--warn); font-weight: 600; }
+  .full { width: 100%; }
+  #err {
+    display: none; position: absolute; inset: 20px; background: #2a1416; border: 1px solid #6b2b2b;
+    color: #ffd7d7; padding: 14px; border-radius: 8px; font: 11px/1.5 var(--mono);
+    white-space: pre-wrap; overflow: auto; z-index: 50;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="wrap"><canvas id="gl"></canvas></div>
+    <div id="hint"></div>
+    <div id="err"></div>
+  </div>
+
+  <div id="panel">
+    <h2>DigiLight · Painting Relighter</h2>
+    <div class="grp"><button id="openPhoto" class="full">Open your painting</button><p class="note">1. Open a JPEG, PNG or WebP photograph.<br>2. Drag the light and adjust Power, Distance and Cone.<br>3. Tune surface relief, compare Original, then export.<br><b>Single-photo relief is estimated.</b> Colour changes can resemble texture; evenly lit photos contain less depth information.</p></div>
+    <h2>Source</h2>
+    <div class="grp">
+      <div class="row" style="grid-template-columns:92px 1fr">
+        <label>Image</label>
+        <select id="src">
+          <option value="synth">Single photo — synthetic (known relief)</option>
+          <option value="upload">Single photo — upload…</option>
+          <option value="psynth">Photometric stereo — synthetic capture</option>
+          <option value="pupload">Photometric stereo — upload shots…</option>
+        </select>
+      </div>
+      <div id="synthOpts">
+        <div class="row" style="grid-template-columns:92px 1fr">
+          <label>Shot with</label>
+          <select id="synthLight">
+            <option value="single">Single soft light</option>
+            <option value="raking">Raking light</option>
+            <option value="symmetric">Archival copy-stand (2 matched)</option>
+          </select>
+        </div>
+        <div class="row"><label>Paint detail</label><input type="range" id="pigment" min="0" max="1" step="0.05" value="0.35"><output></output></div>
+        <p class="note" id="synthNote"></p>
+      </div>
+      <input type="file" id="file" accept="image/jpeg,image/png,image/webp" class="full" style="display:none;margin-top:8px">
+
+      <div id="psOpts" style="display:none">
+        <div class="row"><label>Shots</label><input type="range" id="psShots" min="3" max="8" step="1" value="6"><output></output></div>
+        <div class="row"><label>Elevation</label><input type="range" id="psElev" min="15" max="75" step="1" value="45"><output></output></div>
+        <div class="row"><label>Elev. spread</label><input type="range" id="psSpread" min="0" max="25" step="1" value="15"><output></output></div>
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button id="psAmbient" class="on">Fit ambient</button>
+          <button id="psTruth">Show truth</button>
+          <button id="psSphere" title="Put a chrome sphere in the synthetic frame, so the light-direction reading can be checked against a rig whose angles are known.">Sphere in frame</button>
+        </div>
+        <div class="row"><label>Highlight clamp</label><input type="range" id="psClamp" min="0.1" max="1" step="0.02" value="1"><output></output></div>
+        <input type="file" id="psFiles" accept="image/jpeg,image/png,image/webp" multiple class="full" style="display:none;margin-bottom:8px">
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button id="psAlign" title="Measure the drift between exposures and correct it. The solve is per pixel, so a tripod that shifted between shots corrupts it silently.">Align frames</button>
+          <button id="psAlignReset" title="Put the frames back exactly as they were loaded.">As shot</button>
+        </div>
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button id="sphPlace" title="Drag a circle over the chrome sphere in the frame.">Place sphere</button>
+          <button id="sphRead" title="Read every exposure's light direction off the sphere.">Read light directions</button>
+          <button id="sphClear" title="Forget the circle.">Clear</button>
+        </div>
+        <p class="note" id="sphStatus"></p>
+        <div id="psShotList"></div>
+        <p class="note" id="psStatus"></p>
+        <p class="note">Measured normals and true albedo from N exposures with the light
+          moved. Fitting ambient needs the lights to differ in <i>elevation</i> — at one
+          elevation the system is singular and the solve is refused. Shoot at least one
+          more exposure than there are unknowns (3 without the ambient term, 4 with it):
+          with nothing spare the model fits perfectly by construction and the
+          <b>Fit</b> view cannot tell you anything.</p>
+        <p class="note">A <b>chrome sphere</b> in the corner of the frame turns the light
+          angles from recollection into measurement — the highlight sits where the surface
+          normal bisects the lamp and the eye, and that relation inverts exactly. Drag the
+          circle over it, then read. Accuracy scales with the sphere's <i>radius in pixels</i>:
+          a circle 3px off centre costs about 5&deg; on an 80px sphere and 1.6&deg; on a 300px
+          one, so shoot it large. Take the reading before cropping the sphere out.</p>
+        <p class="note"><b>Align frames</b> measures how far each exposure drifted and
+          shifts it back. The solve is per pixel and assumes every exposure sees the same
+          pixel, so half a pixel of tripod movement corrupts it while still returning a
+          normal. Matching is on colour ratio, which the lighting divides out exactly, so
+          it is not confused by the exposures being lit differently. The verdict is the
+          <b>fit</b> percentage before against after — if it does not improve, the frames
+          are put back and it says so.</p>
+      </div>
+    </div>
+
+    <h2>Surface recovery</h2>
+    <div class="grp" id="surfaceControls">
+      <div class="row"><label>Relief scale</label><input type="range" id="reliefScale" min="1" max="16" step="0.5" value="3"><output></output></div>
+      <div class="row"><label>Source azimuth</label><input type="range" id="azimuth" min="0" max="359" step="1" value="141"><output></output></div>
+      <div class="row"><label>Integration</label><input type="range" id="taps" min="2" max="32" step="1" value="8"><output></output></div>
+      <div class="row"><label>Strength</label><input type="range" id="reliefStrength" min="0" max="40" step="0.5" value="12"><output></output></div>
+      <div class="row"><label>Chroma reject</label><input type="range" id="chromaReject" min="0" max="1" step="0.05" value="0.6"><output></output></div>
+      <p class="note" id="chromaNote" style="display:none;margin:-2px 0 6px"></p>
+      <div class="row"><label>De-light albedo</label><input type="range" id="albedoSuppress" min="0" max="1" step="0.05" value="0.7"><output></output></div>
+      <p class="note">Azimuth is the direction the original photograph was lit from. Only the
+        slope <i>along</i> it is recoverable from one image; perpendicular is unconstrained.</p>
+    </div>
+
+    <h2>Material &amp; frame</h2>
+    <div class="grp">
+      <div class="row"><label>Relief amount</label><input type="range" id="reliefAmount" min="0" max="1" step="0.02" value="1"><output></output></div>
+      <div class="row"><label>Depth</label><input type="range" id="heightScale" min="0" max="0.02" step="0.0005" value="0.006"><output></output></div>
+      <div class="row"><label>Roughness</label><input type="range" id="roughness" min="0.05" max="1" step="0.01" value="0.55"><output></output></div>
+      <div class="row"><label>Specular</label><input type="range" id="specular" min="0" max="4" step="0.05" value="1"><output></output></div>
+      <div class="row"><label>Cast shadow</label><input type="range" id="shadow" min="0" max="1" step="0.05" value="0.7"><output></output></div>
+      <div class="row"><label>Shadow reach</label><input type="range" id="shadowSpread" min="1" max="12" step="0.5" value="4"><output></output></div>
+      <div class="row"><label>Occlusion</label><input type="range" id="ao" min="0" max="1" step="0.05" value="0.4"><output></output></div>
+      <div class="row"><label>Ambient</label><input type="range" id="ambient" min="0" max="1" step="0.02" value="0.12"><output></output></div>
+      <div class="row"><label>Exposure</label><input type="range" id="exposure" min="-3" max="3" step="0.05" value="0"><output></output></div>
+    </div>
+
+    <h2>Lights</h2>
+    <div class="tabs" id="tabs"></div>
+    <div class="grp" id="lightPanel"></div>
+
+    <h2>Export</h2>
+    <div class="grp">
+      <div class="row" style="grid-template-columns:92px 1fr">
+        <label>Format</label>
+        <select id="exportFmt">
+          <option value="image/png">PNG (lossless)</option>
+          <option value="image/jpeg">JPEG (quality 95)</option>
+        </select>
+      </div>
+      <div class="row"><label>Scale</label><input type="range" id="exportScale" min="10" max="100" step="5" value="100"><output>100</output></div>
+      <button id="exportBtn" class="full" style="margin-top:8px">Render at full resolution</button>
+      <p class="note" id="exportStatus"></p>
+      <p class="note">Rendered in tiles with an overlap margin, so the blur, integration
+        and shadow march all have context across tile borders. Surface settings are rescaled
+        to match the preview.</p>
+    </div>
+
+    <h2>View</h2>
+    <div class="grp">
+      <div class="views" id="views"></div>
+      <p class="note" id="viewNote"></p>
+    </div>
+  </div>
+
+  <noscript>Please enable JavaScript to use DigiLight.</noscript>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
