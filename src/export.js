@@ -26,7 +26,7 @@ export function requiredMargin(state) {
     const mean = Math.ceil(3 * (state.psMeanSigma || 16));
     return jacobi + mean + shadow + 4;
   }
-  const blur = Math.ceil(3 * state.reliefScale);
+  const blur = Math.ceil(12 * state.reliefScale);
   const integrate = Math.ceil(state.integrateTaps);
   return blur + integrate + shadow + 4;
 }
@@ -53,6 +53,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const maxTile = state.maxTile
     ? Math.max(64, state.maxTile)
     : Math.min(2048, Math.max(256, (caps.maxTexture || 4096) / 2));
+  if (2 * margin + 64 > caps.maxTexture) throw new Error('Surface reach exceeds GPU limits. Reduce texture size or export scale.');
   const interior = Math.max(64, maxTile - 2 * margin);
 
   const cols = Math.ceil(W / interior);

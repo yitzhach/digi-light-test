@@ -18,6 +18,11 @@ out vec4 outColor;
 uniform sampler2D uAlbedo;
 uniform sampler2D uNormal;   // rgb = normal, a = height
 uniform sampler2D uLin;      // original linear colour, for the before/after view
+uniform sampler2D uMask;
+uniform float uMetallic;
+uniform float uShadowSoftness;
+uniform float uHighlightRolloff;
+uniform float uSplit;
 
 uniform int   uLightCount;
 uniform vec3  uLightPos[${MAX_LIGHTS}];
@@ -25,6 +30,9 @@ uniform vec3  uLightColor[${MAX_LIGHTS}];
 uniform float uLightPower[${MAX_LIGHTS}];
 uniform float uLightCone[${MAX_LIGHTS}];     // 0 = flood, 1 = tight spot
 uniform float uLightEnabled[${MAX_LIGHTS}];
+uniform float uLightSoftness[${MAX_LIGHTS}];
+uniform float uLightFalloff[${MAX_LIGHTS}];
+uniform vec2 uLightAim[${MAX_LIGHTS}];
 
 uniform float uAspect;
 uniform vec2  uUVOffset;   // where this tile sits in the full image
@@ -66,14 +74,16 @@ vec3 F_Schlick(float u, vec3 f0) {
 }
 
 float sampleHeight(vec2 uv) {
-  return texture(uNormal, uv).a * uHeightScale;
+  vec2 globalUV = uUVOffset + uv * uUVScale;
+  return texture(uNormal, uv).a * uHeightScale * uReliefAmount * (texture(uMask, globalUV).r * 2.0);
 }
 
 /**
  * Horizon march: step along the light's planar direction and find the steepest
  * blocker. Smoother than a binary occlusion test and it costs the same.
  */
-float shadowMarch(vec2 uv, vec3 L) {
+float shadowMarch(vec2 uv, vec3 L, float softness) {
+  if (uShadow <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
   vec2 dxy = L.xy;
   float lxy = length(dxy);
   if (lxy < 1e-4) return 1.0;              // light overhead: nothing to cast
@@ -89,7 +99,7 @@ float shadowMarch(vec2 uv, vec3 L) {
     float rise = sampleHeight(suv) - h0;
     occ = max(occ, rise / t - slope);
   }
-  return 1.0 - clamp(occ * 40.0, 0.0, 1.0) * uShadow;
+  return 1.0 - smoothstep(0.0, mix(0.025, 0.7, softness), occ) * uShadow;
 }
 
 vec3 acesFilm(vec3 x) {
@@ -101,9 +111,15 @@ vec3 linearToSrgb(vec3 c) {
 }
 
 void main() {
+  vec2 gUV = uUVOffset + vUV * uUVScale;
+  if (uSplit >= 0.0 && gUV.x < uSplit) {
+    outColor = vec4(linearToSrgb(texture(uLin, vUV).rgb), 1.0); return;
+  }
   vec4 nh = texture(uNormal, vUV);
-  vec3 reliefN = normalize(nh.rgb * 2.0 - 1.0);
-  float height = nh.a;
+  float mask = texture(uMask, gUV).r * 2.0;
+  vec3 rawN = nh.rgb * 2.0 - 1.0;
+  vec3 reliefN = normalize(vec3(rawN.xy * mask, rawN.z));
+  float height = nh.a * mask * uReliefAmount;
 
   if (uViewMode == 1) { outColor = vec4(reliefN * 0.5 + 0.5, 1.0); return; }
   if (uViewMode == 2) { float v = height * 8.0 + 0.5; outColor = vec4(vec3(v), 1.0); return; }
@@ -118,14 +134,13 @@ void main() {
   vec3 N = normalize(mix(vec3(0.0, 0.0, 1.0), reliefN, uReliefAmount));
 
   // Position in whole-image space, so a light stays put as tiles change.
-  vec2 gUV = uUVOffset + vUV * uUVScale;
   vec3 P = vec3(gUV.x, gUV.y * uAspect, 0.0);
   vec3 V = normalize(vec3(0.5, 0.5 * uAspect, 1.6) - P);
   float NoV = max(dot(N, V), 1e-4);
 
   float rough = clamp(uRoughness, 0.03, 1.0);
   float a = rough * rough;
-  vec3 f0 = vec3(0.04 * uSpecular);
+  vec3 f0 = mix(vec3(0.04 * uSpecular), clamp(albedo, 0.0, 1.0), uMetallic);
 
   vec3 acc = vec3(0.0);
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
@@ -141,18 +156,19 @@ void main() {
 
     // Inverse square, referenced to a half-width distance so that the Distance
     // slider lands on sane values instead of needing a power of ten of Power.
-    float atten = 0.25 / (dist * dist);
+    float atten = pow(0.5 / dist, uLightFalloff[i]);
 
     // Cone: L.z is the cosine of the angle off the plane normal, so the spot
     // test falls out without needing a separate aim vector while the light
     // points straight at the surface.
     float cone = clamp(uLightCone[i], 0.0, 1.0);
     float cosOuter = mix(0.02, 0.985, cone);
-    float cosInner = mix(0.0, 0.999, cone * 0.92);
-    float spot = smoothstep(cosOuter, max(cosInner, cosOuter + 1e-3), L.z);
+    float cosInner = mix(cosOuter + 0.001, 1.0, uLightSoftness[i]);
+    vec3 aim = normalize(vec3(uLightAim[i].x - lp.x, (uLightAim[i].y - lp.y) * uAspect, -lp.z));
+    float spot = cone < 0.01 ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
     if (spot <= 0.0) continue;
 
-    float shadow = shadowMarch(vUV, L);
+    float shadow = shadowMarch(vUV, L, clamp(uShadowSoftness + uLightSoftness[i] * 0.25, 0.0, 1.0));
 
     vec3 H = normalize(L + V);
     float NoH = max(dot(N, H), 0.0);
@@ -163,7 +179,7 @@ void main() {
     vec3 F = F_Schlick(VoH, f0);
 
     vec3 spec = D * Vis * F;
-    vec3 diff = albedo * (1.0 - F) / PI;
+    vec3 diff = albedo * (1.0 - F) * (1.0 - uMetallic) / PI;
 
     acc += (diff + spec) * uLightColor[i] * uLightPower[i] * NoL * atten * spot * shadow;
   }
@@ -175,13 +191,16 @@ void main() {
   acc += albedo * uAmbientColor * uAmbient * ao;
 
   acc *= exp2(uExposure);
-  outColor = vec4(linearToSrgb(acesFilm(acc)), 1.0);
+  vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
+  outColor = vec4(linearToSrgb(mapped), 1.0);
 }`;
 
 export class Shader {
   constructor(glctx) {
     this.glctx = glctx;
     this.prog = program(glctx.gl, SHADE_FS, 'shade');
+    this.maskTex = glctx.gl.createTexture();
+    this.maskVersion = -1;
   }
 
   /**
@@ -194,10 +213,22 @@ export class Shader {
     if (!state.exporting) bindTarget(gl, null);
     gl.viewport(0, 0, viewW, viewH);
     gl.useProgram(p.program);
+    if (this.maskVersion !== (state.maskVersion ?? 0)) {
+      gl.activeTexture(gl.TEXTURE0 + 3);
+      gl.bindTexture(gl.TEXTURE_2D, this.maskTex);
+      if (state.maskCanvas) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, state.maskCanvas);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128,128,128,255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.maskVersion = state.maskVersion ?? 0;
+    }
     bindTextures(gl, p, [
       ['uAlbedo', targets.albedo.tex],
       ['uNormal', targets.normal.tex],
       ['uLin', targets.lin.tex],
+      ['uMask', this.maskTex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -206,12 +237,19 @@ export class Shader {
     const pow = new Float32Array(MAX_LIGHTS);
     const cone = new Float32Array(MAX_LIGHTS);
     const on = new Float32Array(MAX_LIGHTS);
+    const soft = new Float32Array(MAX_LIGHTS);
+    const falloff = new Float32Array(MAX_LIGHTS);
+    const aim = new Float32Array(MAX_LIGHTS * 2);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
       pow[i] = l.power;
       cone[i] = l.cone;
       on[i] = l.enabled ? 1 : 0;
+      soft[i] = l.softness ?? 0.5;
+      falloff[i] = l.falloff ?? 2;
+      aim[i * 2] = l.aimX ?? l.x;
+      aim[i * 2 + 1] = l.aimY ?? l.y;
     });
 
     const u = p.uniforms;
@@ -221,6 +259,13 @@ export class Shader {
     gl.uniform1fv(u.uLightPower, pow);
     gl.uniform1fv(u.uLightCone, cone);
     gl.uniform1fv(u.uLightEnabled, on);
+    gl.uniform1fv(u.uLightSoftness, soft);
+    gl.uniform1fv(u.uLightFalloff, falloff);
+    gl.uniform2fv(u.uLightAim, aim);
+    gl.uniform1f(u.uMetallic, state.metallic ?? 0);
+    gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
+    gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
+    gl.uniform1f(u.uSplit, state.exporting ? -1 : (state.compareSplit ?? -1));
     gl.uniform1f(u.uAspect, aspect);
     const t = tile || { ox: 0, oy: 0, sx: 1, sy: 1 };
     gl.uniform2f(u.uUVOffset, t.ox, t.oy);

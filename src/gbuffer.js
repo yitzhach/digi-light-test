@@ -76,8 +76,9 @@ void main() {
   float inv2s2 = 1.0 / (2.0 * sigma * sigma);
   vec4 sum = texture(uSrc, vUV);
   float wsum = 1.0;
+  float stride = max(1.0, ceil(sigma * 3.0 / 48.0));
   for (int i = 1; i <= ${MAX_TAPS}; i++) {
-    float fi = float(i);
+    float fi = float(i) * stride;
     if (fi > sigma * 3.0) break;
     float w = exp(-fi * fi * inv2s2);
     sum += w * (texture(uSrc, vUV + uStep * fi) + texture(uSrc, vUV - uStep * fi));
@@ -91,6 +92,9 @@ void main() {
 const SLOPE_FS = `${HEAD}
 uniform sampler2D uLin;    // linear rgb + luma
 uniform sampler2D uBlur;   // blurred linear rgb + luma
+uniform sampler2D uFine;
+uniform sampler2D uBroad;
+uniform vec3 uBands;
 uniform float uChromaReject;
 void main() {
   vec4 a = texture(uLin, vUV);
@@ -102,7 +106,9 @@ void main() {
   // on albedo, so a ratio makes the recovered height independent of how light or
   // dark the paint underneath happens to be. Without this, relief in dark passages
   // comes out flat and relief in light passages comes out exaggerated.
-  float h = log(L / Lb);
+  float Lf = max(texture(uFine, vUV).a, 1e-4);
+  float Lc = max(texture(uBroad, vUV).a, 1e-4);
+  float h = uBands.x * log(L / Lf) + uBands.y * log(Lf / Lb) + uBands.z * log(Lb / Lc);
 
   // Chroma reject: compare the fine-scale hue against the local average hue.
   // A pure shading change leaves chromaticity untouched; a pigment change moves it.
@@ -126,8 +132,9 @@ uniform float uTaps;
 void main() {
   float acc = 0.0;
   float total = 0.0;
+  float stride = max(1.0, uTaps / 32.0);
   for (int i = 1; i <= 32; i++) {
-    float t = float(i);
+    float t = float(i) * stride;
     if (t > uTaps) break;
     vec2 suv = vUV - uAzimuth * uTexel * t;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
@@ -163,13 +170,18 @@ const ALBEDO_FS = `${HEAD}
 uniform sampler2D uLin;
 uniform sampler2D uBlur;
 uniform float uSuppress;
+uniform sampler2D uBroad;
+uniform float uNeutralize;
+uniform float uMeanLuma;
 void main() {
   vec4 a = texture(uLin, vUV);
   vec4 b = texture(uBlur, vUV);
   float L = max(a.a, 1e-4);
   float Lb = max(b.a, 1e-4);
   float ratio = clamp(Lb / L, 0.25, 4.0);
-  outColor = vec4(a.rgb * mix(1.0, ratio, uSuppress), 1.0);
+  float broad = max(texture(uBroad, vUV).a, 0.02);
+  float neutral = mix(1.0, clamp(uMeanLuma / broad, 0.5, 2.0), uNeutralize);
+  outColor = vec4(a.rgb * mix(1.0, ratio, uSuppress) * neutral, 1.0);
 }`;
 
 export class GBuffer {
@@ -198,7 +210,7 @@ export class GBuffer {
       }
     }
     const mk = () => makeTarget(gl, w, h, { float: true, caps });
-    this.targets = { lin: mk(), tmp: mk(), blur: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
+    this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
     this.size = { w, h };
   }
 
@@ -235,8 +247,17 @@ export class GBuffer {
       gl.uniform1f(u.uSigma, reliefScale);
     });
 
-    run(this.progs.slope, T.slope, [['uLin', T.lin.tex], ['uBlur', T.blur.tex]], (u) => {
+    for (const [target, sigma] of [[T.fine, Math.max(0.5, reliefScale * 0.4)], [T.broad, reliefScale * 4]]) {
+      run(this.progs.blur, T.tmp, [['uSrc', T.lin.tex]], (u) => {
+        gl.uniform2f(u.uStep, 1 / w, 0); gl.uniform1f(u.uSigma, sigma);
+      });
+      run(this.progs.blur, target, [['uSrc', T.tmp.tex]], (u) => {
+        gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, sigma);
+      });
+    }
+    run(this.progs.slope, T.slope, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uFine', T.fine.tex], ['uBroad', T.broad.tex]], (u) => {
       gl.uniform1f(u.uChromaReject, chromaReject);
+      gl.uniform3f(u.uBands, opts.fineRelief ?? 1, opts.mediumRelief ?? 1, opts.broadRelief ?? 0.15);
     });
 
     const az = (azimuthDeg * Math.PI) / 180;
@@ -251,8 +272,10 @@ export class GBuffer {
       gl.uniform1f(u.uStrength, reliefStrength);
     });
 
-    run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex]], (u) => {
+    run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex]], (u) => {
       gl.uniform1f(u.uSuppress, albedoSuppress);
+      gl.uniform1f(u.uNeutralize, opts.neutralize ?? 0);
+      gl.uniform1f(u.uMeanLuma, opts.meanLuma ?? 0.25);
     });
 
     bindTarget(gl, null);

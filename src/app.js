@@ -13,6 +13,7 @@ import { chromaSignal } from './measure.js';
 import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
+import { initStudio } from './studio.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -161,6 +162,7 @@ async function setSource(src) {
 
   dirtySurface = true;
   render();
+  document.dispatchEvent(new Event('digilight:source'));
 }
 
 /**
@@ -273,7 +275,14 @@ function rebuildLightPanel() {
     rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
   };
 
-  head.append(mode, eye, del);
+  const dup = document.createElement('button'); dup.textContent = 'Duplicate';
+  dup.disabled = state.lights.length >= MAX_LIGHTS;
+  dup.onclick = () => {
+    state.lights.push({ ...l, rgb: [...l.rgb], x: Math.min(1.4, l.x + 0.08) });
+    state.selected = state.lights.length - 1;
+    rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
+  };
+  head.append(mode, eye, dup, del);
   p.appendChild(head);
 
   if (l.useKelvin) {
@@ -296,10 +305,14 @@ function rebuildLightPanel() {
   p.appendChild(slider('Distance', 0.08, 2.5, 0.01, l.z, (v) => { l.z = v; rebuildHandles(); }));
   p.appendChild(slider('Cone', 0, 1, 0.01, l.cone, (v) => { l.cone = v; },
     (v) => (v < 0.02 ? 'flood' : v > 0.97 ? 'spot' : v.toFixed(2))));
+  p.appendChild(slider('Softness', 0, 1, 0.02, l.softness ?? 0.5, v => { l.softness = v; }));
+  p.appendChild(slider('Falloff', 0, 2, 0.05, l.falloff ?? 2, v => { l.falloff = v; }));
+  p.appendChild(slider('Aim X', -0.4, 1.4, 0.01, l.aimX ?? l.x, v => { l.aimX = v; }));
+  p.appendChild(slider('Aim Y', -0.4, 1.4, 0.01, l.aimY ?? l.y, v => { l.aimY = v; }));
 
   const note = document.createElement('p');
   note.className = 'note';
-  note.textContent = 'Drag the dot on the canvas for X/Y; Distance is Z.';
+  note.textContent = 'Drag to move. Shift-drag changes height; Alt/Option-drag changes beam width. Falloff 2 is inverse-square; lower values are artistic adjustments. Softness is an approximation.';
   p.appendChild(note);
 }
 
@@ -325,15 +338,20 @@ function rebuildHandles() {
       wrap.querySelectorAll('.handle').forEach((h, j) => h.classList.toggle('sel', i === j));
       const el = d;
       el.setPointerCapture(e.pointerId);
+      const startY = e.clientY, startZ = l.z, startCone = l.cone;
       const move = (ev) => {
         const r = canvas.getBoundingClientRect();
-        l.x = Math.min(1.4, Math.max(-0.4, (ev.clientX - r.left) / r.width));
-        l.y = Math.min(1.4, Math.max(-0.4, 1 - (ev.clientY - r.top) / r.height));
+        if (ev.shiftKey) l.z = Math.min(2.5, Math.max(0.08, startZ + (startY - ev.clientY) / 180));
+        else if (ev.altKey) l.cone = Math.min(1, Math.max(0, startCone + (startY - ev.clientY) / 250));
+        else {
+          l.x = Math.min(1.4, Math.max(-0.4, (ev.clientX - r.left) / r.width));
+          l.y = Math.min(1.4, Math.max(-0.4, 1 - (ev.clientY - r.top) / r.height));
+        }
         el.style.left = `${l.x * 100}%`;
         el.style.top = `${(1 - l.y) * 100}%`;
         render();
       };
-      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); rebuildLightPanel(); rebuildHandles(); };
       el.addEventListener('pointermove', move);
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);
@@ -400,6 +418,7 @@ function render() {
 }
 function renderNow() {
   if (!srcTex || state.exporting) return;
+  document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
     if (dirtySurface) {
@@ -451,7 +470,7 @@ function renderNow() {
       // in the same view without re-rendering anything else.
       drawTargets = Object.assign({}, targets, { normal: { tex: truthTex } });
     }
-    if (state.mode === 'photometric' && state.viewMode === 4) {
+    if (state.mode === 'photometric' && (state.viewMode === 4 || state.compareSplit >= 0)) {
       drawTargets = { ...drawTargets, lin: gbuf.build(srcTex, imgW, imgH, state).lin };
     }
     if (state.viewMode === 5) {
@@ -556,6 +575,18 @@ async function boot() {
   wireExport();
   wirePhotometric();
   wireSpherePlacement();
+  initStudio({
+    state, canvas, render, applyColor,
+    source: () => fullSource,
+    dirty: () => { dirtySurface = true; },
+    refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
+    openSource: async image => {
+      state.mode = 'single'; $('src').value = 'upload';
+      $('synthOpts').style.display = 'none'; $('psOpts').style.display = 'none';
+      $('file').style.display = ''; $('surfaceControls').style.opacity = 1;
+      rebuildViews(); await setSource(image);
+    },
+  });
 
   // Test hook. The §8 #7 acceptance criterion — brushstroke shadows must invert
   // when the light crosses to the other side — is a claim about pixels, so it
@@ -646,11 +677,10 @@ function wireExport() {
       // from the preview.
       state.reliefScale = saved.reliefScale * ratio;
       state.integrateTaps = saved.integrateTaps * ratio;
-      // Gradients are taken per texel, so the slope-to-normal gain comes down as
+      // Gradients are taken per texel, so the slope-to-normal gain increases as
       // texels get smaller, or the export reads far harsher than the preview.
       state.reliefStrength = saved.reliefStrength * ratio;
-      if (state.reliefScale > 16) clamped.push(`blur ${state.reliefScale.toFixed(0)}px > 16px shader cap`);
-      if (state.integrateTaps > 32) clamped.push(`integration ${state.integrateTaps.toFixed(0)} > 32 tap cap`);
+      if (state.reliefScale > 16 || state.integrateTaps > 32) clamped.push('adaptive sampling for large export');
     }
     // The photometric path measures geometry directly, so nothing about the
     // surface needs rescaling; updateDerived() handles the two terms that do.
