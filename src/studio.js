@@ -18,6 +18,14 @@ export function initStudio(api) {
     <label class="selectRow">Lighting<select id="lightingPreset"><option value="">Choose lighting…</option></select></label>
     <button id="autoSetup">Auto setup</button><button id="resetLighting">Reset lighting</button>
     <p class="note" id="autoStatus">A restrained starting look. Adjust texture to suit your painting.</p>
+    </div><h2>My reusable presets</h2><div class="grp">
+    <input id="presetName" class="full" aria-label="Preset name" placeholder="Preset name" maxlength="120">
+    <div class="views"><button id="savePreset">Save current preset</button><button id="downloadPreset">Download current</button></div>
+    <label class="selectRow">My presets<select id="userPresetList"><option value="">Choose saved preset…</option></select></label>
+    <div class="views"><button id="applyPreset">Apply</button><button id="deletePreset">Delete</button><button id="importPreset">Import preset</button></div>
+    <label class="checkRow"><input id="defaultPreset" type="checkbox"> Automatically apply this preset to each new painting</label>
+    <input id="presetFile" type="file" accept=".json,.digilight-preset,application/json" hidden>
+    <p class="note" id="presetStatus">Presets include lighting, surface, material and shadow settings. Image-specific brush corrections stay with the project.</p>
     </div><h2>Texture & shadows</h2><div class="grp" id="creativeSliders"></div>
     <h2>Local texture correction</h2><div class="grp">
     <div class="views"><button id="brushOff" class="on">Move lights</button><button id="brushAdd">Add relief</button><button id="brushRemove">Remove relief</button></div>
@@ -38,7 +46,7 @@ export function initStudio(api) {
   const lights = document.createElement('details');lights.className='sectionDetails';lights.open=true;lights.innerHTML='<summary>Lights · drag dots on the painting</summary>';
   const tabs=$('tabs'), lightPanel=$('lightPanel');tabs.previousElementSibling.remove();lights.append(tabs,lightPanel);
   panel.insertBefore(lights,panel.querySelectorAll('h2')[1]);
-  for (const [id,title] of [['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
+  for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
     const details=document.createElement('details');details.className='sectionDetails';details.innerHTML=`<summary>${title}</summary>`;
     heading.replaceWith(details);details.append(group);
@@ -51,6 +59,7 @@ export function initStudio(api) {
   const extraKeys = Object.keys(defaults);
   const baseMap = { reliefScale:'reliefScale', azimuth:'azimuthDeg', taps:'integrateTaps', reliefStrength:'reliefStrength', chromaReject:'chromaReject', albedoSuppress:'albedoSuppress', reliefAmount:'reliefAmount', heightScale:'heightScale', roughness:'roughness', specular:'specular', shadow:'shadow', shadowSpread:'shadowSpread', ao:'ao', ambient:'ambient', exposure:'exposure' };
   const keys = [...new Set([...Object.values(baseMap), ...extraKeys, 'lights', 'selected'])];
+  const presetKeys = keys.filter(k => !['strokes', 'meanLuma'].includes(k));
   const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(state[k])]));
   const history = new History();
   let before = false, split = false, brush = '', restoring = false, loading = false, projectId = null;
@@ -174,9 +183,9 @@ export function initStudio(api) {
     api.canvas.addEventListener('pointermove',add);api.canvas.addEventListener('pointerup',end);api.canvas.addEventListener('pointercancel',end);
   });
   let dbPromise;
-  function db(){ return dbPromise ||= new Promise((resolve,reject)=>{const r=indexedDB.open('digilight-projects',1);r.onupgradeneeded=()=>r.result.createObjectStore('projects',{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
-  async function storage(mode,action){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction('projects',mode);const r=action(t.objectStore('projects'));t.oncomplete=()=>resolve(r.result);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('Save aborted'));});}
-  async function list(){const rows=await storage('readonly',s=>s.getAll());$('projectList').replaceChildren(new Option('Choose project…',''));for(const p of rows.sort((a,b)=>b.updated-a.updated))$('projectList').add(new Option(p.name,p.id));if(projectId)$('projectList').value=projectId;}
+  function db(){ return dbPromise ||= new Promise((resolve,reject)=>{const r=indexedDB.open('digilight-projects',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('projects'))r.result.createObjectStore('projects',{keyPath:'id'});if(!r.result.objectStoreNames.contains('presets'))r.result.createObjectStore('presets',{keyPath:'id'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);}); }
+  async function storage(store,mode,action){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction(store,mode);const r=action(t.objectStore(store));t.oncomplete=()=>resolve(r.result);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('Save aborted'));});}
+  async function list(){const rows=await storage('projects','readonly',s=>s.getAll());$('projectList').replaceChildren(new Option('Choose project…',''));for(const p of rows.sort((a,b)=>b.updated-a.updated))$('projectList').add(new Option(p.name,p.id));if(projectId)$('projectList').value=projectId;}
   function status(message){$('projectStatus').textContent=message;}
   async function project(){
     if(state.mode!=='single')throw new Error('Project saving currently supports single photographs. Export capture results as PNG.');
@@ -185,7 +194,7 @@ export function initStudio(api) {
     return {format:'digilight',version:1,id:projectId||crypto.randomUUID(),name:$('projectName').value.trim()||'Untitled painting',updated:Date.now(),image,settings:snapshot()};
   }
   async function busy(fn){if(loading||state.exporting)return;loading=true;try{await fn();}catch(e){status(e.message);}finally{loading=false;}}
-  async function save(variation){await busy(async()=>{const p=await project();if(variation){p.id=crypto.randomUUID();p.name+=' — variation';}await storage('readwrite',s=>s.put(p));projectId=p.id;$('projectName').value=p.name;await list();status('Saved in this browser. Download project for a portable backup.');});}
+  async function save(variation){await busy(async()=>{const p=await project();if(variation){p.id=crypto.randomUUID();p.name+=' — variation';}await storage('projects','readwrite',s=>s.put(p));projectId=p.id;$('projectName').value=p.name;await list();status('Saved in this browser. Download project for a portable backup.');});}
   $('saveProject').onclick=()=>save(false);$('saveVariation').onclick=()=>save(true);
   function validate(p){
     if(p?.format!=='digilight'||p.version!==1||!/^data:image\/(png|jpeg|webp);base64,/.test(p.image||''))throw new Error('Not a supported DigiLight project.');
@@ -201,12 +210,54 @@ export function initStudio(api) {
     return settings;
   }
   async function open(p){const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
-  $('loadProject').onclick=()=>busy(async()=>{const p=await storage('readonly',s=>s.get($('projectList').value));if(!p)throw new Error('Choose a saved project.');await open(p);});
+  $('loadProject').onclick=()=>busy(async()=>{const p=await storage('projects','readonly',s=>s.get($('projectList').value));if(!p)throw new Error('Choose a saved project.');await open(p);});
   $('downloadProject').onclick=()=>busy(async()=>{const p=await project();const blob=new Blob([JSON.stringify(p)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${p.name.replace(/[^a-z0-9_-]/gi,'_')}.digilight.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),4000);status('Project downloaded.');});
   $('importProject').onclick=()=>$('projectFile').click();
   $('projectFile').onchange=()=>busy(async()=>{const f=$('projectFile').files[0];if(!f)return;if(f.size>150*1024*1024)throw new Error('Project exceeds the 150 MB import limit.');await open(JSON.parse(await f.text()));$('projectFile').value='';});
-  list().catch(()=>status('Browser storage unavailable. Download project still works.'));
-  const onSource=()=>{sourceRevision++;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading)autoSetup();sync();history.reset(snapshot());historyUI();};
+  const defaultId=()=>{try{return localStorage.getItem('digilight-default-preset')||'';}catch{return '';}};
+  const setDefaultId=id=>{try{id?localStorage.setItem('digilight-default-preset',id):localStorage.removeItem('digilight-default-preset');}catch{throw new Error('Browser storage is unavailable.');}};
+  function presetStatus(message){$('presetStatus').textContent=message;}
+  function presetSettings(){return Object.fromEntries(presetKeys.map(k=>[k,structuredClone(state[k])]));}
+  function presetRecord(id=crypto.randomUUID(), name=$('presetName').value.trim()){
+    if(!name)throw new Error('Name the preset first.');
+    return {format:'digilight-preset',version:1,id,name:name.slice(0,120),updated:Date.now(),settings:presetSettings()};
+  }
+  function validatePreset(p){
+    if(p?.format!=='digilight-preset'||p.version!==1||!p.settings)throw new Error('Not a supported DigiLight preset.');
+    const merged={...snapshot(),...p.settings,strokes:[]};
+    const checked=validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:merged});
+    return {format:'digilight-preset',version:1,id:typeof p.id==='string'&&p.id?p.id:crypto.randomUUID(),name:String(p.name||'Imported preset').slice(0,120),updated:Number.isFinite(p.updated)?p.updated:Date.now(),settings:Object.fromEntries(presetKeys.map(k=>[k,checked[k]]))};
+  }
+  function applyUserPreset(p, message=true){
+    const checked=validatePreset(p);Object.assign(state,checked.settings);sync();if(message){history.push(snapshot());historyUI();}
+    $('presetName').value=checked.name;$('userPresetList').value=checked.id;$('defaultPreset').checked=defaultId()===checked.id;
+    if(message)presetStatus(`Applied “${checked.name}” to this painting.`);
+  }
+  async function listPresets(selectId=''){
+    const rows=await storage('presets','readonly',s=>s.getAll()), def=defaultId();
+    $('userPresetList').replaceChildren(new Option('Choose saved preset…',''));
+    for(const p of rows.sort((a,b)=>a.name.localeCompare(b.name)))$('userPresetList').add(new Option(`${p.id===def?'★ ':''}${p.name}`,p.id));
+    if(selectId)$('userPresetList').value=selectId;
+    $('defaultPreset').checked=!!selectId&&selectId===def;
+    return rows;
+  }
+  $('userPresetList').onchange=async()=>{
+    const id=$('userPresetList').value;$('defaultPreset').checked=!!id&&id===defaultId();
+    if(!id)return;const p=await storage('presets','readonly',s=>s.get(id));if(p)$('presetName').value=p.name;
+  };
+  $('savePreset').onclick=()=>busy(async()=>{
+    const chosen=$('userPresetList').value, p=presetRecord(chosen||crypto.randomUUID());
+    await storage('presets','readwrite',s=>s.put(p));await listPresets(p.id);presetStatus(`Saved “${p.name}”. It is available for every painting in this browser.`);
+  });
+  $('applyPreset').onclick=()=>busy(async()=>{const p=await storage('presets','readonly',s=>s.get($('userPresetList').value));if(!p)throw new Error('Choose a saved preset.');applyUserPreset(p);});
+  $('deletePreset').onclick=()=>busy(async()=>{const id=$('userPresetList').value;if(!id)throw new Error('Choose a saved preset.');const p=await storage('presets','readonly',s=>s.get(id));if(!confirm(`Delete “${p?.name||'this preset'}” from this browser?`))return;await storage('presets','readwrite',s=>s.delete(id));if(defaultId()===id)setDefaultId('');$('presetName').value='';await listPresets();presetStatus('Preset deleted. A downloaded copy can still be imported.');});
+  $('defaultPreset').onchange=()=>busy(async()=>{const id=$('userPresetList').value;if($('defaultPreset').checked&&!id){$('defaultPreset').checked=false;throw new Error('Choose and save a preset first.');}setDefaultId($('defaultPreset').checked?id:'');await listPresets(id);presetStatus($('defaultPreset').checked?'This preset will load after Auto setup whenever you open a new painting.':'Automatic preset loading is off.');});
+  function downloadJSON(data,filename){const blob=new Blob([JSON.stringify(data)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),4000);}
+  $('downloadPreset').onclick=()=>busy(async()=>{const p=presetRecord($('userPresetList').value||crypto.randomUUID());downloadJSON(p,`${p.name.replace(/[^a-z0-9_-]/gi,'_')}.digilight-preset.json`);presetStatus('Preset downloaded. Import this file in another browser or future project.');});
+  $('importPreset').onclick=()=>$('presetFile').click();
+  $('presetFile').onchange=()=>busy(async()=>{const f=$('presetFile').files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Preset exceeds the 1 MB import limit.');const p=validatePreset(JSON.parse(await f.text()));p.id=crypto.randomUUID();p.updated=Date.now();await storage('presets','readwrite',s=>s.put(p));await listPresets(p.id);applyUserPreset(p);$('presetFile').value='';presetStatus(`Imported and applied “${p.name}”.`);});
+  Promise.all([list(),listPresets()]).catch(()=>status('Browser storage unavailable. Downloaded projects and presets still work.'));
+  const onSource=async()=>{const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();history.reset(snapshot());historyUI();};
   document.addEventListener('digilight:source',onSource);
   rebuildMask();history.reset(snapshot());historyUI();
   window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,get sourceRevision(){return sourceRevision;}};

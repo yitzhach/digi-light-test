@@ -33,6 +33,16 @@ download a project JSON for backup or transfer. Project import validates setting
 Project saving currently supports the single-photo workflow. Multi-photo capture
 remains available in the expandable Demo & multi-photo capture section.
 
+**My reusable presets** save the current lights, surface recovery, material,
+shadows and exposure without saving the photograph or its local brush corrections.
+Name and save a preset, then choose it and click Apply on another painting. Mark a
+preset as automatic to apply it after Auto setup whenever a new painting is opened.
+Presets persist in this browser and website origin. **Download current** creates a
+portable `.digilight-preset.json` file; Import preset validates, saves and applies
+one of these files. Imported presets receive a new local identity, so they do not
+overwrite a same-named preset. A downloaded file is the durable backup if browser
+site data is cleared.
+
 Open your painting (JPEG, PNG or WebP). Drag a light, or use Horizontal/Vertical.
 Power changes intensity; Distance controls height above the painting; Cone varies
 from flood to spot. Add up to eight lights, choose Kelvin or custom colours.
@@ -69,7 +79,8 @@ Creative Studio was tested in headless Chromium with actual WebGL shaders:
 upload and auto setup; preset changes; Before/After and split image pixels; slider
 and light undo/redo; light dragging and duplication; brush pixels and stroke undo;
 local project save/reopen and variations; portable project import/export; PNG and
-scaled JPEG exports; preview restoration; mobile layout; photometric rendering
+scaled JPEG exports; reusable preset save/apply/default/download/import; preview
+restoration; mobile layout; photometric rendering
 and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
