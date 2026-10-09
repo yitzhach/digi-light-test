@@ -5,7 +5,8 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-09
-- Last code change on `main`: `a38309f` (2026-10-09) — merged PR #1: calibrated relief, spot↔diffused lights, Quick setup
+- Last code change on `main`: `2e83379` (2026-10-09) — merged `claude/charming-goodall-k3m6fo`:
+  light dots toggle, safe photo reopen + undoable new photo, view zoom, grazing light, blend layers
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -28,17 +29,17 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
-- 10-09 (branch `claude/charming-goodall-k3m6fo`, not merged): "Light dots: on/off" toggle (was
+- 10-09 (merged `2e83379`): "Light dots: on/off" toggle (was
   "Light guides") is the only thing hiding dots besides Sweep; grabbing a dot leaves
   Before/Split and brush mode; off-painting lights pin to the edge. Open your painting
   no longer resets edits; a new photo is undoable (history kept).
-- 10-09 (same branch): view zoom (− / 100% / + / Show all lights, keys - = 0); dots beyond
+- 10-09 (`2e83379`): view zoom (− / 100% / + / Show all lights, keys - = 0); dots beyond
   the view pin to its edge, dashed. Graze from left/right/top/bottom + "Grazing side
   light" preset: 3° off the wall, 1 painting width out, power compensated
   (`grazePower`), shadows full-strength and crisp. Lights may sit -1.5..2.5, z down
   to 0.01, angle to 1°, Brightness slider is logarithmic up to 1024. Shadow march
   takes up to 96 steps on long (grazing) shadows; reach cap 0.3 widths.
-- 10-09 (same branch): Layers · blend effects — up to 4 layers (Original or Relit
+- 10-09 (`2e83379`): Layers · blend effects — up to 4 layers (Original or Relit
   source, 13 blend modes, opacity, visible, order, duplicate). Composited at the end
   of `shade.js` in sRGB, so exports include them; `state.layers` is in history,
   projects and presets (validated in studio.js `validate`).
@@ -57,6 +58,8 @@ of a painting → estimate surface relief → relight with movable virtual light
 2. Optional "match original brightness" exposure after a lighting preset
 3. Project save for the multi-photo capture workflow (currently single-photo only)
 4. Large-export memory limits / preview vs export differences at very high res
+5. User feedback on grazing light (3° default; estimated relief gets glittery below
+   that) and on layers (maybe layer masks, or a "current result" source)
 
 ## Gotchas
 - Calibrated mode (`state.physical`, single photo only) derives heightScale,
