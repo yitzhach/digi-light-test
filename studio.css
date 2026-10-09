@@ -46,3 +46,12 @@ input[type=range]:disabled { opacity:.35; }
 .handle.pinned { border-style:dashed; }
 .lightTypes.graze { align-items:center; }
 .lightTypes.graze span { color:var(--dim); font-size:11px; margin-right:2px; }
+
+/* Blend layers */
+.layer { border:1px solid var(--line); border-radius:6px; padding:8px; margin:8px 0; background:var(--panel2); }
+.layer.off { opacity:.55; }
+.layerHead { display:flex; gap:4px; align-items:center; }
+.layerHead select { flex:1 1 0; min-width:0; }
+.layer .row { margin:6px 0 2px; }
+.layerTools { display:flex; gap:4px; justify-content:flex-end; }
+.layerTools button { padding:3px 8px; font-size:11px; }

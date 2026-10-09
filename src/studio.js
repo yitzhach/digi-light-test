@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -51,6 +51,9 @@ export function initStudio(api) {
   const lights = document.createElement('details');lights.className='sectionDetails';lights.open=true;lights.innerHTML='<summary>Lights · drag dots on the painting</summary>';
   const tabs=$('tabs'), lightPanel=$('lightPanel');tabs.previousElementSibling.remove();lights.append(tabs,lightPanel);
   panel.insertBefore(lights,panel.querySelectorAll('h2')[1]);
+  const layersBox = document.createElement('details');layersBox.className='sectionDetails';layersBox.id='layersSection';
+  layersBox.innerHTML='<summary>Layers · blend effects</summary><div class="grp"><p class="note">Copies of the photo blended over the relit result, like layer blend modes in an image editor. Pin light or Soft light of the original adds natural highlights. Top of the list is applied last.</p><div id="layerList"></div><button id="addLayer" class="full">+ Add layer</button></div>';
+  lights.after(layersBox);
   for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
     const details=document.createElement('details');details.className='sectionDetails';details.innerHTML=`<summary>${title}</summary>`;
@@ -69,7 +72,7 @@ export function initStudio(api) {
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
-    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [] };
+    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [] };
   const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0 };
   const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
@@ -137,8 +140,32 @@ export function initStudio(api) {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { row.querySelector('output').textContent = Number(row.querySelector('input').value).toFixed(2); });
-    syncQuick(); refresh(); rebuildMask(); historyUI();
+    syncQuick(); refresh(); rebuildMask(); renderLayers(); historyUI();
   }
+  // Shown top-first like an image editor's layer list; state.layers is bottom-first.
+  function renderLayers() {
+    const list=$('layerList'); list.textContent='';
+    const layers=state.layers||(state.layers=[]);
+    for (let i=layers.length-1;i>=0;i--) {
+      const L=layers[i], row=document.createElement('div'); row.className='layer'+(L.enabled?'':' off');
+      const opt=(items,v)=>items.map(([k,label])=>`<option value="${k}"${k===v?' selected':''}>${label}</option>`).join('');
+      row.innerHTML=`<div class="layerHead"><button class="lyVis${L.enabled?' on':''}" title="Show or hide this layer">${L.enabled?'Visible':'Hidden'}</button><select class="lyMode" aria-label="Blend mode">${opt(blendModes,L.mode)}</select><select class="lySrc" aria-label="Layer image">${opt(layerSources,L.source)}</select></div>
+        <div class="row"><label>Opacity</label><input class="lyOpacity" type="range" min="0" max="1" step="0.01" value="${L.opacity}" aria-label="Layer opacity"><output data-own>${Math.round(L.opacity*100)}%</output></div>
+        <div class="layerTools"><button class="lyUp" title="Move up"${i===layers.length-1?' disabled':''}>↑</button><button class="lyDown" title="Move down"${i===0?' disabled':''}>↓</button><button class="lyDup" title="Duplicate"${layers.length>=MAX_LAYERS?' disabled':''}>Duplicate</button><button class="lyDel">Delete</button></div>`;
+      const q=c=>row.querySelector(c);
+      q('.lyVis').onclick=()=>{L.enabled=!L.enabled;renderLayers();render();};
+      q('.lyMode').onchange=e=>{L.mode=e.target.value;render();};
+      q('.lySrc').onchange=e=>{L.source=e.target.value;render();};
+      q('.lyOpacity').oninput=e=>{L.opacity=+e.target.value;q('output').textContent=`${Math.round(L.opacity*100)}%`;render();};
+      const move=d=>{layers.splice(i,1);layers.splice(i+d,0,L);renderLayers();render();};
+      q('.lyUp').onclick=()=>move(1); q('.lyDown').onclick=()=>move(-1);
+      q('.lyDup').onclick=()=>{layers.splice(i+1,0,{...L});renderLayers();render();};
+      q('.lyDel').onclick=()=>{layers.splice(i,1);renderLayers();render();};
+      list.append(row);
+    }
+    $('addLayer').disabled=layers.length>=MAX_LAYERS;
+  }
+  $('addLayer').onclick=()=>{const layers=state.layers||(state.layers=[]);if(layers.length>=MAX_LAYERS)return;layers.push({mode:'pinLight',source:'original',opacity:0.35,enabled:true});renderLayers();render();};
   function restore(value) { if (!value || state.exporting) return; restoring = true; Object.assign(state,value); sync(); restoring = false; }
   $('undo').onclick = () => { if (!state.exporting) { stopSweep(); restore(history.undo()); } };
   $('redo').onclick = () => { if (!state.exporting) { stopSweep(); restore(history.redo()); } };
@@ -327,12 +354,14 @@ export function initStudio(api) {
     if(p?.format!=='digilight'||p.version!==1||!/^data:image\/(png|jpeg|webp);base64,/.test(p.image||''))throw new Error('Not a supported DigiLight project.');
     if(!p.settings||!Array.isArray(p.settings.lights)||p.settings.lights.length<1||p.settings.lights.length>8)throw new Error('Invalid project lights.');
     const settings={};
-    for(const k of keys)if(!['lights','strokes'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
+    for(const k of keys)if(!['lights','strokes','layers'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
+    const layers=p.settings.layers??[];if(!Array.isArray(layers)||layers.length>MAX_LAYERS)throw new Error('Invalid layers.');
+    settings.layers=layers.map(L=>{if(!blendModes.some(([k])=>k===L?.mode)||!layerSources.some(([k])=>k===L.source)||!Number.isFinite(L.opacity)||L.opacity<0||L.opacity>1)throw new Error('Invalid layer.');return {mode:L.mode,source:L.source,opacity:L.opacity,enabled:L.enabled!==false};});
     const strokes=p.settings.strokes||[];let points=0;if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');
     settings.strokes=strokes.map(s=>{if(!['add','remove'].includes(s.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});
     return settings;

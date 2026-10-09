@@ -38,6 +38,10 @@ of a painting → estimate surface relief → relight with movable virtual light
   (`grazePower`), shadows full-strength and crisp. Lights may sit -1.5..2.5, z down
   to 0.01, angle to 1°, Brightness slider is logarithmic up to 1024. Shadow march
   takes up to 96 steps on long (grazing) shadows; reach cap 0.3 widths.
+- 10-09 (same branch): Layers · blend effects — up to 4 layers (Original or Relit
+  source, 13 blend modes, opacity, visible, order, duplicate). Composited at the end
+  of `shade.js` in sRGB, so exports include them; `state.layers` is in history,
+  projects and presets (validated in studio.js `validate`).
 - 10-09 (PR #1): texture depth (mm) + painting width drive one height field for shading
   and shadows; even-light relief estimate for evenly lit photos (`photoDiffuse`);
   per-light source size, angular penumbra, physical shadow reach; Quick setup,

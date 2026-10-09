@@ -76,6 +76,17 @@ export function grazePower(dist, deg) {
 }
 const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
 
+// Blend layers: copies of the photo composited over the relit result, the way an
+// image editor's layer blend modes work (in display space, top of the list last).
+export const MAX_LAYERS = 4;
+export const blendModes = [
+  ['normal', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay'],
+  ['softLight', 'Soft light'], ['hardLight', 'Hard light'], ['colorDodge', 'Color dodge'],
+  ['colorBurn', 'Color burn'], ['linearLight', 'Linear light'], ['vividLight', 'Vivid light'],
+  ['pinLight', 'Pin light'], ['darken', 'Darken'], ['lighten', 'Lighten'],
+];
+export const layerSources = [['original', 'Original'], ['relit', 'Relit']];
+
 export const lightTypes = [['Spot', 0], ['Track', 0.25], ['Flood', 0.5], ['Softbox', 0.75], ['Window', 1]];
 
 // Lighting scenes. Positions are in painting widths (x right, y up, z out from the

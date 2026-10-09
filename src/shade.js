@@ -13,6 +13,9 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
+import { blendModes, layerSources, MAX_LAYERS } from './presets.js';
+
+const B = Object.fromEntries(blendModes.map(([k], i) => [k, i]));
 
 export const MAX_LIGHTS = 8;
 
@@ -59,6 +62,11 @@ uniform float uShadow;
 uniform float uAO;
 uniform float uExposure;
 uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original, 6 shadows
+
+uniform int   uLayerCount;
+uniform int   uLayerMode[${MAX_LAYERS}];
+uniform int   uLayerSource[${MAX_LAYERS}];   // 0 original photo, 1 relit image
+uniform float uLayerOpacity[${MAX_LAYERS}];
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -131,6 +139,29 @@ float shadowMarch(vec2 uv, vec3 L, float penumbra) {
   float open = smoothstep(-penumbra, penumbra, elev);
   float vis = smoothstep(-penumbra, penumbra, elev - atan(horizon)) / max(open, 1e-3);
   return 1.0 - (1.0 - min(vis, 1.0)) * uShadow;
+}
+
+// Layer blend modes, per channel on display values: a is what lies below, b the layer.
+float dodge(float a, float b) { return a <= 0.0 ? 0.0 : b >= 1.0 ? 1.0 : min(1.0, a / (1.0 - b)); }
+float burn(float a, float b) { return a >= 1.0 ? 1.0 : b <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - a) / b); }
+float softLightD(float a) { return a <= 0.25 ? ((16.0 * a - 12.0) * a + 4.0) * a : sqrt(a); }
+float blend1(int m, float a, float b) {
+  if (m == ${B.multiply}) return a * b;
+  if (m == ${B.screen}) return 1.0 - (1.0 - a) * (1.0 - b);
+  if (m == ${B.overlay}) return a < 0.5 ? 2.0 * a * b : 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+  if (m == ${B.softLight}) return b <= 0.5 ? a - (1.0 - 2.0 * b) * a * (1.0 - a) : a + (2.0 * b - 1.0) * (softLightD(a) - a);
+  if (m == ${B.hardLight}) return b < 0.5 ? 2.0 * a * b : 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+  if (m == ${B.colorDodge}) return dodge(a, b);
+  if (m == ${B.colorBurn}) return burn(a, b);
+  if (m == ${B.linearLight}) return clamp(a + 2.0 * b - 1.0, 0.0, 1.0);
+  if (m == ${B.vividLight}) return b < 0.5 ? burn(a, 2.0 * b) : dodge(a, 2.0 * b - 1.0);
+  if (m == ${B.pinLight}) return b < 0.5 ? min(a, 2.0 * b) : max(a, 2.0 * b - 1.0);
+  if (m == ${B.darken}) return min(a, b);
+  if (m == ${B.lighten}) return max(a, b);
+  return b;
+}
+vec3 blendLayer(int m, vec3 a, vec3 b) {
+  return vec3(blend1(m, a.r, b.r), blend1(m, a.g, b.g), blend1(m, a.b, b.b));
 }
 
 vec3 acesFilm(vec3 x) {
@@ -253,7 +284,17 @@ void main() {
 
   acc *= exp2(uExposure);
   vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
-  outColor = vec4(linearToSrgb(mapped), 1.0);
+  vec3 relit = clamp(linearToSrgb(mapped), 0.0, 1.0);
+  vec3 col = relit;
+  if (uLayerCount > 0) {
+    vec3 orig = clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0);
+    for (int i = 0; i < ${MAX_LAYERS}; i++) {
+      if (i >= uLayerCount) break;
+      vec3 b = uLayerSource[i] == 0 ? orig : relit;
+      col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i]);
+    }
+  }
+  outColor = vec4(col, 1.0);
 }`;
 
 export class Shader {
@@ -354,6 +395,19 @@ export class Shader {
     gl.uniform1f(u.uAO, state.ao);
     gl.uniform1f(u.uExposure, state.exposure);
     gl.uniform1i(u.uViewMode, state.viewMode);
+
+    // Only visible layers go to the GPU, in order, bottom first.
+    const layers = (state.layers || []).filter((l) => l.enabled && l.opacity > 0).slice(0, MAX_LAYERS);
+    const lMode = new Int32Array(MAX_LAYERS), lSrc = new Int32Array(MAX_LAYERS), lOp = new Float32Array(MAX_LAYERS);
+    layers.forEach((l, i) => {
+      lMode[i] = Math.max(0, B[l.mode] ?? 0);
+      lSrc[i] = Math.max(0, layerSources.findIndex(([k]) => k === l.source));
+      lOp[i] = l.opacity;
+    });
+    gl.uniform1i(u.uLayerCount, layers.length);
+    gl.uniform1iv(u.uLayerMode, lMode);
+    gl.uniform1iv(u.uLayerSource, lSrc);
+    gl.uniform1fv(u.uLayerOpacity, lOp);
 
     drawFullscreen(gl);
   }
