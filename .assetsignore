@@ -1,0 +1,8 @@
+# Not part of the published site.
+.git
+tests
+wrangler.jsonc
+.assetsignore
+CLAUDE.md
+HANDOFF.md
+.wrangler

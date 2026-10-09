@@ -5,6 +5,12 @@
 // linear light, inverse-square falloff, real spot cones, and a horizon-march
 // against the height field so raised paint shadows the paint beside it. That last
 // term is the one the depth-map competitors structurally cannot do.
+//
+// Every light also has a physical SIZE (radius, in painting widths). Size is what
+// separates a spotlight from diffused light: a small source casts a hard edge, a
+// softbox or window casts a wide penumbra, wraps light round the relief and
+// spreads its highlight. The penumbra is angular — the source's angular radius
+// seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
 
@@ -33,11 +39,16 @@ uniform float uLightEnabled[${MAX_LIGHTS}];
 uniform float uLightSoftness[${MAX_LIGHTS}];
 uniform float uLightFalloff[${MAX_LIGHTS}];
 uniform vec2 uLightAim[${MAX_LIGHTS}];
+uniform float uLightSize[${MAX_LIGHTS}];     // source radius, in painting widths
 
 uniform float uAspect;
 uniform vec2  uUVOffset;   // where this tile sits in the full image
 uniform vec2  uUVScale;    // how much of the full image this tile covers
-uniform float uShadowDist; // march length, in whole-image UV units
+uniform float uShadowDist; // longest march, in whole-image UV units
+uniform float uHeightReach; // tallest rise worth marching for, same units as heights
+uniform float uTexelGlobal; // one full-image texel, in painting widths
+uniform float uAOScale;
+uniform float uHeightView;
 uniform float uAmbient;
 uniform vec3  uAmbientColor;
 uniform float uRoughness;
@@ -47,10 +58,10 @@ uniform float uHeightScale;
 uniform float uShadow;
 uniform float uAO;
 uniform float uExposure;
-uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original
+uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original, 6 shadows
 
 const float PI = 3.14159265359;
-const int SHADOW_STEPS = 24;
+const int SHADOW_STEPS = 32;
 
 float D_GGX(float NoH, float a) {
   float a2 = a * a;
@@ -79,27 +90,42 @@ float sampleHeight(vec2 uv) {
 }
 
 /**
- * Horizon march: step along the light's planar direction and find the steepest
- * blocker. Smoother than a binary occlusion test and it costs the same.
+ * Horizon march: step along the light's planar direction and find the highest
+ * horizon. The shadow is then the visible fraction of a source with angular
+ * radius "penumbra" sitting at the light's elevation — half visible when the
+ * horizon cuts through its centre, fully hidden once it clears the top edge.
+ *
+ * How far to march is physical too: the tallest relief can only reach
+ * uHeightReach / tan(elevation) across the canvas, so a raking light marches far
+ * and an overhead one hardly at all. Steps bunch up near the pixel, where the
+ * small ridges that matter most sit.
  */
-float shadowMarch(vec2 uv, vec3 L, float softness) {
+float shadowMarch(vec2 uv, vec3 L, float penumbra) {
   if (uShadow <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
   vec2 dxy = L.xy;
   float lxy = length(dxy);
   if (lxy < 1e-4) return 1.0;              // light overhead: nothing to cast
   vec2 dir = dxy / lxy;
   float slope = L.z / lxy;                 // world height gained per unit travelled
+  float maxDist = min(uShadowDist, uHeightReach / max(slope, 1e-3));
+  float tMin = 0.75 * uTexelGlobal;
+  if (maxDist <= tMin) return 1.0;
   float h0 = sampleHeight(uv);
-  float maxDist = uShadowDist;
-  float occ = 0.0;
+  float horizon = -1.0e3;                  // tangent of the highest blocker seen
   for (int i = 1; i <= SHADOW_STEPS; i++) {
-    float t = (float(i) / float(SHADOW_STEPS)) * maxDist;
+    float f = float(i) / float(SHADOW_STEPS);
+    float t = tMin + (maxDist - tMin) * pow(f, 1.5);
     vec2 suv = uv + (dir * t / vec2(1.0, uAspect)) / uUVScale;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
-    float rise = sampleHeight(suv) - h0;
-    occ = max(occ, rise / t - slope);
+    horizon = max(horizon, (sampleHeight(suv) - h0) / t);
   }
-  return 1.0 - smoothstep(0.0, mix(0.025, 0.7, softness), occ) * uShadow;
+  // Relative to an open, flat surface: the part of a big low source that sits
+  // below the painting's own plane is already accounted for by the light wrap, so
+  // only relief rising above that plane may take light away.
+  float elev = atan(slope);
+  float open = smoothstep(-penumbra, penumbra, elev);
+  float vis = smoothstep(-penumbra, penumbra, elev - atan(horizon)) / max(open, 1e-3);
+  return 1.0 - (1.0 - min(vis, 1.0)) * uShadow;
 }
 
 vec3 acesFilm(vec3 x) {
@@ -122,7 +148,7 @@ void main() {
   float height = nh.a * mask * uReliefAmount;
 
   if (uViewMode == 1) { outColor = vec4(reliefN * 0.5 + 0.5, 1.0); return; }
-  if (uViewMode == 2) { float v = height * 8.0 + 0.5; outColor = vec4(vec3(v), 1.0); return; }
+  if (uViewMode == 2) { float v = height * uHeightView + 0.5; outColor = vec4(vec3(v), 1.0); return; }
   if (uViewMode == 3) { outColor = vec4(linearToSrgb(texture(uAlbedo, vUV).rgb), 1.0); return; }
   if (uViewMode == 4) { outColor = vec4(linearToSrgb(texture(uLin, vUV).rgb), 1.0); return; }
 
@@ -143,6 +169,7 @@ void main() {
   vec3 f0 = mix(vec3(0.04 * uSpecular), clamp(albedo, 0.0, 1.0), uMetallic);
 
   vec3 acc = vec3(0.0);
+  float litShare = 0.0, allShare = 0.0;   // for the Shadows view
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uLightCount) break;
     if (uLightEnabled[i] < 0.5) continue;
@@ -152,7 +179,13 @@ void main() {
     float dist = max(length(Lv), 1e-4);
     vec3 L = Lv / dist;
     float NoL = dot(N, L);
-    if (NoL <= 0.0) continue;
+
+    // Angular radius of the source as this point sees it. A large, close source
+    // wraps light past the terminator (the lit fraction of its disc falls off
+    // gradually), which is why diffused light flattens texture and a spot carves it.
+    float srcAngle = atan(max(uLightSize[i], 0.0) / dist);
+    float wrap = sin(min(srcAngle, 1.2));
+    float NoLw = (NoL + wrap) / (1.0 + wrap);
 
     // Inverse square, referenced to a half-width distance so that the Distance
     // slider lands on sane values instead of needing a power of ten of Power.
@@ -168,26 +201,49 @@ void main() {
     float spot = cone < 0.01 ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
     if (spot <= 0.0) continue;
 
-    float shadow = shadowMarch(vUV, L, clamp(uShadowSoftness + uLightSoftness[i] * 0.25, 0.0, 1.0));
+    // Shadows view: everything inside the beam counts, and a facet turned away from
+    // the light is in (attached) shadow just as much as one a ridge blocks.
+    vec3 incoming = uLightColor[i] * uLightPower[i] * atten * spot;
+    float weight = dot(incoming, vec3(0.2126, 0.7152, 0.0722));
+    allShare += weight;
+    if (NoLw <= 0.0) continue;
+
+    float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
+    float shadow = shadowMarch(vUV, L, penumbra);
 
     vec3 H = normalize(L + V);
     float NoH = max(dot(N, H), 0.0);
     float VoH = max(dot(V, H), 0.0);
+    float NoLs = max(NoL, 0.0);
 
-    float D = D_GGX(NoH, a);
-    float Vis = V_SmithGGX(NoV, NoL, a);
+    // A bigger source spreads the highlight: widen the lobe by the source's size
+    // relative to its distance (Karis' sphere-light approximation, without the
+    // representative-point term). D stays normalised, so the energy is spread
+    // rather than added.
+    float aSrc = min(1.0, a + uLightSize[i] / (2.0 * dist));
+    float D = D_GGX(NoH, aSrc);
+    float Vis = V_SmithGGX(NoV, max(NoLs, 1e-4), aSrc);
     vec3 F = F_Schlick(VoH, f0);
 
-    vec3 spec = D * Vis * F;
-    vec3 diff = albedo * (1.0 - F) * (1.0 - uMetallic) / PI;
+    vec3 spec = D * Vis * F * NoLs;
+    vec3 diff = albedo * (1.0 - F) * (1.0 - uMetallic) / PI * NoLw;
 
-    acc += (diff + spec) * uLightColor[i] * uLightPower[i] * NoL * atten * spot * shadow;
+    acc += (diff + spec) * incoming * shadow;
+    litShare += weight * shadow * smoothstep(0.0, 0.1, NoLw);
+  }
+
+  if (uViewMode == 6) {
+    // Where the lights' cast shadows land: white is fully lit, blue is shadow.
+    float v = allShare > 0.0 ? litShare / allShare : 1.0;
+    float base = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+    vec3 col = mix(vec3(0.08, 0.16, 0.55), vec3(1.0, 0.98, 0.94), v) * (0.75 + 0.25 * clamp(base * 2.0, 0.0, 1.0));
+    outColor = vec4(col, 1.0); return;
   }
 
   // Ambient occlusion straight off the height field: the high-pass is already a
   // local-mean-zero signal, so a negative height *is* a pit and pits catch less
   // of the sky term.
-  float ao = 1.0 - uAO * clamp(-height * 6.0, 0.0, 1.0);
+  float ao = 1.0 - uAO * clamp(-height * uAOScale, 0.0, 1.0);
   acc += albedo * uAmbientColor * uAmbient * ao;
 
   acc *= exp2(uExposure);
@@ -240,6 +296,7 @@ export class Shader {
     const soft = new Float32Array(MAX_LIGHTS);
     const falloff = new Float32Array(MAX_LIGHTS);
     const aim = new Float32Array(MAX_LIGHTS * 2);
+    const size = new Float32Array(MAX_LIGHTS);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
@@ -250,6 +307,7 @@ export class Shader {
       falloff[i] = l.falloff ?? 2;
       aim[i * 2] = l.aimX ?? l.x;
       aim[i * 2 + 1] = l.aimY ?? l.y;
+      size[i] = l.size ?? 0.03;
     });
 
     const u = p.uniforms;
@@ -262,6 +320,7 @@ export class Shader {
     gl.uniform1fv(u.uLightSoftness, soft);
     gl.uniform1fv(u.uLightFalloff, falloff);
     gl.uniform2fv(u.uLightAim, aim);
+    gl.uniform1fv(u.uLightSize, size);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
@@ -274,6 +333,12 @@ export class Shader {
     // fraction of image width would make shadows grow with resolution, so the
     // preview and the full-res export would not match.
     gl.uniform1f(u.uShadowDist, state.shadowDist);
+    // Calibrated heights tell the march how far it needs to go; legacy heights are
+    // in arbitrary units, so there the fixed reach above is the only limit.
+    gl.uniform1f(u.uHeightReach, state.calibrated ? state.heightScale * state.reliefAmount * 1.5 : 1e3);
+    gl.uniform1f(u.uTexelGlobal, t.sx / Math.max(1, viewW));
+    gl.uniform1f(u.uAOScale, state.calibrated ? state.aoScale ?? 2.5 : 6.0);
+    gl.uniform1f(u.uHeightView, state.calibrated ? 1.0 : 8.0);
     gl.uniform1f(u.uAmbient, state.ambient);
     gl.uniform3fv(u.uAmbientColor, new Float32Array(state.ambientColor));
     gl.uniform1f(u.uRoughness, state.roughness);
