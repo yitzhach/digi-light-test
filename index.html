@@ -93,7 +93,7 @@
 
   <div id="panel">
     <h2>DigiLight · Painting Relighter</h2>
-    <div class="grp"><button id="openPhoto" class="full">Open your painting</button><p class="note">1. Open a JPEG, PNG or WebP photograph.<br>2. Drag the light and adjust Power, Distance and Cone.<br>3. Tune surface relief, compare Original, then export.<br><b>Single-photo relief is estimated.</b> Colour changes can resemble texture; evenly lit photos contain less depth information.</p></div>
+    <div class="grp"><button id="openPhoto" class="full">Open your painting</button><p class="note">1. Open a JPEG, PNG or WebP photograph.<br>2. In Quick setup, pick the paint texture, its depth and how the photo was lit.<br>3. Choose a lighting preset, drag the lights, compare Before/After, then export.<br><b>Single-photo relief is estimated.</b> Colour changes can resemble texture; depth is your estimate, not a measurement.</p></div>
     <h2>Source</h2>
     <div class="grp">
       <div class="row" style="grid-template-columns:92px 1fr">
@@ -112,6 +112,7 @@
             <option value="single">Single soft light</option>
             <option value="raking">Raking light</option>
             <option value="symmetric">Archival copy-stand (2 matched)</option>
+            <option value="diffuse">Even soft light (light tent)</option>
           </select>
         </div>
         <div class="row"><label>Paint detail</label><input type="range" id="pigment" min="0" max="1" step="0.05" value="0.35"><output></output></div>

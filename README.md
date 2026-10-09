@@ -4,9 +4,40 @@ package installation or build step are required. Requires WebGL2 and floating-po
 render targets; graphics acceleration must be enabled.
 
 ## Use
-Creative Studio starts each uploaded photograph with restrained, image-dependent
-relief settings. Choose a surface, material finish and lighting preset, then refine.
-These presets are artistic approximations, not automatic material identification.
+Creative Studio starts each uploaded photograph with a restrained look: brushy oil
+about 1 mm deep, photographed in even light. **Quick setup** is the everyday path:
+
+- **Paint texture** — glazes, canvas weave, brushy oil, thick brushwork, palette-knife
+  or sculptural impasto, texture paste, plaster. Each sets a typical depth and scale.
+- **Texture depth** (mm) and **Painting width** (cm) — your estimate of how far paint
+  ridges stand above the hollows beside them, and the painting's real size. One
+  height field sized from these two numbers drives both the shading and the cast
+  shadows, so a 3 mm ridge under a 15° light casts a shadow about 11 mm long.
+- **Photo was lit** — *Even* (most photos: flat, scanned, two lamps, daylight) or the
+  side the light came from. Even reads relief from recesses photographing darker
+  and holds up from any new light direction; a side reads it from shading along
+  that direction and is stronger when the photo was raking-lit.
+- **Lighting** scenes (gallery track, museum spotlight, two-spot, window, softbox,
+  overcast, raking, candlelight, chiaroscuro…) and a **Finish**.
+
+Every individual slider is still available under **Fine-tune (advanced)**. Presets
+are artistic approximations, not automatic material identification.
+
+Each light has type buttons (**Spot, Track, Flood, Softbox, Window**) and one
+**Diffusion** dial between them. Diffusion sets beam width, beam edge and the
+light's physical size: a small source casts crisp shadows and a tight highlight; a
+large one casts wide soft penumbrae, wraps light round the relief and flattens it.
+**Angle to wall** swings the light about its aim point (low = raking, long shadows);
+**Distance** reads in cm from the painting's width. **Mirror** adds a matched light
+on the other side. Up to eight lights.
+
+**Sweep light** (toolbar) orbits a low raking light round the painting to inspect
+its texture, then gives your lights back (Esc or click again). The **Shadows** view
+shows where the lights' cast and attached shadows land.
+
+Projects and presets saved before calibrated relief open with their hand-set
+Depth and Texture strength; touching texture depth, size or Photo was lit switches
+them to calibrated relief.
 
 Click **Before / After** (or B) for the original photograph. **Split view** adds a
 movable comparison boundary. Comparisons and light guides never appear in exports.
@@ -21,11 +52,13 @@ brightness variation; it can also flatten painted tonal detail, so starts at zer
 Add/Remove Relief brushes amplify or suppress existing estimated texture locally;
 they do not invent geometry or paint over the photograph.
 
-Lights include softness, adjustable falloff, beam aim, duplication and presets.
-Shift-drag changes height; Alt/Option-drag changes cone width. Dashed beam guides
-are approximate. Falloff 2 uses inverse-square distance; softer settings are
-creative controls. Shadow softness uses a smooth horizon approximation, not a
-physical area-light integration. Metallic is a whole-surface artistic material.
+Lights include beam edge, source size, adjustable falloff, beam aim, duplication
+and presets (More light controls). Shift-drag changes distance; Alt/Option-drag
+changes cone width. Dashed beam guides are approximate. Falloff 2 uses
+inverse-square distance; softer settings are creative controls. Shadows use a
+horizon march with an angular penumbra set by the source's size and distance; it
+is an approximation of an area light, not a physical integration. Metallic is a
+whole-surface artistic material.
 
 Save project and Save variation include the original photo, light/material settings
 and brush corrections in IndexedDB. Saves are local to this browser and origin;
@@ -75,13 +108,27 @@ Do not double-click index.html; ES modules require an HTTP server.
   normal-strength scaling; restores controls and preview after completion/failure.
 
 ## Validation
+**Relief recovery** was scored against the synthetic painting's known relief
+(correlation of recovered with true normals, along / across the original light
+direction; 1 is perfect). Even soft light (light tent): 0.25 / 0.05 with the
+directional estimate alone, 0.52 / 0.48 with Photo was lit = Even. Side-lit and
+raking: 0.86 / 0.80 and 0.85 / 0.61, unchanged (sides use the directional estimate
+only). A two-lamp copy stand recovers ≈0 either way, and fine achromatic grain
+(cement, plaster) defeats both. These are synthetic numbers; real photographs add
+pigment, varnish glare and lens effects the bench does not model.
+
+**Shadows** are checked against the same known relief: deeper texture and lower
+lights cast more shadow, a larger source softens it, and shadows land on slopes
+facing away from the light, flipping sides when the light crosses.
+
 Creative Studio was tested in headless Chromium with actual WebGL shaders:
 upload and auto setup; preset changes; Before/After and split image pixels; slider
 and light undo/redo; light dragging and duplication; brush pixels and stroke undo;
 local project save/reopen and variations; portable project import/export; PNG and
 scaled JPEG exports; reusable preset save/apply/default/download/import; preview
-restoration; mobile layout; photometric rendering
-and synthetic truth restoration. No browser or WebGL errors were reported.
+restoration; quick setup, photo lighting and depth undo; light types, angle and
+mirror; sweep light; legacy project import; shadow physics; mobile layout;
+photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
 of difference across channels. This does not establish physical reconstruction

@@ -263,9 +263,54 @@ function renderUnder(surface, w, h, dirs, weights, ambient = AMBIENT) {
 }
 
 /**
+ * Render under even, soft light: a light tent, an overcast window, a big softbox
+ * either side. No light has a direction, so the directional estimate has nothing
+ * to find — but the light is still *occluded*: a tilted facet sees less of the
+ * surround ((1 + Nz) / 2, the sky-view factor of a tilted plane) and a recess is
+ * shaded by the ridges around it (cos² of the horizon angle, per azimuth). That is
+ * the signal the even-light estimate reads, modelled here from the true height.
+ */
+function renderDiffuse(surface, w, h) {
+  const { H, normals, albedo } = surface;
+  const img = new ImageData(w, h);
+  const px = img.data;
+  const DIRS = 16;
+  const STEPS = [1, 2, 3, 4, 6, 8, 10, 13, 16, 20, 25];
+  const dirs = [];
+  for (let k = 0; k < DIRS; k++) {
+    const a = (k + 0.5) * Math.PI * 2 / DIRS;
+    dirs.push([Math.cos(a), Math.sin(a)]);
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const h0 = H[i] * HEIGHT_TO_SLOPE;     // height in pixels, as the normals see it
+      let vis = 0;
+      for (const [dx, dy] of dirs) {
+        let tanMax = 0;
+        for (const t of STEPS) {
+          const sx = Math.round(x + dx * t), sy = Math.round(y + dy * t);
+          if (sx < 0 || sy < 0 || sx >= w || sy >= h) break;
+          const rise = H[sy * w + sx] * HEIGHT_TO_SLOPE - h0;
+          if (rise > tanMax * t) tanMax = rise / t;
+        }
+        vis += 1 / (1 + tanMax * tanMax);       // cos² of the horizon elevation
+      }
+      const shade = 0.12 + 0.95 * ((1 + normals[i * 3 + 2]) / 2) * (vis / DIRS);
+      const o = i * 4;
+      px[o]     = encodeSrgb(albedo[i * 3] * shade);
+      px[o + 1] = encodeSrgb(albedo[i * 3 + 1] * shade);
+      px[o + 2] = encodeSrgb(albedo[i * 3 + 2] * shade);
+      px[o + 3] = 255;
+    }
+  }
+  return img;
+}
+
+/**
  * A single flat-lit photograph, for testing single-image relief recovery.
  *
- * @param {'symmetric'|'single'|'raking'} opts.lighting  How the repro shot was lit.
+ * @param {'symmetric'|'single'|'raking'|'diffuse'} opts.lighting  How the repro shot was lit.
  * @param {number} opts.pigmentDetail  Fine colour variation carried by the paint
  *   itself — high-frequency detail that is not geometry, but which shifts hue and
  *   so can at least be separated from shading in principle.
@@ -279,7 +324,9 @@ export function synthesizePainting({ width = 900, height = 1100, seed = 7,
   const w = width, h = height;
   const surface = buildSurface(w, h, seed, pigmentDetail, grain);
   const rig = RIGS[lighting] || RIGS.single;
-  const image = renderUnder(surface, w, h, rig.dirs.map(normalize3), rig.weights);
+  const image = lighting === 'diffuse'
+    ? renderDiffuse(surface, w, h)
+    : renderUnder(surface, w, h, rig.dirs.map(normalize3), rig.weights);
   return { image, normals: surface.normals, height: surface.H, width: w, rows: h };
 }
 

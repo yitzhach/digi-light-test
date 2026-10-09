@@ -1,4 +1,4 @@
-import { surfaces, materials, lighting, History } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -8,16 +8,21 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on">Light guides</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on">Light guides</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
-  panel.innerHTML = `<h2>Start a look</h2><div class="grp">
-    <label class="selectRow">Surface<select id="surfacePreset"><option value="">Choose texture…</option></select></label>
-    <label class="selectRow">Material<select id="materialPreset"><option value="">Choose finish…</option></select></label>
+  panel.innerHTML = `<h2>Quick setup</h2><div class="grp" id="quickSetup">
+    <label class="selectRow">Paint texture<select id="surfacePreset"><option value="">Choose texture…</option></select></label>
+    <div class="row"><label for="textureDepthMm">Texture depth</label><input id="textureDepthMm" type="range" min="0" max="10" step="0.05" value="1"><output data-own></output></div>
+    <div class="row"><label for="paintingWidthCm">Painting width</label><input id="paintingWidthCm" type="range" min="10" max="300" step="1" value="60"><output data-own></output></div>
+    <p class="note" id="depthNote"></p>
+    <div class="photoLit"><span>Photo was lit</span><div id="photoCompass" role="group" aria-label="How the photograph was lit"></div></div>
+    <p class="note" id="photoNote"></p>
     <label class="selectRow">Lighting<select id="lightingPreset"><option value="">Choose lighting…</option></select></label>
-    <button id="autoSetup">Auto setup</button><button id="resetLighting">Reset lighting</button>
-    <p class="note" id="autoStatus">A restrained starting look. Adjust texture to suit your painting.</p>
+    <label class="selectRow">Finish<select id="materialPreset"><option value="">Choose finish…</option></select></label>
+    <div class="views"><button id="autoSetup">Auto setup</button><button id="resetLighting">Reset lighting</button></div>
+    <p class="note" id="autoStatus">A restrained starting look. Pick the paint texture and how the photo was lit.</p>
     </div><h2>My reusable presets</h2><div class="grp">
     <input id="presetName" class="full" aria-label="Preset name" placeholder="Preset name" maxlength="120">
     <div class="views"><button id="savePreset">Save current preset</button><button id="downloadPreset">Download current</button></div>
@@ -51,16 +56,34 @@ export function initStudio(api) {
     const details=document.createElement('details');details.className='sectionDetails';details.innerHTML=`<summary>${title}</summary>`;
     heading.replaceWith(details);details.append(group);
   }
-  for (const [id, data] of [['surfacePreset', surfaces], ['materialPreset', materials], ['lightingPreset', lighting]]) {
+  for (const [id, data] of [['surfacePreset', textures], ['materialPreset', materials], ['lightingPreset', lighting]]) {
     for (const name of Object.keys(data)) $(id).add(new Option(name, name));
   }
-  const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.4, highlightRolloff: 0.7, meanLuma: 0.25, strokes: [] };
-  Object.assign(state, defaults);
+  for (const [key, label, where] of photoDirections) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.dir = key; b.textContent = label;
+    b.title = `Photo was lit ${key === 'even' ? '' : 'from the '}${where}`;
+    b.setAttribute('aria-label', b.title);
+    $('photoCompass').append(b);
+  }
+  // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
+  // (see app.js); projects and presets saved before they existed open with physical 0.
+  const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
+    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [] };
+  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0 };
+  const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
+  // Derived from texture depth when calibrated, so not checked against their sliders.
+  const DERIVED = ['heightScale', 'reliefStrength'];
+  // Fill in only what the bench has not already set (the demo source sets how it was lit).
+  for (const [k, v] of Object.entries(defaults)) if (!(k in state)) state[k] = v;
   const extraKeys = Object.keys(defaults);
   const baseMap = { reliefScale:'reliefScale', azimuth:'azimuthDeg', taps:'integrateTaps', reliefStrength:'reliefStrength', chromaReject:'chromaReject', albedoSuppress:'albedoSuppress', reliefAmount:'reliefAmount', heightScale:'heightScale', roughness:'roughness', specular:'specular', shadow:'shadow', shadowSpread:'shadowSpread', ao:'ao', ambient:'ambient', exposure:'exposure' };
   const keys = [...new Set([...Object.values(baseMap), ...extraKeys, 'lights', 'selected'])];
   const presetKeys = keys.filter(k => !['strokes', 'meanLuma'].includes(k));
-  const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(state[k])]));
+  // While the sweep inspector borrows the lights, saves and history see the real ones.
+  let sweep = null;
+  const live = k => sweep && (k === 'lights' || k === 'selected') ? sweep[k] : state[k];
+  const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(live(k))]));
   const history = new History();
   let before = false, split = false, brush = '', restoring = false, loading = false, projectId = null;
   let sourceRevision = 0;
@@ -87,20 +110,43 @@ export function initStudio(api) {
     state.maskVersion++; render();
   }
   function historyUI() { $('undo').disabled = history.index <= 0; $('redo').disabled = history.index >= history.entries.length-1; }
-  function checkpoint() { if (!restoring && !loading && !state.exporting) { history.push(snapshot()); historyUI(); } }
+  function checkpoint() { if (!restoring && !loading && !state.exporting && !sweep) { history.push(snapshot()); historyUI(); } }
+  function syncQuick() {
+    const mm = state.textureDepthMm, w = state.paintingWidthCm;
+    $('textureDepthMm').nextElementSibling.textContent = `${mm.toFixed(mm < 1 ? 2 : 1)} mm`;
+    $('paintingWidthCm').nextElementSibling.textContent = `${Math.round(w)} cm`;
+    $('paintingWidthCm').title = `${(w / 2.54).toFixed(1)} in`;
+    $('depthNote').textContent = state.physical
+      ? `${(mm / 25.4).toFixed(3)} in deep on a ${(w / 2.54).toFixed(0)} in wide painting. ${DEPTH_GUIDE}`
+      : 'This project uses hand-set relief (Fine-tune). Change texture depth, size or Photo was lit to switch to calibrated relief.';
+    const even = state.photoDiffuse >= 0.5;
+    let best = null, bestErr = 1e9;
+    for (const [key,,, az] of photoDirections) if (az !== null) { const e = Math.abs(((state.azimuthDeg - az + 540) % 360) - 180); if (e < bestErr) { bestErr = e; best = key; } }
+    $('photoCompass').querySelectorAll('button').forEach(b => b.classList.toggle('on', even ? b.dataset.dir === 'even' : b.dataset.dir === best));
+    const where = photoDirections.find(d => d[0] === best)?.[2];
+    $('photoNote').textContent = even
+      ? 'Even light: relief is read from recesses photographing darker, so it holds up from any new light direction. Dark paint can read as low; Protect color edges helps.'
+      : `Lit from the ${where}: relief is read from shading along that direction — strongest when the photo was raking-lit. Choose Even if you are unsure.`;
+    for (const id of ['heightScale', 'reliefStrength', 'shadowSpread']) {
+      const locked = !!state.physical && state.mode === 'single';
+      const el = $(id); el.disabled = locked;
+      el.closest('.row').title = locked ? 'Set by Texture depth and Painting width (Quick setup)' : '';
+    }
+  }
   function sync() {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { row.querySelector('output').textContent = Number(row.querySelector('input').value).toFixed(2); });
-    refresh(); rebuildMask(); historyUI();
+    syncQuick(); refresh(); rebuildMask(); historyUI();
   }
   function restore(value) { if (!value || state.exporting) return; restoring = true; Object.assign(state,value); sync(); restoring = false; }
-  $('undo').onclick = () => { if (!state.exporting) restore(history.undo()); };
-  $('redo').onclick = () => { if (!state.exporting) restore(history.redo()); };
+  $('undo').onclick = () => { if (!state.exporting) { stopSweep(); restore(history.undo()); } };
+  $('redo').onclick = () => { if (!state.exporting) { stopSweep(); restore(history.redo()); } };
   document.addEventListener('keydown', e => {
     if (e.target.matches('input:not([type=range]),textarea,select') || state.exporting) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); }
     if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) $('compare').click();
+    if (e.key === 'Escape') stopSweep();
   });
   // Capture one final snapshot per gesture; input events only redraw.
   document.addEventListener('change', () => setTimeout(checkpoint,0));
@@ -111,45 +157,113 @@ export function initStudio(api) {
     ['fineRelief','Fine texture',0,2,0.05,true], ['mediumRelief','Medium relief',0,2,0.05,true], ['broadRelief','Broad relief',0,2,0.05,true],
     ['neutralize','Neutralize light',0,1,0.02,true], ['shadowSoftness','Shadow softness',0,1,0.02,false],
     ['metallic','Metallic',0,1,0.02,false], ['highlightRolloff','Highlight rolloff',0,1,0.02,false],
+    ['photoDiffuse','Even-light share',0,1,0.02,true],
   ];
   for (const [key,label,min,max,step,surface] of newControls) {
     const row = document.createElement('div'); row.className='row';
     row.innerHTML=`<label for="${key}">${label}</label><input id="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state[key]}"><output>${state[key]}</output>`;
-    row.querySelector('input').oninput=e=>{state[key]=+e.target.value; row.querySelector('output').textContent=state[key].toFixed(2); if(surface) api.dirty(); render();};
+    row.querySelector('input').oninput=e=>{state[key]=+e.target.value; row.querySelector('output').textContent=state[key].toFixed(2); if(key==='photoDiffuse'){calibrate();syncQuick();} if(surface) api.dirty(); render();};
     $('creativeSliders').append(row);
   }
-  const warning = document.createElement('p'); warning.className='note'; warning.textContent='Neutralize light reduces local brightness variation and may alter tonal details. Start low; compare often.'; $('creativeSliders').append(warning);
+  const warning = document.createElement('p'); warning.className='note'; warning.textContent='Neutralize light reduces local brightness variation and may alter tonal details. Start low; compare often. Even-light share blends relief read from dark recesses (1) with relief read along the photo\'s light direction (0).'; $('creativeSliders').append(warning);
   for (const [id,label] of Object.entries({chromaReject:'Protect color edges', reliefStrength:'Texture strength',reliefScale:'Texture size',shadow:'Shadow depth',ao:'Contact shadow',specular:'Highlight strength',heightScale:'Relief depth',albedoSuppress:'Reduce baked detail'})) $(id).closest('.row').querySelector('label').textContent=label;
   const advanced = document.createElement('details'); advanced.innerHTML='<summary>Advanced surface recovery</summary>';
   for (const id of ['azimuth','taps','albedoSuppress']) advanced.append($(id).closest('.row'));
   $('surfaceControls').append(advanced);
-  function makeLight(values) {
-    const [x,y,z,power,kelvin,cone,softness]=values;
-    const l={x,y,z,power,kelvin,cone,softness,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
+  // The everyday path is Quick setup plus the lights; every individual slider is
+  // still here, folded away.
+  const fine=document.createElement('details');fine.className='sectionDetails';fine.id='fineTune';
+  fine.innerHTML='<summary>Fine-tune (advanced)</summary>';
+  for (const grp of [$('creativeSliders'),$('surfaceControls'),$('roughness').closest('.grp')]) fine.append(grp.previousElementSibling,grp);
+  $('exportBtn').closest('.grp').previousElementSibling.before(fine);
+  function makeLight(v) {
+    const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
   }
-  function useLighting(name) { state.lights=lighting[name].map(makeLight); state.selected=0; state.ambient=0.22; refresh(); }
+  function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; refresh(); }
+  // Any calibrated control switches a legacy project over to calibrated relief.
+  function calibrate() { state.physical = 1; }
+  function useTexture(name) {
+    const t=textures[name]; if(!t)return;
+    calibrate();
+    state.textureDepthMm=t.depthMm; state.reliefScale=t.size; state.fineRelief=t.fine; state.mediumRelief=t.medium; state.broadRelief=t.broad;
+    state.reliefAmount=1; api.dirty();
+  }
+  function usePhotoLight(dir) {
+    const d=photoDirections.find(x=>x[0]===dir); if(!d)return;
+    calibrate();
+    // A side-lit photo has strong baked shading to take out before relighting; an
+    // evenly lit one has little, and removing more only removes painted detail.
+    if (d[3]===null) { state.photoDiffuse=EVEN_SHARE; state.albedoSuppress=0.2; }
+    else { state.photoDiffuse=0; state.azimuthDeg=d[3]; state.albedoSuppress=0.5; }
+    api.dirty();
+  }
   $('lightingPreset').onchange=e=>{if(e.target.value) {useLighting(e.target.value); sync();}};
-  $('surfacePreset').onchange=e=>{const v=surfaces[e.target.value]; if(!v)return; [state.fineRelief,state.mediumRelief,state.broadRelief,state.reliefStrength]=v; state.reliefAmount=v[3]?1:0; sync();};
+  $('surfacePreset').onchange=e=>{if(textures[e.target.value]){useTexture(e.target.value); sync();}};
   $('materialPreset').onchange=e=>{const v=materials[e.target.value]; if(!v)return; [state.roughness,state.specular,state.metallic]=v; sync();};
+  $('photoCompass').onclick=e=>{const b=e.target.closest('button'); if(!b)return; usePhotoLight(b.dataset.dir); sync();};
+  for (const key of ['textureDepthMm','paintingWidthCm']) $(key).oninput=e=>{calibrate(); state[key]=+e.target.value; api.dirty(); syncQuick(); render();};
   $('resetLighting').onclick=()=>{useLighting('Gallery track'); state.exposure=0; sync();};
   function autoSetup() {
     if (state.mode !== 'single') { $('autoStatus').textContent='Auto setup is for single photographs; capture mode uses measured light directions.'; return; }
     const source=api.source(); if(!source)return;
     const sample=document.createElement('canvas'); sample.width=128; sample.height=128;
     const c=sample.getContext('2d',{willReadFrequently:true}); c.drawImage(source,0,0,128,128);
-    const d=c.getImageData(0,0,128,128).data; let sum=0,detail=0;
+    const d=c.getImageData(0,0,128,128).data; let sum=0;
     const linear = x => x<=0.04045?x/12.92:((x+0.055)/1.055)**2.4;
     const gray = i => 0.2126*linear(d[i]/255)+0.7152*linear(d[i+1]/255)+0.0722*linear(d[i+2]/255);
-    for(let i=0;i<d.length;i+=4){ const v=gray(i);sum+=v; if((i/4)%128)detail+=Math.abs(v-gray(i-4)); }
-    state.meanLuma=sum/(128*128); const busy=detail/(128*128);
-    state.reliefStrength=busy>0.08?5:8; state.reliefScale=busy>0.08?2:3;
-    state.fineRelief=0.65;state.mediumRelief=0.8;state.broadRelief=0.12;
-    state.chromaReject=0.85;state.albedoSuppress=0.2;state.neutralize=0;state.reliefAmount=1;
+    for(let i=0;i<d.length;i+=4) sum+=gray(i);
+    state.meanLuma=sum/(128*128);
+    // Most paintings are photographed evenly lit, so that is the starting guess.
+    state.physical=1; useTexture('Brushy oil');
+    // The synthetic demo knows how it was lit (loadSynthetic set it); a photo is
+    // assumed evenly lit until the user says otherwise.
+    if ($('src').value==='synth') state.albedoSuppress=state.photoDiffuse>=0.5?0.2:0.5;
+    else usePhotoLight('even');
+    state.chromaReject=0.85;state.neutralize=0;state.shadow=0.85;state.ao=0.4;state.shadowSoftness=0.2;
     state.roughness=0.72;state.specular=0.45;state.metallic=0;state.exposure=0;
+    $('surfacePreset').value='Brushy oil';
     useLighting('Gallery track'); sync();
-    $('autoStatus').textContent=`Auto setup applied ${busy>0.08?'gentle relief for detailed colour':'moderate relief'}. Original light direction and material cannot be reliably identified from one photo.`;
+    $('autoStatus').textContent='Auto setup: brushy oil about 1 mm deep, photo assumed evenly lit. Set the paint texture, depth and how the photo was lit to match your painting.';
   }
   $('autoSetup').onclick=()=>{autoSetup();checkpoint();};
+  // Sweep inspector: a low raking light orbits the painting, the way a conservator
+  // walks a torch round a canvas, so every ridge shows its shadow in turn. It
+  // borrows the lights and hands them back; saves and history see the real ones.
+  let sweepFrame=0;
+  function startSweep(){
+    if(sweep||state.exporting||!api.source())return;
+    const l=makeLight({x:0,y:0,z:0.2,power:3,kelvin:5000,cone:0,softness:0.2,size:0.02});
+    sweep={lights:state.lights,selected:state.selected,angle:Math.PI*0.75,last:performance.now(),light:l};
+    state.lights=[l];state.selected=0;
+    $('sweepLight').classList.add('on');$('wrap').classList.add('sweeping');
+    refresh();
+    const step=now=>{
+      if(!sweep)return;
+      sweep.angle+=Math.min(0.1,(now-sweep.last)/1000)*Math.PI*2/8; sweep.last=now;
+      // Orbit just outside the painting at about 12 degrees, bright enough that the
+      // flat paint reads at a normal exposure despite the grazing angle.
+      const a=api.canvas.height/api.canvas.width, R=0.5*Math.hypot(1,a)+0.1, elev=12*Math.PI/180;
+      l.x=0.5+R*Math.cos(sweep.angle); l.y=0.5+R*Math.sin(sweep.angle)/a; l.z=R*Math.tan(elev);
+      const dist=Math.hypot(R,l.z); l.power=0.45*Math.PI/((0.5/dist)**2*Math.sin(elev));
+      render(); sweepFrame=requestAnimationFrame(step);
+    };
+    sweepFrame=requestAnimationFrame(step);
+  }
+  function stopSweep(){
+    if(!sweep)return;
+    cancelAnimationFrame(sweepFrame);
+    state.lights=sweep.lights;state.selected=sweep.selected;sweep=null;
+    $('sweepLight').classList.remove('on');$('wrap').classList.remove('sweeping');
+    refresh(); checkpoint();
+  }
+  $('sweepLight').onclick=()=>sweep?stopSweep():startSweep();
+  // Light buttons and export act on the real lights, so the sweep ends first; the
+  // click itself is swallowed because it was aimed at the borrowed light's panel.
+  document.addEventListener('click',e=>{
+    if(!sweep)return;
+    if(e.target.closest('#exportBtn'))stopSweep();
+    else if(e.target.closest('#tabs button,#lightPanel button')){stopSweep();e.preventDefault();e.stopPropagation();}
+  },true);
   const splitRow=document.createElement('div'); splitRow.id='splitControl'; splitRow.hidden=true;
   splitRow.innerHTML='<span>BEFORE</span><input type="range" min="0" max="100" value="50" aria-label="Before after split"><span>AFTER</span>';
   $('stage').append(splitRow);
@@ -202,16 +316,17 @@ export function initStudio(api) {
     if(p?.format!=='digilight'||p.version!==1||!/^data:image\/(png|jpeg|webp);base64,/.test(p.image||''))throw new Error('Not a supported DigiLight project.');
     if(!p.settings||!Array.isArray(p.settings.lights)||p.settings.lights.length<1||p.settings.lights.length>8)throw new Error('Invalid project lights.');
     const settings={};
-    for(const k of keys)if(!['lights','strokes'].includes(k)){const v=p.settings[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
-    for(const [id,k] of Object.entries(baseMap)){const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
+    for(const k of keys)if(!['lights','strokes'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
+    for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
-    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',-0.4,1.4],['y',-0.4,1.4],['z',0.08,2.5],['power',0,8],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',-0.4,1.4],['aimY',-0.4,1.4]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
+    for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
+    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',-0.4,1.4],['y',-0.4,1.4],['z',0.08,2.5],['power',0,8],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',-0.4,1.4],['aimY',-0.4,1.4],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
     const strokes=p.settings.strokes||[];let points=0;if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');
     settings.strokes=strokes.map(s=>{if(!['add','remove'].includes(s.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});
     return settings;
   }
-  async function open(p){const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
+  async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
   $('loadProject').onclick=()=>busy(async()=>{const p=await storage('projects','readonly',s=>s.get($('projectList').value));if(!p)throw new Error('Choose a saved project.');await open(p);});
   $('downloadProject').onclick=()=>busy(async()=>{const p=await project();const blob=new Blob([JSON.stringify(p)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${p.name.replace(/[^a-z0-9_-]/gi,'_')}.digilight.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),4000);status('Project downloaded.');});
   $('importProject').onclick=()=>$('projectFile').click();
@@ -219,18 +334,20 @@ export function initStudio(api) {
   const defaultId=()=>{try{return localStorage.getItem('digilight-default-preset')||'';}catch{return '';}};
   const setDefaultId=id=>{try{id?localStorage.setItem('digilight-default-preset',id):localStorage.removeItem('digilight-default-preset');}catch{throw new Error('Browser storage is unavailable.');}};
   function presetStatus(message){$('presetStatus').textContent=message;}
-  function presetSettings(){return Object.fromEntries(presetKeys.map(k=>[k,structuredClone(state[k])]));}
+  function presetSettings(){return Object.fromEntries(presetKeys.map(k=>[k,structuredClone(live(k))]));}
   function presetRecord(id=crypto.randomUUID(), name=$('presetName').value.trim()){
     if(!name)throw new Error('Name the preset first.');
     return {format:'digilight-preset',version:1,id,name:name.slice(0,120),updated:Date.now(),settings:presetSettings()};
   }
   function validatePreset(p){
     if(p?.format!=='digilight-preset'||p.version!==1||!p.settings)throw new Error('Not a supported DigiLight preset.');
-    const merged={...snapshot(),...p.settings,strokes:[]};
+    // Presets from before calibrated relief keep their hand-set depth and strength.
+    const merged={...snapshot(),...('physical' in p.settings?{}:LEGACY),...p.settings,strokes:[]};
     const checked=validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:merged});
     return {format:'digilight-preset',version:1,id:typeof p.id==='string'&&p.id?p.id:crypto.randomUUID(),name:String(p.name||'Imported preset').slice(0,120),updated:Number.isFinite(p.updated)?p.updated:Date.now(),settings:Object.fromEntries(presetKeys.map(k=>[k,checked[k]]))};
   }
   function applyUserPreset(p, message=true){
+    stopSweep();
     const checked=validatePreset(p);Object.assign(state,checked.settings);sync();if(message){history.push(snapshot());historyUI();}
     $('presetName').value=checked.name;$('userPresetList').value=checked.id;$('defaultPreset').checked=defaultId()===checked.id;
     if(message)presetStatus(`Applied “${checked.name}” to this painting.`);
@@ -259,8 +376,8 @@ export function initStudio(api) {
   $('importPreset').onclick=()=>$('presetFile').click();
   $('presetFile').onchange=()=>busy(async()=>{const f=$('presetFile').files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Preset exceeds the 1 MB import limit.');const p=validatePreset(JSON.parse(await f.text()));p.id=crypto.randomUUID();p.updated=Date.now();await storage('presets','readwrite',s=>s.put(p));await listPresets(p.id);applyUserPreset(p);$('presetFile').value='';presetStatus(`Imported and applied “${p.name}”.`);});
   Promise.all([list(),listPresets()]).catch(()=>status('Browser storage unavailable. Downloaded projects and presets still work.'));
-  const onSource=async()=>{const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();history.reset(snapshot());historyUI();};
+  const onSource=async()=>{stopSweep();const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();history.reset(snapshot());historyUI();};
   document.addEventListener('digilight:source',onSource);
-  rebuildMask();history.reset(snapshot());historyUI();
-  window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,get sourceRevision(){return sourceRevision;}};
+  syncQuick();rebuildMask();history.reset(snapshot());historyUI();
+  window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

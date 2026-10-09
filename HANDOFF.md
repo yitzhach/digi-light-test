@@ -6,6 +6,7 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 ## Status
 - Last updated: 2026-10-09
 - Last code change on `main`: `e1c2e26` (2026-09-18) — "Add reusable named presets across paintings"
+- Branch `claude/lucid-gauss-q7yewo` (not merged yet): calibrated relief, spot↔diffused lights, Quick setup
 - Live: static site, deployed manually to Cloudflare Pages (see README "Manual hosting")
 
 ## What it is
@@ -15,7 +16,8 @@ of a painting → estimate surface relief → relight with movable virtual light
 ## Map (src/)
 - `app.js` — main bench: load image, build G-buffer, re-shade on interaction (largest file)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
-- `gbuffer.js` — single-photo surface estimation; `shade.js` — per-frame shading pass
+- `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
+  normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
 - `photometric.js`, `register.js`, `sphere.js` — multi-photo capture path (demo section)
 - `synth.js` — synthetic painting with known relief (tests); `measure.js` — image stats
@@ -26,13 +28,26 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-09 (branch): texture depth (mm) + painting width drive one height field for shading
+  and shadows; even-light relief estimate for evenly lit photos (`photoDiffuse`);
+  per-light source size, angular penumbra, physical shadow reach; Quick setup,
+  photo-lit compass, light types/Diffusion/Angle/Mirror, Sweep light, Shadows view;
+  advanced sliders folded into Fine-tune. Legacy projects load with `physical: 0`.
+- 10-09: storage ops queue instead of being dropped (fixed preset-import test failure)
 - 09-18: reusable named presets (save/apply/auto/download/import)
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
-1. Project save for the multi-photo capture workflow (currently single-photo only)
-2. Large-export memory limits / preview vs export differences at very high res
+1. Check calibrated relief on real photos of impasto (synthetic-only so far; the
+   cloud environment's network policy blocked Wikimedia)
+2. Optional "match original brightness" exposure after a lighting preset
+3. Project save for the multi-photo capture workflow (currently single-photo only)
+4. Large-export memory limits / preview vs export differences at very high res
 
 ## Gotchas
+- Calibrated mode (`state.physical`, single photo only) derives heightScale,
+  reliefStrength and shadow reach in `app.js` updateDerived; export tiles reuse the
+  preview's measured `heightStats`, never re-measure.
+- No backticks inside GLSL comments: the shaders are JS template strings.
 - Must serve over HTTP (ES modules); don't open index.html directly.
 - Deploy index.html, studio.css, src/, _headers together.

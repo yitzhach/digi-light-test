@@ -14,6 +14,7 @@ import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -57,17 +58,50 @@ const state = {
   chroma: null,          // descriptive measurement of the loaded image
   placingSphere: false,
   lights: [],
+  // Calibrated relief (single photo). With `physical` on, one height field sized
+  // by the painting's width and the texture depth the user estimates drives both
+  // the shading normals and the cast shadows. Legacy projects carry physical: 0
+  // and keep their hand-set Depth and Texture strength.
+  physical: 1,
+  paintingWidthCm: 60,
+  textureDepthMm: 1,
+  photoDiffuse: 0.6,
+  heightStats: { dir: 1, cav: 1 },
 };
+
+/** Texture depth as a fraction of the painting's width — the unit heights use. */
+function physicalDepth(st) {
+  return Math.max(0, st.textureDepthMm) / Math.max(1, st.paintingWidthCm * 10);
+}
+
+/**
+ * The longest shadow any enabled light can cast across the painting: the tallest
+ * relief over the tangent of the light's lowest elevation, which is reached at the
+ * corner farthest from it. Bounds the march and the export tile margin.
+ */
+function shadowReach(st, depth, aspect) {
+  const rise = depth * st.reliefAmount * 1.5;
+  let reach = 0;
+  for (const l of st.lights) {
+    if (!l.enabled) continue;
+    let far = 0;
+    for (const [cx, cy] of [[0, 0], [1, 0], [0, aspect], [1, aspect]]) {
+      far = Math.max(far, Math.hypot(cx - l.x, cy - l.y * aspect));
+    }
+    reach = Math.max(reach, rise * far / Math.max(l.z, 0.01));
+  }
+  return Math.min(0.1, reach);
+}
 
 function newLight(i) {
   const spots = [[0.28, 0.78], [0.74, 0.66], [0.5, 0.22]];
   const p = spots[i % spots.length];
-  return {
+  return applyCharacter({
     x: p[0], y: p[1], z: 0.55,
     kelvin: 4300, useKelvin: true, hex: '#ffffff',
     rgb: kelvinToLinearRGB(4300),
-    power: 2.2, cone: 0.35, enabled: true,
-  };
+    power: 2.2, enabled: true,
+  }, 0.3);
 }
 state.lights.push(newLight(0));
 
@@ -91,13 +125,17 @@ async function loadSynthetic() {
 
   // The synthetic rig knows how it lit the scene, so seed the azimuth dial with
   // the truth. On a real photograph this is the one number the user has to supply.
-  const AZ = { symmetric: [-0.55, 0.45], single: [-0.55, 0.45], raking: [-0.90, 0.20] }[lighting];
+  const AZ = { symmetric: [-0.55, 0.45], single: [-0.55, 0.45], raking: [-0.90, 0.20], diffuse: [-0.55, 0.45] }[lighting];
   const deg = (Math.atan2(AZ[1], AZ[0]) * 180 / Math.PI + 360) % 360;
   $('azimuth').value = Math.round(deg);
   state.azimuthDeg = Math.round(deg);
+  // Likewise how it was lit: evenly for the soft-light rig, from one side otherwise.
+  state.photoDiffuse = lighting === 'diffuse' ? EVEN_SHARE : 0;
   syncOutputs();
 
-  $('synthNote').innerHTML = lighting === 'symmetric'
+  $('synthNote').innerHTML = lighting === 'diffuse'
+    ? 'Even soft light: no direction to read, but recesses receive less light. Choose <b>Even</b> under Photo was lit to read relief that way.'
+    : lighting === 'symmetric'
     ? '<b>Worst case by design.</b> Two matched opposing lights cancel first-order relief shading — that is what the geometry is for. Expect the recovery to find almost nothing here; that is the correct result, not a bug.'
     : lighting === 'raking'
       ? 'Easy case. Strong directional signal along the azimuth; almost none perpendicular to it.'
@@ -234,32 +272,71 @@ function rebuildTabs() {
   }
 }
 
+// Each light-panel slider reads its value back from the light, so one control
+// moving another (Angle moves Horizontal, Vertical and Distance) stays in step
+// without rebuilding the panel under the pointer.
+let lightRows = [];
+function syncLightRows(except) {
+  for (const r of lightRows) if (r.inp !== except) r.refresh();
+}
+
 function slider(label, min, max, step, value, oninput, fmt) {
   const row = document.createElement('div');
   row.className = 'row';
   const lab = document.createElement('label'); lab.textContent = label;
   const inp = document.createElement('input');
-  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = value;
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step;
+  const get = typeof value === 'function' ? value : () => value;
+  inp.value = get();
   const out = document.createElement('output');
   const show = () => { out.textContent = fmt ? fmt(parseFloat(inp.value)) : parseFloat(inp.value).toFixed(2); };
-  inp.oninput = () => { oninput(parseFloat(inp.value)); show(); render(); };
+  inp.oninput = () => { oninput(parseFloat(inp.value)); show(); syncLightRows(inp); render(); };
   show();
+  lightRows.push({ inp, refresh: () => { inp.value = get(); show(); } });
   row.append(lab, inp, out);
   return row;
 }
 
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const aspectNow = () => (imgW ? imgH / imgW : 1);
+const aimOf = (l) => [l.aimX ?? l.x, l.aimY ?? l.y];
+
+/** Angle between the light and the wall, seen from the point it aims at. */
+function elevationOf(l) {
+  const [ax, ay] = aimOf(l);
+  return Math.atan2(l.z, Math.hypot(l.x - ax, (l.y - ay) * aspectNow())) * 180 / Math.PI;
+}
+
+/**
+ * Swing a light up or down about its aim point, keeping its distance and its
+ * compass direction. Low angles rake across the paint and lengthen every cast
+ * shadow; 90 degrees is straight on, where relief casts almost none.
+ */
+function setElevation(l, deg) {
+  const a = aspectNow();
+  const [ax, ay] = aimOf(l);
+  l.aimX = ax; l.aimY = ay;
+  const vx = l.x - ax, vy = (l.y - ay) * a;
+  const d = Math.hypot(vx, vy, l.z);
+  const phi = Math.hypot(vx, vy) < 1e-4 ? Math.PI / 2 : Math.atan2(vy, vx);
+  const t = deg * Math.PI / 180, horiz = d * Math.cos(t);
+  l.z = clamp(d * Math.sin(t), 0.08, 2.5);
+  l.x = clamp(ax + horiz * Math.cos(phi), -0.4, 1.4);
+  l.y = clamp(ay + horiz * Math.sin(phi) / a, -0.4, 1.4);
+}
+
+const cm = (v) => v * (state.paintingWidthCm || 60);
+const fmtLength = (v) => { const c = cm(v); return c >= 100 ? `${(c / 100).toFixed(2)} m` : `${Math.round(c)} cm`; };
+
 function rebuildLightPanel() {
   const p = $('lightPanel');
   p.innerHTML = '';
+  lightRows = [];
   const l = state.lights[state.selected];
   if (!l) return;
 
   const head = document.createElement('div');
-  head.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:8px';
-
-  const mode = document.createElement('button');
-  mode.textContent = l.useKelvin ? 'Kelvin' : 'Custom';
-  mode.onclick = () => { l.useKelvin = !l.useKelvin; applyColor(l); rebuildLightPanel(); rebuildHandles(); render(); };
+  head.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap';
 
   const eye = document.createElement('button');
   eye.textContent = l.enabled ? 'Visible' : 'Hidden';
@@ -282,11 +359,44 @@ function rebuildLightPanel() {
     state.selected = state.lights.length - 1;
     rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
   };
-  head.append(mode, eye, dup, del);
+
+  // A matched pair either side of the painting is the commonest two-light setup.
+  const mirror = document.createElement('button'); mirror.textContent = 'Mirror';
+  mirror.title = 'Add a copy reflected across the painting\'s vertical centre line';
+  mirror.disabled = state.lights.length >= MAX_LIGHTS;
+  mirror.onclick = () => {
+    const [ax] = aimOf(l);
+    state.lights.push({ ...l, rgb: [...l.rgb], x: clamp(1 - l.x, -0.4, 1.4), aimX: 1 - ax, aimY: aimOf(l)[1] });
+    state.selected = state.lights.length - 1;
+    rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
+  };
+  head.append(eye, dup, mirror, del);
   p.appendChild(head);
 
+  // Light type: one click from bare spot to window light.
+  const types = document.createElement('div');
+  types.className = 'lightTypes';
+  const c = characterOf(l);
+  for (const [name, value] of lightTypes) {
+    const b = document.createElement('button');
+    b.textContent = name;
+    if (Math.abs(c - value) < 0.08) b.className = 'on';
+    b.onclick = () => { applyCharacter(l, value); rebuildLightPanel(); rebuildHandles(); render(); };
+    types.appendChild(b);
+  }
+  p.appendChild(types);
+
+  p.appendChild(slider('Diffusion', 0, 1, 0.01, () => characterOf(l), (v) => {
+    applyCharacter(l, v);
+    types.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', Math.abs(v - lightTypes[i][1]) < 0.08));
+  }, (v) => (v < 0.04 ? 'spot' : v > 0.96 ? 'diffused' : `${Math.round(v * 100)}%`)));
+  p.appendChild(slider('Brightness', 0, 8, 0.05, () => l.power, (v) => { l.power = v; }));
+  p.appendChild(slider('Angle to wall', 3, 90, 1, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
+    (v) => `${Math.round(v)}°`));
+  p.appendChild(slider('Distance', 0.08, 2.5, 0.01, () => l.z, (v) => { l.z = v; rebuildHandles(); }, fmtLength));
+
   if (l.useKelvin) {
-    p.appendChild(slider('Temperature', 1800, 10000, 50, l.kelvin,
+    p.appendChild(slider('Temperature', 1800, 10000, 50, () => l.kelvin,
       (v) => { l.kelvin = v; applyColor(l); rebuildHandles(); }, (v) => `${v | 0}K`));
   } else {
     const row = document.createElement('div');
@@ -299,20 +409,31 @@ function rebuildLightPanel() {
     p.appendChild(row);
   }
 
-  p.appendChild(slider('Horizontal', -0.4, 1.4, 0.01, l.x, (v) => { l.x = v; rebuildHandles(); }));
-  p.appendChild(slider('Vertical', -0.4, 1.4, 0.01, l.y, (v) => { l.y = v; rebuildHandles(); }));
-  p.appendChild(slider('Power', 0, 8, 0.05, l.power, (v) => { l.power = v; }));
-  p.appendChild(slider('Distance', 0.08, 2.5, 0.01, l.z, (v) => { l.z = v; rebuildHandles(); }));
-  p.appendChild(slider('Cone', 0, 1, 0.01, l.cone, (v) => { l.cone = v; },
+  const more = document.createElement('details');
+  more.className = 'moreLight';
+  more.open = !!state.moreLightOpen;
+  more.ontoggle = () => { state.moreLightOpen = more.open; };
+  more.innerHTML = '<summary>More light controls</summary>';
+  const mode = document.createElement('button');
+  mode.textContent = l.useKelvin ? 'Colour: Kelvin' : 'Colour: Custom';
+  mode.onclick = () => { l.useKelvin = !l.useKelvin; applyColor(l); rebuildLightPanel(); rebuildHandles(); render(); };
+  more.appendChild(mode);
+  more.appendChild(slider('Horizontal', -0.4, 1.4, 0.01, () => l.x, (v) => { l.x = v; rebuildHandles(); }));
+  more.appendChild(slider('Vertical', -0.4, 1.4, 0.01, () => l.y, (v) => { l.y = v; rebuildHandles(); }));
+  more.appendChild(slider('Cone', 0, 1, 0.01, () => l.cone, (v) => { l.cone = v; },
     (v) => (v < 0.02 ? 'flood' : v > 0.97 ? 'spot' : v.toFixed(2))));
-  p.appendChild(slider('Softness', 0, 1, 0.02, l.softness ?? 0.5, v => { l.softness = v; }));
-  p.appendChild(slider('Falloff', 0, 2, 0.05, l.falloff ?? 2, v => { l.falloff = v; }));
-  p.appendChild(slider('Aim X', -0.4, 1.4, 0.01, l.aimX ?? l.x, v => { l.aimX = v; }));
-  p.appendChild(slider('Aim Y', -0.4, 1.4, 0.01, l.aimY ?? l.y, v => { l.aimY = v; }));
+  more.appendChild(slider('Beam edge', 0, 1, 0.02, () => l.softness ?? 0.5, (v) => { l.softness = v; }));
+  more.appendChild(slider('Source size', 0, 1.5, 0.005, () => l.size ?? 0.03, (v) => { l.size = v; }, fmtLength));
+  more.appendChild(slider('Falloff', 0, 2, 0.05, () => l.falloff ?? 2, (v) => { l.falloff = v; }));
+  more.appendChild(slider('Aim X', -0.4, 1.4, 0.01, () => l.aimX ?? l.x, (v) => { l.aimX = v; }));
+  more.appendChild(slider('Aim Y', -0.4, 1.4, 0.01, () => l.aimY ?? l.y, (v) => { l.aimY = v; }));
+  p.appendChild(more);
 
   const note = document.createElement('p');
   note.className = 'note';
-  note.textContent = 'Drag to move. Shift-drag changes height; Alt/Option-drag changes beam width. Falloff 2 is inverse-square; lower values are artistic adjustments. Softness is an approximation.';
+  note.textContent = 'Drag the dot to place the light. Lower angles rake across the paint and lengthen shadows. '
+    + 'Spot gives crisp shadows and a tight beam; Diffused gives soft shadows that flatten texture. '
+    + 'Shift-drag changes distance; Alt/Option-drag changes beam width.';
   p.appendChild(note);
 }
 
@@ -372,6 +493,8 @@ const VIEWS = [
   ['Height', 2, 'Reconstructed relief after integration along the azimuth.'],
   ['Albedo', 3, 'Base colour with the baked fine-scale shading divided out.'],
   ['Original', 4, 'The untouched source, for before/after.'],
+  ['Shadows', 6, 'Where the lights cast shadows across the relief: blue is shadow. Raise the texture '
+    + 'depth or lower a light\'s angle and they lengthen; a diffused light softens their edges.'],
 ];
 
 function rebuildViews() {
@@ -397,12 +520,24 @@ const PS_REFERENCE_W = 700;
 
 function updateDerived(workingW) {
   const W = Math.max(1, workingW);
+  // Calibrated relief is a single-photo model; a capture measures its own heights.
+  state.calibrated = state.mode === 'single' && !!state.physical;
   if (state.mode === 'photometric') {
     // Measured relief sits at its true physical scale whatever the resolution,
     // so shadow reach is a fraction of image width and stays put.
     state.shadowDist = state.shadowSpread * 0.005;
     state.shadowDistPx = state.shadowDist * W;
     state.psHeightGain = PS_REFERENCE_W / W;
+  } else if (state.physical) {
+    // Calibrated: heights are in painting widths, so a normal's slope is the height
+    // difference over the texel's width. That gain grows with resolution, which is
+    // exactly the rescale export needs; shadow reach is geometry, not pixels.
+    const depth = physicalDepth(state);
+    state.heightScale = depth;
+    state.reliefStrength = depth * W / 2;
+    state.shadowDist = shadowReach(state, depth, imgH / Math.max(1, imgW));
+    state.shadowDistPx = state.shadowDist * W;
+    state.aoScale = 3 * Math.min(1, Math.sqrt(state.textureDepthMm / 2));
   } else {
     // Single-image relief is parameterised in PIXELS, so its features shrink as
     // resolution rises; tying shadow reach to the relief scale keeps the two in
@@ -460,7 +595,9 @@ function renderNow() {
           }
         }
       } else {
-        targets = gbuf.build(srcTex, imgW, imgH, state);
+        // The preview measures the height spread; export tiles reuse it.
+        targets = gbuf.build(srcTex, imgW, imgH, { ...state, measureHeight: !!state.physical });
+        state.heightStats = { ...gbuf.heightStats };
       }
       dirtySurface = false;
     }
@@ -486,7 +623,7 @@ function syncOutputs() {
   document.querySelectorAll('#panel .grp .row').forEach((row) => {
     const inp = row.querySelector('input[type=range]');
     const out = row.querySelector('output');
-    if (inp && out && inp.id) out.textContent = parseFloat(inp.value).toFixed(inp.step < 1 ? 3 : 0);
+    if (inp && out && inp.id && !out.hasAttribute('data-own')) out.textContent = parseFloat(inp.value).toFixed(inp.step < 1 ? 3 : 0);
   });
 }
 

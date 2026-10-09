@@ -38,6 +38,19 @@
 // achromatic because it scales every channel together, whereas a pigment change
 // usually shifts hue — so where hue moves at fine scale, the chroma-reject term
 // below down-weights the contribution.
+//
+// EVEN-LIGHT ESTIMATE. The directional model above has nothing to work with when
+// the photograph was lit evenly, which is how most paintings are photographed.
+// Even light still leaves a signal, just a different one: recesses see less of
+// the surrounding light than crests do, so they photograph darker. Read that way
+// the band-passed luminance is itself a (rough) height, with no integration and
+// no preferred direction. It is a heuristic — dark pigment also reads as low —
+// so the two estimates are blended by how the photo was lit (`photoDiffuse`).
+//
+// CALIBRATION. Both estimates are in arbitrary units. Each is normalised so its
+// 2nd–98th percentile spread is 1; the caller then scales that unit to the
+// texture depth the user enters, in millimetres, so shading and cast shadows
+// come from one physically sized height field instead of two unrelated gains.
 
 import { program, makeTarget, bindTarget, bindTextures, drawFullscreen } from './gl.js';
 
@@ -109,6 +122,11 @@ void main() {
   float Lf = max(texture(uFine, vUV).a, 1e-4);
   float Lc = max(texture(uBroad, vUV).a, 1e-4);
   float h = uBands.x * log(L / Lf) + uBands.y * log(Lf / Lb) + uBands.z * log(Lb / Lc);
+  // Even-light reading of the same bands. The broad band is left out on purpose:
+  // in soft light a busy impasto passage photographs darker overall even though it
+  // stands higher, so beyond stroke scale brightness stops meaning height (measured
+  // on the synthetic soft-light rig: including it turns the correlation negative).
+  float hEven = uBands.x * log(L / Lf) + uBands.y * log(Lf / Lb);
 
   // Chroma reject: compare the fine-scale hue against the local average hue.
   // A pure shading change leaves chromaticity untouched; a pigment change moves it.
@@ -117,7 +135,7 @@ void main() {
   float hueShift = length(chromaA - chromaB);
   float w = 1.0 - uChromaReject * smoothstep(0.02, 0.25, hueShift);
 
-  outColor = vec4(h * w, hueShift, 0.0, 1.0);
+  outColor = vec4(h * w, hueShift, hEven * w, 1.0);
 }`;
 
 // Directional integration: reconstruct height by accumulating −slope backwards
@@ -142,7 +160,21 @@ void main() {
     acc += -texture(uSlope, suv).r * wt;
     total += wt;
   }
-  outColor = vec4(total > 0.0 ? acc / total : 0.0, 0.0, 0.0, 1.0);
+  // g: the even-light estimate, read straight off the band-passed luminance.
+  outColor = vec4(total > 0.0 ? acc / total : 0.0, texture(uSlope, vUV).b, 0.0, 1.0);
+}`;
+
+// Point-sample both height estimates on a scattered grid, so their spread can be
+// measured on the CPU from a few thousand values instead of a full readback.
+const SAMPLE_FS = `${HEAD}
+uniform sampler2D uHeight;
+uniform vec2 uSize;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main() {
+  vec2 cell = floor(gl_FragCoord.xy);
+  vec2 jitter = vec2(hash(cell), hash(cell + 17.0));
+  vec2 uv = (gl_FragCoord.xy - 0.5 + jitter) / uSize;
+  outColor = texture(uHeight, uv);
 }`;
 
 // Normals by central difference on the height field. Sobel would be smoother but
@@ -152,16 +184,21 @@ const NORMAL_FS = `${HEAD}
 uniform sampler2D uHeight;
 uniform vec2 uTexel;
 uniform float uStrength;
+uniform vec3 uMix;   // x: directional scale, y: even-light scale, z: even-light share
+float heightAt(vec2 uv) {
+  vec2 e = texture(uHeight, uv).rg;
+  return mix(e.r * uMix.x, e.g * uMix.y, uMix.z);
+}
 void main() {
-  float l = texture(uHeight, vUV - vec2(uTexel.x, 0.0)).r;
-  float r = texture(uHeight, vUV + vec2(uTexel.x, 0.0)).r;
-  float d = texture(uHeight, vUV - vec2(0.0, uTexel.y)).r;
-  float u = texture(uHeight, vUV + vec2(0.0, uTexel.y)).r;
+  float l = heightAt(vUV - vec2(uTexel.x, 0.0));
+  float r = heightAt(vUV + vec2(uTexel.x, 0.0));
+  float d = heightAt(vUV - vec2(0.0, uTexel.y));
+  float u = heightAt(vUV + vec2(0.0, uTexel.y));
 
   // dh/dx and dh/dy scaled into a slope. +Y is up because the source texture was
   // uploaded flipped, so the shading space and the light-handle space agree.
   vec3 n = normalize(vec3((l - r) * uStrength, (d - u) * uStrength, 1.0));
-  outColor = vec4(n * 0.5 + 0.5, texture(uHeight, vUV).r);
+  outColor = vec4(n * 0.5 + 0.5, heightAt(vUV));
 }`;
 
 // Albedo: divide the fine-scale shading back out, so the relight does not
@@ -194,10 +231,42 @@ export class GBuffer {
       slope: program(gl, SLOPE_FS, 'slope'),
       integrate: program(gl, INTEGRATE_FS, 'integrate'),
       normal: program(gl, NORMAL_FS, 'normal'),
+      sample: program(gl, SAMPLE_FS, 'sample'),
       albedo: program(gl, ALBEDO_FS, 'albedo'),
     };
     this.targets = null;
     this.size = { w: 0, h: 0 };
+    this.sampleTarget = null;
+    // Spread of each estimate from the last measured build; reused by export tiles,
+    // which must be scaled exactly like the preview rather than measured alone.
+    this.heightStats = { dir: 1, cav: 1 };
+  }
+
+  /**
+   * Robust spread (2nd–98th percentile) of both height estimates. Read back from
+   * a 128x128 scattered sample, which is plenty for two percentiles and keeps the
+   * readback small enough to run on every surface rebuild.
+   */
+  measureHeight(heightTex) {
+    const { gl, caps } = this.glctx;
+    const N = 128;
+    if (!this.sampleTarget) this.sampleTarget = makeTarget(gl, N, N, { float: true, linear: false, caps });
+    bindTarget(gl, this.sampleTarget);
+    gl.useProgram(this.progs.sample.program);
+    bindTextures(gl, this.progs.sample, [['uHeight', heightTex]]);
+    gl.uniform2f(this.progs.sample.uniforms.uSize, N, N);
+    drawFullscreen(gl);
+    const px = new Float32Array(N * N * 4);
+    gl.readPixels(0, 0, N, N, gl.RGBA, gl.FLOAT, px);
+    const spread = (ch) => {
+      const v = new Float32Array(N * N);
+      for (let i = 0; i < N * N; i++) v[i] = px[i * 4 + ch];
+      v.sort();
+      return v[Math.floor(N * N * 0.98)] - v[Math.floor(N * N * 0.02)];
+    };
+    const dir = spread(0), cav = spread(1);
+    // A blank image has no spread; keep the scale finite rather than amplifying noise.
+    return { dir: Math.max(dir, 1e-4), cav: Math.max(cav, 1e-4) };
   }
 
   resize(w, h) {
@@ -267,9 +336,17 @@ export class GBuffer {
       gl.uniform1f(u.uTaps, integrateTaps);
     });
 
+    // Calibrated mode measures the preview and reuses that spread for export tiles;
+    // legacy mode keeps the raw directional estimate exactly as it always was.
+    if (opts.measureHeight) this.heightStats = this.measureHeight(T.height.tex);
+    const calibrated = !!opts.physical;
+    const stats = !calibrated ? { dir: 1, cav: 1 }
+      : opts.measureHeight ? this.heightStats : (opts.heightStats || this.heightStats);
+    const share = Math.min(1, Math.max(0, opts.photoDiffuse ?? 0));
     run(this.progs.normal, T.normal, [['uHeight', T.height.tex]], (u) => {
       gl.uniform2f(u.uTexel, 1 / w, 1 / h);
       gl.uniform1f(u.uStrength, reliefStrength);
+      gl.uniform3f(u.uMix, 1 / stats.dir, 1 / stats.cav, share);
     });
 
     run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex]], (u) => {
