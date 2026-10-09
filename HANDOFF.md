@@ -5,9 +5,9 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-09
-- Last code change on `main`: `e1c2e26` (2026-09-18) — "Add reusable named presets across paintings"
-- Branch `claude/lucid-gauss-q7yewo` (not merged yet): calibrated relief, spot↔diffused lights, Quick setup
-- Live: static site, deployed manually to Cloudflare Pages (see README "Manual hosting")
+- Last code change on `main`: `a38309f` (2026-10-09) — merged PR #1: calibrated relief, spot↔diffused lights, Quick setup
+- Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
+- Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
 ## What it is
 Static, no-build, in-browser painting relighter (WebGL2, ES modules). Upload a photo
@@ -28,7 +28,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
-- 10-09 (branch): texture depth (mm) + painting width drive one height field for shading
+- 10-09 (PR #1): texture depth (mm) + painting width drive one height field for shading
   and shadows; even-light relief estimate for evenly lit photos (`photoDiffuse`);
   per-light source size, angular penumbra, physical shadow reach; Quick setup,
   photo-lit compass, light types/Diffusion/Angle/Mirror, Sweep light, Shadows view;
