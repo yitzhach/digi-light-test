@@ -8,7 +8,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on">Light guides</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -276,7 +276,9 @@ export function initStudio(api) {
   $('compare').onclick=()=>{if(state.exporting)return; before=!before;split=false;comparison();};
   $('splitView').onclick=()=>{if(state.exporting)return;split=!split;before=false;comparison();};
   splitRow.querySelector('input').oninput=comparison;
-  $('showHandles').onclick=()=>{const off=$('wrap').classList.toggle('hideGuides'); $('showHandles').classList.toggle('on',!off);};
+  $('showHandles').onclick=()=>{const off=$('wrap').classList.toggle('hideGuides'); $('showHandles').classList.toggle('on',!off); $('showHandles').textContent=`Light dots: ${off?'off':'on'}`;};
+  // Grabbing a light dot always wins: leave Before/Split and brush mode so the move is visible.
+  $('wrap').addEventListener('pointerdown',e=>{if(!e.target.closest('.handle'))return;if(before||split){before=false;split=false;comparison();}if(brush)setBrush('');},true);
   $('views').addEventListener('click',()=>{before=false;split=false;state.compareSplit=-1;splitRow.hidden=true;$('wrap').classList.remove('comparing');$('compare').classList.remove('on');$('splitView').classList.remove('on');$('compareLabel').textContent='DIAGNOSTIC VIEW';render();});
   function setBrush(value){brush=value;$('wrap').classList.toggle('brushing',!!brush);for(const [id,v] of [['brushOff',''],['brushAdd','add'],['brushRemove','remove']])$(id).classList.toggle('on',value===v);}
   $('brushOff').onclick=()=>setBrush('');$('brushAdd').onclick=()=>setBrush('add');$('brushRemove').onclick=()=>setBrush('remove');
@@ -376,7 +378,9 @@ export function initStudio(api) {
   $('importPreset').onclick=()=>$('presetFile').click();
   $('presetFile').onchange=()=>busy(async()=>{const f=$('presetFile').files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Preset exceeds the 1 MB import limit.');const p=validatePreset(JSON.parse(await f.text()));p.id=crypto.randomUUID();p.updated=Date.now();await storage('presets','readwrite',s=>s.put(p));await listPresets(p.id);applyUserPreset(p);$('presetFile').value='';presetStatus(`Imported and applied “${p.name}”.`);});
   Promise.all([list(),listPresets()]).catch(()=>status('Browser storage unavailable. Downloaded projects and presets still work.'));
-  const onSource=async()=>{stopSweep();const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();history.reset(snapshot());historyUI();};
+  const onSource=async e=>{stopSweep();if(e.detail?.keep){sync();return;}const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();checkpointSource();};
+  // A new photo keeps the undo history, so Undo brings back the previous settings.
+  function checkpointSource(){if(history.index<0)history.reset(snapshot());else history.push(snapshot());historyUI();}
   document.addEventListener('digilight:source',onSource);
   syncQuick();rebuildMask();history.reset(snapshot());historyUI();
   window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};

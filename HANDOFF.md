@@ -28,6 +28,10 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-09 (branch `claude/charming-goodall-k3m6fo`, not merged): "Light dots: on/off" toggle (was
+  "Light guides") is the only thing hiding dots besides Sweep; grabbing a dot leaves
+  Before/Split and brush mode; off-painting lights pin to the edge. Open your painting
+  no longer resets edits; a new photo is undoable (history kept).
 - 10-09 (PR #1): texture depth (mm) + painting width drive one height field for shading
   and shadows; even-light relief estimate for evenly lit photos (`photoDiffuse`);
   per-light source size, angular penumbra, physical shadow reach; Quick setup,

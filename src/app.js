@@ -154,7 +154,7 @@ function loadFile(file) {
   });
 }
 
-async function setSource(src) {
+async function setSource(src, keep = false) {
   const { gl } = glctx;
   const w = src.width || src.naturalWidth;
   const h = src.height || src.naturalHeight;
@@ -200,7 +200,8 @@ async function setSource(src) {
 
   dirtySurface = true;
   render();
-  document.dispatchEvent(new Event('digilight:source'));
+  // keep: same picture re-shown (e.g. switching back to Upload) -- leave the edits alone.
+  document.dispatchEvent(new CustomEvent('digilight:source', { detail: { keep } }));
 }
 
 /**
@@ -441,6 +442,13 @@ function applyColor(l) {
   l.rgb = l.useKelvin ? kelvinToLinearRGB(l.kelvin) : hexToLinearRGB(l.hex);
 }
 
+// Lights may sit past the painting's edge; pin their dot to the edge so it stays grabbable.
+function placeHandle(d, l) {
+  const clamp = (v) => Math.min(100, Math.max(0, v));
+  d.style.left = `${clamp(l.x * 100)}%`;
+  d.style.top = `${clamp((1 - l.y) * 100)}%`;
+}
+
 function rebuildHandles() {
   wrap.querySelectorAll('.handle').forEach((h) => h.remove());
   state.lights.forEach((l, i) => {
@@ -451,8 +459,7 @@ function rebuildHandles() {
     const px = 18 + l.z * 26;
     d.style.width = d.style.height = `${px}px`;
     d.style.margin = `${-px / 2}px 0 0 ${-px / 2}px`;
-    d.style.left = `${l.x * 100}%`;
-    d.style.top = `${(1 - l.y) * 100}%`;
+    placeHandle(d, l);
     d.onpointerdown = (e) => {
       e.preventDefault();
       state.selected = i; rebuildTabs(); rebuildLightPanel();
@@ -468,8 +475,7 @@ function rebuildHandles() {
           l.x = Math.min(1.4, Math.max(-0.4, (ev.clientX - r.left) / r.width));
           l.y = Math.min(1.4, Math.max(-0.4, 1 - (ev.clientY - r.top) / r.height));
         }
-        el.style.left = `${l.x * 100}%`;
-        el.style.top = `${(1 - l.y) * 100}%`;
+        placeHandle(el, l);
         render();
       };
       const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); rebuildLightPanel(); rebuildHandles(); };
@@ -694,7 +700,7 @@ async function boot() {
     $('psTruth').className = '';
     rebuildViews();
     dirtySurface = true;
-    if (!photometric && v === 'upload') await setSource(fullSource);
+    if (!photometric && v === 'upload') await setSource(fullSource, true);
     if (v === 'synth') await setSource(await loadSynthetic());
     else if (v === 'psynth') await setSource(await loadSyntheticCapture());
   });
