@@ -193,7 +193,9 @@ export function initStudio(api) {
     const image=await new Promise((resolve,reject)=>c.toBlob(b=>{if(!b)return reject(new Error('Image too large to save.'));const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(b);},'image/png'));
     return {format:'digilight',version:1,id:projectId||crypto.randomUUID(),name:$('projectName').value.trim()||'Untitled painting',updated:Date.now(),image,settings:snapshot()};
   }
-  async function busy(fn){if(loading||state.exporting)return;loading=true;try{await fn();}catch(e){status(e.message);}finally{loading=false;}}
+  // Queue storage operations rather than dropping one that arrives while another runs.
+  let queue=Promise.resolve();
+  function busy(fn){const run=queue.then(async()=>{if(state.exporting)return;loading=true;try{await fn();}catch(e){status(e.message);}finally{loading=false;}});queue=run;return run;}
   async function save(variation){await busy(async()=>{const p=await project();if(variation){p.id=crypto.randomUUID();p.name+=' — variation';}await storage('projects','readwrite',s=>s.put(p));projectId=p.id;$('projectName').value=p.name;await list();status('Saved in this browser. Download project for a portable backup.');});}
   $('saveProject').onclick=()=>save(false);$('saveVariation').onclick=()=>save(true);
   function validate(p){
