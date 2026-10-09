@@ -5,7 +5,7 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-09
-- `main` at `e1c2e26` (2026-09-18) — "Add reusable named presets across paintings"
+- Last code change on `main`: `e1c2e26` (2026-09-18) — "Add reusable named presets across paintings"
 - Live: static site, deployed manually to Cloudflare Pages (see README "Manual hosting")
 
 ## What it is
