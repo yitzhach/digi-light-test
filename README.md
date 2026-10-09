@@ -88,6 +88,10 @@ can resemble relief, and flat copy lighting suppresses texture information.
 Photometric mode supports matching photos with varied, known light directions;
 use more than four shots with varied elevation when fitting ambient.
 
+## Automatic deploys
+`wrangler.jsonc` tells Cloudflare Workers Builds to publish this folder as a static
+site on every push (no build step); `.assetsignore` keeps tests and notes out of it.
+
 ## Manual hosting
 This folder is the complete static site. index.html must be at the deployment
 root beside src/ and _headers. Upload the ZIP as a Cloudflare Pages direct upload,
