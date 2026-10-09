@@ -33,6 +33,14 @@ await page.click('#showHandles');assert.ok(!(await page.locator('.handle').first
 await slider('fineRelief',1.3);await page.click('#openPhoto');await settle();assert.equal(await setting('fineRelief'),1.3);
 await page.locator('#file').setInputFiles({name:'again.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.state.fineRelief!==1.3);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),1.3);
 console.log('PASS light dots override compare/brush; reopening keeps edits; new photo undoable');
+{const sel=await setting('selected');const preX=(await setting('lights'))[sel].x;await page.getByRole('button',{name:'Graze from left'}).click();await settle();const g=(await setting('lights'))[sel];
+const deg=Math.atan2(g.z,Math.hypot(g.x-g.aimX,(g.y-g.aimY)*300/240))*180/Math.PI;assert.ok(g.x<0&&Math.abs(deg-3)<0.2&&g.power>8,JSON.stringify(g));assert.equal(await setting('shadow'),1);
+await page.click('#zoomFit');assert.ok((await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
+await page.click('#zoomLights');await settle();assert.ok(await setting('viewZoom')<1);assert.ok(!(await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
+const hb=await page.locator('.handle').nth(sel).boundingBox(),cb=await page.locator('#gl').boundingBox();assert.ok(hb.x+hb.width/2<cb.x);
+await page.click('#zoomOut');assert.ok(await setting('viewZoom')<0.85);await page.click('#zoomFit');assert.equal(await setting('viewZoom'),1);
+await page.click('#undo');await settle();assert.equal((await setting('lights'))[sel].x,preX);}
+console.log('PASS graze light, view zoom and off-painting dots');
 await page.getByText('My reusable presets',{exact:true}).click();await page.fill('#presetName','My gallery look');const presetStrength=await setting('fineRelief');await page.click('#savePreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('Saved'));
 await slider('fineRelief',.15);await page.click('#applyPreset');await settle();assert.equal(await setting('fineRelief'),presetStrength);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),.15);await page.click('#redo');await settle();assert.equal(await setting('fineRelief'),presetStrength);
 await page.check('#defaultPreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('This preset'));

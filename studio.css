@@ -39,3 +39,10 @@ details { margin-top:12px; } summary { cursor:pointer; color:var(--dim); font-si
 #fineTune h2 { border-bottom:0; padding:12px 14px 2px; }
 input[type=range]:disabled { opacity:.35; }
 .sweeping .handle, .sweeping #beamGuide { display:none!important; }
+
+/* View zoom and pinned (off-view) light dots */
+.zoomGroup { display:inline-flex; gap:2px; }
+.zoomGroup button { min-width:30px; }
+.handle.pinned { border-style:dashed; }
+.lightTypes.graze { align-items:center; }
+.lightTypes.graze span { color:var(--dim); font-size:11px; margin-right:2px; }

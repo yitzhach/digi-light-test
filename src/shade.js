@@ -62,6 +62,7 @@ uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 origin
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
+const int SHADOW_STEPS_MAX = 96;
 
 float D_GGX(float NoH, float a) {
   float a2 = a * a;
@@ -112,8 +113,12 @@ float shadowMarch(vec2 uv, vec3 L, float penumbra) {
   if (maxDist <= tMin) return 1.0;
   float h0 = sampleHeight(uv);
   float horizon = -1.0e3;                  // tangent of the highest blocker seen
-  for (int i = 1; i <= SHADOW_STEPS; i++) {
-    float f = float(i) / float(SHADOW_STEPS);
+  // Long (grazing) marches take more steps so thin ridges are not stepped over;
+  // about one step per three texels, never fewer than the usual 32.
+  int steps = clamp(int(maxDist / (3.0 * uTexelGlobal)), SHADOW_STEPS, SHADOW_STEPS_MAX);
+  for (int i = 1; i <= SHADOW_STEPS_MAX; i++) {
+    if (i > steps) break;
+    float f = float(i) / float(steps);
     float t = tMin + (maxDist - tMin) * pow(f, 1.5);
     vec2 suv = uv + (dir * t / vec2(1.0, uAspect)) / uUVScale;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;

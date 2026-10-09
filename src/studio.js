@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -8,7 +8,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Shrink the view to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Enlarge the view ( + key )">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -147,7 +147,16 @@ export function initStudio(api) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); }
     if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) $('compare').click();
     if (e.key === 'Escape') stopSweep();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (e.key === '-' || e.key === '_') $('zoomOut').click(); else if (e.key === '=' || e.key === '+') $('zoomIn').click(); else if (e.key === '0') $('zoomFit').click(); }
   });
+  const zoomSteps=[1,0.85,0.7,0.55,0.4,0.3,0.2];
+  const zoomTo=z=>api.setZoom(z);
+  $('zoomOut').onclick=()=>zoomTo(zoomSteps.find(z=>z<(state.viewZoom||1)-0.01)??0.2);
+  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??1);
+  $('zoomFit').onclick=()=>zoomTo(1);
+  $('zoomLights').onclick=()=>zoomTo('lights');
+  document.addEventListener('digilight:zoom',()=>{$('zoomFit').textContent=`${Math.round((state.viewZoom||1)*100)}%`;});
+  document.addEventListener('digilight:settings',()=>sync());
   // Capture one final snapshot per gesture; input events only redraw.
   document.addEventListener('change', () => setTimeout(checkpoint,0));
   document.addEventListener('pointerup', () => setTimeout(checkpoint,0));
@@ -179,7 +188,7 @@ export function initStudio(api) {
   function makeLight(v) {
     const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
   }
-  function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; refresh(); }
+  function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; for (const k of ['shadow','shadowSoftness']) if (k in scene) state[k]=scene[k]; refresh(); }
   // Any calibrated control switches a legacy project over to calibrated relief.
   function calibrate() { state.physical = 1; }
   function useTexture(name) {
@@ -322,7 +331,7 @@ export function initStudio(api) {
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
-    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',-0.4,1.4],['y',-0.4,1.4],['z',0.08,2.5],['power',0,8],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',-0.4,1.4],['aimY',-0.4,1.4],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
+    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
     const strokes=p.settings.strokes||[];let points=0;if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');
     settings.strokes=strokes.map(s=>{if(!['add','remove'].includes(s.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});
