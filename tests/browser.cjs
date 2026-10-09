@@ -28,6 +28,28 @@ await page.click('#undo');await settle();assert.notEqual((await setting('lights'
 console.log('PASS duplicate lights, dragging and gesture undo');
 await page.getByText('Local texture correction',{exact:true}).click();await page.click('#brushRemove');const preBrush=await pixels();await page.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*.6,box.y+box.height*.5,{steps:8});await page.mouse.up();await settle();assert.equal((await setting('strokes')).length,1);assert.notEqual(await pixels(),preBrush);await page.click('#undo');await settle();assert.equal((await setting('strokes')).length,0);assert.equal(await pixels(),preBrush);await page.click('#redo');await settle();assert.equal((await setting('strokes')).length,1);
 console.log('PASS relief brush pixels and undo redo');
+await page.click('#brushAdd');await page.click('#compare');assert.ok(await page.locator('.handle').first().isVisible());{const hb=await page.locator('.handle').first().boundingBox();await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await page.mouse.down();await page.mouse.up();}await settle();assert.equal(await setting('viewMode'),0);assert.ok(!(await page.locator('#wrap').getAttribute('class')||'').includes('brushing'));
+await page.click('#showHandles');assert.ok(!(await page.locator('.handle').first().isVisible()));await page.click('#showHandles');assert.ok(await page.locator('.handle').first().isVisible());
+await slider('fineRelief',1.3);await page.click('#openPhoto');await settle();assert.equal(await setting('fineRelief'),1.3);
+await page.locator('#file').setInputFiles({name:'again.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.state.fineRelief!==1.3);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),1.3);
+console.log('PASS light dots override compare/brush; reopening keeps edits; new photo undoable');
+{const sel=await setting('selected');const preX=(await setting('lights'))[sel].x;await page.getByRole('button',{name:'Graze from left'}).click();await settle();const g=(await setting('lights'))[sel];
+const deg=Math.atan2(g.z,Math.hypot(g.x-g.aimX,(g.y-g.aimY)*300/240))*180/Math.PI;assert.ok(g.x<0&&Math.abs(deg-3)<0.2&&g.power>8,JSON.stringify(g));assert.equal(await setting('shadow'),1);
+await page.click('#zoomFit');assert.ok((await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
+await page.click('#zoomLights');await settle();assert.ok(await setting('viewZoom')<1);assert.ok(!(await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
+const hb=await page.locator('.handle').nth(sel).boundingBox(),cb=await page.locator('#gl').boundingBox();assert.ok(hb.x+hb.width/2<cb.x);
+await page.click('#zoomOut');assert.ok(await setting('viewZoom')<0.85);await page.click('#zoomFit');assert.equal(await setting('viewZoom'),1);
+await page.click('#undo');await settle();assert.equal((await setting('lights'))[sel].x,preX);}
+console.log('PASS graze light, view zoom and off-painting dots');
+await page.getByText('Layers · blend effects',{exact:true}).click();const noLayer=await pixels();await page.click('#addLayer');await settle();
+let layers=await setting('layers');assert.deepEqual(layers,[{mode:'pinLight',source:'original',opacity:.35,enabled:true}]);const pin=await pixels();assert.notEqual(pin,noLayer);
+await page.locator('.lyOpacity').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});await settle();assert.equal(await pixels(),noLayer);
+await page.click('#undo');await settle();assert.equal((await setting('layers'))[0].opacity,.35);assert.equal(await pixels(),pin);
+await page.selectOption('.lyMode','multiply');await settle();const mult=await pixels();assert.notEqual(mult,pin);await page.click('.lyVis');await settle();assert.equal(await pixels(),noLayer);await page.click('.lyVis');
+await page.click('#compare');await settle();assert.notEqual(await pixels(),mult);await page.click('#compare');
+await page.click('.lyDup');await settle();assert.equal((await setting('layers')).length,2);await page.click('#undo');await settle();assert.equal((await setting('layers')).length,1);
+await page.selectOption('.lyMode','pinLight');await settle();assert.equal(await pixels(),pin);
+console.log('PASS blend layers: add, opacity, mode, visibility, duplicate, undo');
 await page.getByText('My reusable presets',{exact:true}).click();await page.fill('#presetName','My gallery look');const presetStrength=await setting('fineRelief');await page.click('#savePreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('Saved'));
 await slider('fineRelief',.15);await page.click('#applyPreset');await settle();assert.equal(await setting('fineRelief'),presetStrength);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),.15);await page.click('#redo');await settle();assert.equal(await setting('fineRelief'),presetStrength);
 await page.check('#defaultPreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('This preset'));
@@ -46,6 +68,7 @@ const difference=await page.evaluate(async b=>{const im=new Image();await new Pr
 assert.deepEqual([difference.width,difference.height],[240,300]);assert.ok(difference.mean<1,JSON.stringify(difference));console.log('PASS export matches relit preview',difference);
 const tiledDifference=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const tiled=await __bench.exportFullRes();const b=tiled.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(tiledDifference<1,'Tile difference '+tiledDifference);console.log('PASS multi-tile export with brush mask',tiledDifference);
 await page.selectOption('#exportFmt','image/jpeg');await slider('exportScale',50);const jpegDownload=page.waitForEvent('download');await page.click('#exportBtn');const jpeg=await jpegDownload;await jpeg.saveAs(outputDir + '/export.jpg');await page.waitForFunction(()=>!__bench.state.exporting&&!document.querySelector('#exportBtn').disabled);console.log('PASS scaled JPEG export');
+assert.equal((await setting('layers')).length,1);await page.evaluate(()=>{document.querySelector('#layersSection').open=true;});await page.click('.lyDel');await settle();assert.equal((await setting('layers')).length,0);
 // Calibrated relief: quick setup, photo lighting and texture depth, all undoable.
 await page.selectOption('#surfacePreset','Palette-knife impasto');await settle();assert.equal(await setting('textureDepthMm'),3.5);assert.equal(await setting('physical'),1);assert.equal(await setting('reliefScale'),4.5);
 await page.click('#photoCompass button[data-dir=l]');await settle();assert.equal(await setting('photoDiffuse'),0);assert.equal(await setting('azimuthDeg'),180);

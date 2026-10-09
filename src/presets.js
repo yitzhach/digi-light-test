@@ -57,6 +57,36 @@ export function applyCharacter(l, c) {
 export function characterOf(l) {
   return Math.min(1, Math.cbrt(Math.max(0, ((l.size ?? 0.03) - 0.01) / 0.99)));
 }
+// Where a light may sit, in painting widths/heights. Well past the edges, so a raking
+// light can stand back from the painting; zoom the view out to see its dot.
+export const LIGHT_MIN = -1.5, LIGHT_MAX = 2.5, LIGHT_Z_MIN = 0.01;
+export const POWER_MAX = 1024;
+
+/**
+ * Grazing light: the lamp almost in the painting's own plane, a painting width out
+ * from the centre, so every ridge throws a long, hard shadow across the paint. Flat
+ * paint only catches sin(angle) of the light there, so the brightness is raised to
+ * keep the centre a little under a normal exposure: ridges facing the lamp catch
+ * many times more and would otherwise blow out. 3 degrees is the default because
+ * estimated relief turns glittery below that; the angle slider still goes to 1.
+ */
+export const GRAZE_DEG = 3, GRAZE_DISTANCE = 1;
+export function grazePower(dist, deg) {
+  return Math.min(POWER_MAX, 0.35 * Math.PI / ((0.5 / dist) ** 2 * Math.sin(deg * Math.PI / 180)));
+}
+const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
+
+// Blend layers: copies of the photo composited over the relit result, the way an
+// image editor's layer blend modes work (in display space, top of the list last).
+export const MAX_LAYERS = 4;
+export const blendModes = [
+  ['normal', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay'],
+  ['softLight', 'Soft light'], ['hardLight', 'Hard light'], ['colorDodge', 'Color dodge'],
+  ['colorBurn', 'Color burn'], ['linearLight', 'Linear light'], ['vividLight', 'Vivid light'],
+  ['pinLight', 'Pin light'], ['darken', 'Darken'], ['lighten', 'Lighten'],
+];
+export const layerSources = [['original', 'Original'], ['relit', 'Relit']];
+
 export const lightTypes = [['Spot', 0], ['Track', 0.25], ['Flood', 0.5], ['Softbox', 0.75], ['Window', 1]];
 
 // Lighting scenes. Positions are in painting widths (x right, y up, z out from the
@@ -76,6 +106,7 @@ export const lighting = {
   'Two-light studio':    { ambient: 0.22, lights: [L(-0.1, 0.75, 0.8, 4, 5500, 0, 0.85, 0.2), L(1.1, 0.7, 0.8, 3, 5500, 0, 0.85, 0.2)] },
   'Overhead wash':       { ambient: 0.22, lights: [L(0.5, 1.2, 0.85, 6, 4500, 0, 0.8, 0.4)] },
   'Candlelight':         { ambient: 0.04, lights: [L(0.12, 0.15, 0.3, 1.4, 1850, 0, 0.6, 0.015)] },
+  'Grazing side light':  { ambient: 0.06, shadow: 1, shadowSoftness: 0.03, lights: [L(0.5 - GRAZE_DISTANCE, 0.5, grazeZ, grazePower(Math.hypot(GRAZE_DISTANCE, grazeZ), GRAZE_DEG), 5000, 0, 0.3, 0.005)] },
   'Sunset side':         { ambient: 0.22, lights: [L(-0.2, 0.55, 0.25, 3, 2400, 0, 0.25, 0.02)] },
   'Dramatic chiaroscuro':{ ambient: 0.03, lights: [L(-0.1, 1.1, 0.4, 4, 3800, 0.6, 0.3, 0.015)] },
 };

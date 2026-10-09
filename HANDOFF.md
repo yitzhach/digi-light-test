@@ -28,6 +28,20 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-09 (branch `claude/charming-goodall-k3m6fo`, not merged): "Light dots: on/off" toggle (was
+  "Light guides") is the only thing hiding dots besides Sweep; grabbing a dot leaves
+  Before/Split and brush mode; off-painting lights pin to the edge. Open your painting
+  no longer resets edits; a new photo is undoable (history kept).
+- 10-09 (same branch): view zoom (− / 100% / + / Show all lights, keys - = 0); dots beyond
+  the view pin to its edge, dashed. Graze from left/right/top/bottom + "Grazing side
+  light" preset: 3° off the wall, 1 painting width out, power compensated
+  (`grazePower`), shadows full-strength and crisp. Lights may sit -1.5..2.5, z down
+  to 0.01, angle to 1°, Brightness slider is logarithmic up to 1024. Shadow march
+  takes up to 96 steps on long (grazing) shadows; reach cap 0.3 widths.
+- 10-09 (same branch): Layers · blend effects — up to 4 layers (Original or Relit
+  source, 13 blend modes, opacity, visible, order, duplicate). Composited at the end
+  of `shade.js` in sRGB, so exports include them; `state.layers` is in history,
+  projects and presets (validated in studio.js `validate`).
 - 10-09 (PR #1): texture depth (mm) + painting width drive one height field for shading
   and shadows; even-light relief estimate for evenly lit photos (`photoDiffuse`);
   per-light source size, angular penumbra, physical shadow reach; Quick setup,

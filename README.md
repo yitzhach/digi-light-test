@@ -31,6 +31,21 @@ large one casts wide soft penumbrae, wraps light round the relief and flattens i
 **Distance** reads in cm from the painting's width. **Mirror** adds a matched light
 on the other side. Up to eight lights.
 
+**Graze from Left/Right/Top/Bottom** lays a light almost flat to the painting (3°,
+one painting width out, brightness compensated) for long, hard cast shadows; the
+**Grazing side light** preset does the same. Angle to wall goes down to 1°, and
+Brightness is logarithmic so these powers fit. Lights can stand well beyond the
+painting: the toolbar **− / 100% / +** and **Show all lights** shrink the view
+(keys - = 0), and a dot outside the view is pinned to its edge with a dashed ring.
+**Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
+Split and brush mode.
+
+**Layers · blend effects** stacks up to four copies of the Original photo (or the
+Relit image) over the result with a blend mode (Normal, Multiply, Screen, Overlay,
+Soft/Hard/Linear/Vivid/Pin light, Color dodge/burn, Darken, Lighten) and opacity.
+Layers apply in display space, appear in exports, and are saved with undo,
+projects and presets. Pin light or Soft light of the original adds natural highlights.
+
 **Sweep light** (toolbar) orbits a low raking light round the painting to inspect
 its texture, then gives your lights back (Esc or click again). The **Shadows** view
 shows where the lights' cast and attached shadows land.
@@ -42,8 +57,8 @@ them to calibrated relief.
 Click **Before / After** (or B) for the original photograph. **Split view** adds a
 movable comparison boundary. Comparisons and light guides never appear in exports.
 Undo/redo restores settings, light edits and brush strokes; Cmd/Ctrl-Z and
-Cmd/Ctrl-Shift-Z work outside text fields. History holds 40 edits and resets when
-a different source or project opens. Source changes and capture calibration are
+Cmd/Ctrl-Shift-Z work outside text fields. History holds 40 edits and resets when a
+project opens; opening a new photo is itself undoable (Undo restores the previous settings). Source changes and capture calibration are
 not part of creative undo history.
 
 Surface controls separate fine, medium and broad relief. Protect color edges
@@ -131,7 +146,8 @@ and light undo/redo; light dragging and duplication; brush pixels and stroke und
 local project save/reopen and variations; portable project import/export; PNG and
 scaled JPEG exports; reusable preset save/apply/default/download/import; preview
 restoration; quick setup, photo lighting and depth undo; light types, angle and
-mirror; sweep light; legacy project import; shadow physics; mobile layout;
+mirror; light dots over compare/brush; reopening a photo keeps edits; graze
+light and view zoom; blend layers; sweep light; legacy project import; shadow physics; mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels

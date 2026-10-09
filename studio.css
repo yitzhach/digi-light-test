@@ -15,7 +15,7 @@ select { min-width:0; max-width:100%; }
 input[type=text],#projectName { color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:5px; padding:8px; margin-bottom:8px; }
 details { margin-top:12px; } summary { cursor:pointer; color:var(--dim); font-size:12px; }
 #creative .views { margin-top:8px; }
-.hideGuides .handle,.comparing .handle,.brushing .handle { display:none; }
+.hideGuides .handle { display:none; }
 .brushing canvas { cursor:crosshair; }
 #splitControl { position:absolute; bottom:14px; left:15%; right:15%; padding:9px 12px; background:#14161ae8; border-radius:8px; display:flex; align-items:center; gap:12px; font:10px var(--mono); z-index:5; }
 #splitControl[hidden] { display:none; }
@@ -39,3 +39,19 @@ details { margin-top:12px; } summary { cursor:pointer; color:var(--dim); font-si
 #fineTune h2 { border-bottom:0; padding:12px 14px 2px; }
 input[type=range]:disabled { opacity:.35; }
 .sweeping .handle, .sweeping #beamGuide { display:none!important; }
+
+/* View zoom and pinned (off-view) light dots */
+.zoomGroup { display:inline-flex; gap:2px; }
+.zoomGroup button { min-width:30px; }
+.handle.pinned { border-style:dashed; }
+.lightTypes.graze { align-items:center; }
+.lightTypes.graze span { color:var(--dim); font-size:11px; margin-right:2px; }
+
+/* Blend layers */
+.layer { border:1px solid var(--line); border-radius:6px; padding:8px; margin:8px 0; background:var(--panel2); }
+.layer.off { opacity:.55; }
+.layerHead { display:flex; gap:4px; align-items:center; }
+.layerHead select { flex:1 1 0; min-width:0; }
+.layer .row { margin:6px 0 2px; }
+.layerTools { display:flex; gap:4px; justify-content:flex-end; }
+.layerTools button { padding:3px 8px; font-size:11px; }

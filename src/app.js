@@ -14,7 +14,7 @@ import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
-import { applyCharacter, characterOf, lightTypes, EVEN_SHARE } from './presets.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, GRAZE_DEG, GRAZE_DISTANCE, grazePower } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -90,7 +90,7 @@ function shadowReach(st, depth, aspect) {
     }
     reach = Math.max(reach, rise * far / Math.max(l.z, 0.01));
   }
-  return Math.min(0.1, reach);
+  return Math.min(0.3, reach);
 }
 
 function newLight(i) {
@@ -154,7 +154,7 @@ function loadFile(file) {
   });
 }
 
-async function setSource(src) {
+async function setSource(src, keep = false) {
   const { gl } = glctx;
   const w = src.width || src.naturalWidth;
   const h = src.height || src.naturalHeight;
@@ -200,7 +200,8 @@ async function setSource(src) {
 
   dirtySurface = true;
   render();
-  document.dispatchEvent(new Event('digilight:source'));
+  // keep: same picture re-shown (e.g. switching back to Upload) -- leave the edits alone.
+  document.dispatchEvent(new CustomEvent('digilight:source', { detail: { keep } }));
 }
 
 /**
@@ -243,9 +244,28 @@ function fitCanvas() {
   const r = stage.getBoundingClientRect();
   const availW = Math.max(80, r.width - 32);
   const availH = Math.max(80, r.height - 32);
-  const disp = Math.min(availW / imgW, availH / imgH);
+  const disp = Math.min(availW / imgW, availH / imgH) * (state.viewZoom || 1);
   canvas.style.width = `${Math.round(imgW * disp)}px`;
   canvas.style.height = `${Math.round(imgH * disp)}px`;
+  repositionHandles();
+}
+
+/**
+ * View zoom: shrink the painting inside the stage so lights placed beyond its
+ * edges come into view. 'lights' picks the largest zoom that shows every dot.
+ */
+function setZoom(z) {
+  if (z === 'lights') {
+    const r = $('stage').getBoundingClientRect();
+    const availW = Math.max(80, r.width - 32), availH = Math.max(80, r.height - 32);
+    const fit = Math.min(availW / imgW, availH / imgH);
+    let hx = 0.5, hy = 0.5;
+    for (const l of state.lights) { hx = Math.max(hx, Math.abs(l.x - 0.5) + 0.04); hy = Math.max(hy, Math.abs(l.y - 0.5) + 0.04); }
+    z = Math.min(availW / (imgW * fit * 2 * hx), availH / (imgH * fit * 2 * hy));
+  }
+  state.viewZoom = clamp(z, 0.2, 1);
+  fitCanvas();
+  document.dispatchEvent(new Event('digilight:zoom'));
 }
 
 // ---------------------------------------------------------------- lights UI
@@ -320,9 +340,9 @@ function setElevation(l, deg) {
   const d = Math.hypot(vx, vy, l.z);
   const phi = Math.hypot(vx, vy) < 1e-4 ? Math.PI / 2 : Math.atan2(vy, vx);
   const t = deg * Math.PI / 180, horiz = d * Math.cos(t);
-  l.z = clamp(d * Math.sin(t), 0.08, 2.5);
-  l.x = clamp(ax + horiz * Math.cos(phi), -0.4, 1.4);
-  l.y = clamp(ay + horiz * Math.sin(phi) / a, -0.4, 1.4);
+  l.z = clamp(d * Math.sin(t), LIGHT_Z_MIN, 2.5);
+  l.x = clamp(ax + horiz * Math.cos(phi), LIGHT_MIN, LIGHT_MAX);
+  l.y = clamp(ay + horiz * Math.sin(phi) / a, LIGHT_MIN, LIGHT_MAX);
 }
 
 const cm = (v) => v * (state.paintingWidthCm || 60);
@@ -355,7 +375,7 @@ function rebuildLightPanel() {
   const dup = document.createElement('button'); dup.textContent = 'Duplicate';
   dup.disabled = state.lights.length >= MAX_LIGHTS;
   dup.onclick = () => {
-    state.lights.push({ ...l, rgb: [...l.rgb], x: Math.min(1.4, l.x + 0.08) });
+    state.lights.push({ ...l, rgb: [...l.rgb], x: Math.min(LIGHT_MAX, l.x + 0.08) });
     state.selected = state.lights.length - 1;
     rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
   };
@@ -366,7 +386,7 @@ function rebuildLightPanel() {
   mirror.disabled = state.lights.length >= MAX_LIGHTS;
   mirror.onclick = () => {
     const [ax] = aimOf(l);
-    state.lights.push({ ...l, rgb: [...l.rgb], x: clamp(1 - l.x, -0.4, 1.4), aimX: 1 - ax, aimY: aimOf(l)[1] });
+    state.lights.push({ ...l, rgb: [...l.rgb], x: clamp(1 - l.x, LIGHT_MIN, LIGHT_MAX), aimX: 1 - ax, aimY: aimOf(l)[1] });
     state.selected = state.lights.length - 1;
     rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
   };
@@ -386,14 +406,33 @@ function rebuildLightPanel() {
   }
   p.appendChild(types);
 
+  const grazeRow = document.createElement('div');
+  grazeRow.className = 'lightTypes graze';
+  grazeRow.title = 'Lay this light almost flat against the painting for long, hard shadows';
+  grazeRow.append(Object.assign(document.createElement('span'), { textContent: 'Graze from' }));
+  for (const side of ['left', 'right', 'top', 'bottom']) {
+    const b = document.createElement('button');
+    b.textContent = side[0].toUpperCase() + side.slice(1);
+    b.setAttribute('aria-label', `Graze from ${side}`);
+    b.onclick = () => {
+      graze(l, side);
+      rebuildLightPanel(); rebuildHandles(); render();
+      document.dispatchEvent(new Event('digilight:settings'));
+    };
+    grazeRow.appendChild(b);
+  }
+  p.appendChild(grazeRow);
+
   p.appendChild(slider('Diffusion', 0, 1, 0.01, () => characterOf(l), (v) => {
     applyCharacter(l, v);
     types.querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', Math.abs(v - lightTypes[i][1]) < 0.08));
   }, (v) => (v < 0.04 ? 'spot' : v > 0.96 ? 'diffused' : `${Math.round(v * 100)}%`)));
-  p.appendChild(slider('Brightness', 0, 8, 0.05, () => l.power, (v) => { l.power = v; }));
-  p.appendChild(slider('Angle to wall', 3, 90, 1, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
-    (v) => `${Math.round(v)}°`));
-  p.appendChild(slider('Distance', 0.08, 2.5, 0.01, () => l.z, (v) => { l.z = v; rebuildHandles(); }, fmtLength));
+  // Logarithmic: a grazing light needs a hundred times the power of a front light.
+  p.appendChild(slider('Brightness', -3, Math.log2(POWER_MAX), 0.02, () => Math.log2(Math.max(l.power, 0.125)),
+    (v) => { l.power = 2 ** v; }, (v) => { const w = 2 ** v; return w < 10 ? w.toFixed(2) : w.toFixed(0); }));
+  p.appendChild(slider('Angle to wall', 1, 90, 0.5, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
+    (v) => (v < 10 ? `${v.toFixed(1)}°` : `${Math.round(v)}°`)));
+  p.appendChild(slider('Distance', LIGHT_Z_MIN, 2.5, 0.005, () => l.z, (v) => { l.z = v; rebuildHandles(); }, fmtLength));
 
   if (l.useKelvin) {
     p.appendChild(slider('Temperature', 1800, 10000, 50, () => l.kelvin,
@@ -418,20 +457,21 @@ function rebuildLightPanel() {
   mode.textContent = l.useKelvin ? 'Colour: Kelvin' : 'Colour: Custom';
   mode.onclick = () => { l.useKelvin = !l.useKelvin; applyColor(l); rebuildLightPanel(); rebuildHandles(); render(); };
   more.appendChild(mode);
-  more.appendChild(slider('Horizontal', -0.4, 1.4, 0.01, () => l.x, (v) => { l.x = v; rebuildHandles(); }));
-  more.appendChild(slider('Vertical', -0.4, 1.4, 0.01, () => l.y, (v) => { l.y = v; rebuildHandles(); }));
+  more.appendChild(slider('Horizontal', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.x, (v) => { l.x = v; rebuildHandles(); }));
+  more.appendChild(slider('Vertical', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.y, (v) => { l.y = v; rebuildHandles(); }));
   more.appendChild(slider('Cone', 0, 1, 0.01, () => l.cone, (v) => { l.cone = v; },
     (v) => (v < 0.02 ? 'flood' : v > 0.97 ? 'spot' : v.toFixed(2))));
   more.appendChild(slider('Beam edge', 0, 1, 0.02, () => l.softness ?? 0.5, (v) => { l.softness = v; }));
   more.appendChild(slider('Source size', 0, 1.5, 0.005, () => l.size ?? 0.03, (v) => { l.size = v; }, fmtLength));
   more.appendChild(slider('Falloff', 0, 2, 0.05, () => l.falloff ?? 2, (v) => { l.falloff = v; }));
-  more.appendChild(slider('Aim X', -0.4, 1.4, 0.01, () => l.aimX ?? l.x, (v) => { l.aimX = v; }));
-  more.appendChild(slider('Aim Y', -0.4, 1.4, 0.01, () => l.aimY ?? l.y, (v) => { l.aimY = v; }));
+  more.appendChild(slider('Aim X', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.aimX ?? l.x, (v) => { l.aimX = v; }));
+  more.appendChild(slider('Aim Y', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.aimY ?? l.y, (v) => { l.aimY = v; }));
   p.appendChild(more);
 
   const note = document.createElement('p');
   note.className = 'note';
-  note.textContent = 'Drag the dot to place the light. Lower angles rake across the paint and lengthen shadows. '
+  note.textContent = 'Drag the dot to place the light. Lower angles rake across the paint and lengthen shadows; '
+    + 'Graze lays the light nearly flat to the painting for the longest, hardest shadows. '
     + 'Spot gives crisp shadows and a tight beam; Diffused gives soft shadows that flatten texture. '
     + 'Shift-drag changes distance; Alt/Option-drag changes beam width.';
   p.appendChild(note);
@@ -439,6 +479,47 @@ function rebuildLightPanel() {
 
 function applyColor(l) {
   l.rgb = l.useKelvin ? kelvinToLinearRGB(l.kelvin) : hexToLinearRGB(l.hex);
+}
+
+// Lights may sit beyond the visible stage; pin those dots to its edge (dashed) so
+// they stay grabbable. Zooming out shows where they really are.
+function placeHandle(d, l) {
+  let x = l.x * 100, y = (1 - l.y) * 100;
+  const s = $('stage').getBoundingClientRect(), w = canvas.getBoundingClientRect();
+  if (w.width > 0 && w.height > 0) {
+    const pad = 14;
+    const px = clamp(x, (s.left + pad - w.left) / w.width * 100, (s.right - pad - w.left) / w.width * 100);
+    const py = clamp(y, (s.top + pad - w.top) / w.height * 100, (s.bottom - pad - w.top) / w.height * 100);
+    const pinned = Math.abs(px - x) > 0.01 || Math.abs(py - y) > 0.01;
+    d.classList.toggle('pinned', pinned);
+    d.title = pinned ? 'This light is beyond the view. Zoom out (−) or Show all lights to see where it is.' : '';
+    x = px; y = py;
+  }
+  d.style.left = `${x}%`;
+  d.style.top = `${y}%`;
+}
+function repositionHandles() {
+  wrap.querySelectorAll('.handle').forEach((d, i) => { if (state.lights[i]) placeHandle(d, state.lights[i]); });
+}
+
+/**
+ * Turn a light into a grazing light from one side: aimed at the centre, a painting
+ * width out, a couple of degrees off the wall, a small hard source. Also makes
+ * cast shadows full strength and crisp, since that is the point of grazing light.
+ */
+function graze(l, side) {
+  const a = aspectNow();
+  const [dx, dy] = { left: [-1, 0], right: [1, 0], top: [0, 1], bottom: [0, -1] }[side];
+  const z = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
+  Object.assign(l, {
+    aimX: 0.5, aimY: 0.5,
+    x: clamp(0.5 + dx * GRAZE_DISTANCE, LIGHT_MIN, LIGHT_MAX),
+    y: clamp(0.5 + dy * GRAZE_DISTANCE / a, LIGHT_MIN, LIGHT_MAX),
+    z, cone: 0, softness: 0.3, size: 0.005, falloff: 2,
+    power: grazePower(Math.hypot(GRAZE_DISTANCE, z), GRAZE_DEG),
+  });
+  state.shadow = 1;
+  state.shadowSoftness = Math.min(state.shadowSoftness ?? 0.35, 0.03);
 }
 
 function rebuildHandles() {
@@ -451,8 +532,7 @@ function rebuildHandles() {
     const px = 18 + l.z * 26;
     d.style.width = d.style.height = `${px}px`;
     d.style.margin = `${-px / 2}px 0 0 ${-px / 2}px`;
-    d.style.left = `${l.x * 100}%`;
-    d.style.top = `${(1 - l.y) * 100}%`;
+    placeHandle(d, l);
     d.onpointerdown = (e) => {
       e.preventDefault();
       state.selected = i; rebuildTabs(); rebuildLightPanel();
@@ -462,14 +542,13 @@ function rebuildHandles() {
       const startY = e.clientY, startZ = l.z, startCone = l.cone;
       const move = (ev) => {
         const r = canvas.getBoundingClientRect();
-        if (ev.shiftKey) l.z = Math.min(2.5, Math.max(0.08, startZ + (startY - ev.clientY) / 180));
+        if (ev.shiftKey) l.z = Math.min(2.5, Math.max(LIGHT_Z_MIN, startZ + (startY - ev.clientY) / 180));
         else if (ev.altKey) l.cone = Math.min(1, Math.max(0, startCone + (startY - ev.clientY) / 250));
         else {
-          l.x = Math.min(1.4, Math.max(-0.4, (ev.clientX - r.left) / r.width));
-          l.y = Math.min(1.4, Math.max(-0.4, 1 - (ev.clientY - r.top) / r.height));
+          l.x = clamp((ev.clientX - r.left) / r.width, LIGHT_MIN, LIGHT_MAX);
+          l.y = clamp(1 - (ev.clientY - r.top) / r.height, LIGHT_MIN, LIGHT_MAX);
         }
-        el.style.left = `${l.x * 100}%`;
-        el.style.top = `${(1 - l.y) * 100}%`;
+        placeHandle(el, l);
         render();
       };
       const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); rebuildLightPanel(); rebuildHandles(); };
@@ -694,7 +773,7 @@ async function boot() {
     $('psTruth').className = '';
     rebuildViews();
     dirtySurface = true;
-    if (!photometric && v === 'upload') await setSource(fullSource);
+    if (!photometric && v === 'upload') await setSource(fullSource, true);
     if (v === 'synth') await setSource(await loadSynthetic());
     else if (v === 'psynth') await setSource(await loadSyntheticCapture());
   });
@@ -716,6 +795,7 @@ async function boot() {
     state, canvas, render, applyColor,
     source: () => fullSource,
     dirty: () => { dirtySurface = true; },
+    setZoom,
     refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
     openSource: async image => {
       state.mode = 'single'; $('src').value = 'upload';
