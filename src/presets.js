@@ -109,9 +109,9 @@ export const grazeSize = (soft) => GRAZE_SIZE + Math.min(1, Math.max(0, soft)) *
 export const grazePresets = {
   'Gentle raking':               { elevation: 6,   detail: 0.006, fine: 1,   reach: 1, clean: 0.15, soft: 0.2, opacity: 0.6 },
   'Classic raking':              { elevation: 3,   detail: 0.01,  fine: 0.8, reach: 1, clean: 0.3,  soft: 0.2, opacity: 0.75 },
-  'Long shadows':                { elevation: 1.5, detail: 0.014, fine: 0.5, reach: 1, clean: 0.3,  soft: 0.3, opacity: 0.8 },
-  'Long shadows, clean surface': { elevation: 1,   detail: 0.016, fine: 0.3, reach: 1, clean: 0.6,  soft: 0.3, opacity: 0.85 },
-  'Soft strip light':            { elevation: 2.5, detail: 0.012, fine: 0.6, reach: 1, clean: 0.3,  soft: 0.8, opacity: 0.7 },
+  'Long shadows':                { elevation: 1.5, detail: 0.01,  fine: 0.6, reach: 1, clean: 0.15, soft: 0.15, opacity: 0.9 },
+  'Long shadows, clean surface': { elevation: 1,   detail: 0.012, fine: 0.5, reach: 1, clean: 0.3,  soft: 0.15, opacity: 0.9 },
+  'Soft strip light':            { elevation: 2.5, detail: 0.01,  fine: 0.7, reach: 1, clean: 0.3,  soft: 0.5, opacity: 0.8 },
   'Every detail (raw)':          { elevation: 3,   detail: 0,     fine: 1,   reach: 1, clean: 0,    soft: 0,   opacity: 0.75 },
 };
 
