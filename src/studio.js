@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, GRAZE_DETAIL, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, GRAZE_DETAIL, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, GRAZE_REACH, GRAZE_CLEAN } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -68,8 +68,11 @@ export function initStudio(api) {
     <div class="row"><label for="grazeElevation">Angle to wall</label><input id="grazeElevation" type="range" min="${GRAZE_EL_MIN}" max="${GRAZE_EL_MAX}" step="0.5"><output data-own></output></div>
     <div class="row"><label for="grazeDetail">Detail</label><input id="grazeDetail" type="range" min="0" max="${GRAZE_DETAIL_MAX}" step="0.001"><output data-own></output></div>
     <div class="row"><label for="grazeFine">Fine texture</label><input id="grazeFine" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeReach">Shadow length</label><input id="grazeReach" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeClean">Clean shadows</label><input id="grazeClean" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
     <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
-    <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p></div>`;
+    <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
+    <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do.</p></div>`;
   lights.after(grazeBox);
   for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
@@ -86,7 +89,7 @@ export function initStudio(api) {
     b.setAttribute('aria-label', b.title);
     $('photoCompass').append(b);
   }
-  const GRAZE_DEFAULT = { enabled: false, angle: 180, elevation: 3, opacity: 0.75, detail: GRAZE_DETAIL, fine: 1 };
+  const GRAZE_DEFAULT = { enabled: false, angle: 180, elevation: 3, opacity: 0.75, detail: GRAZE_DETAIL, fine: 1, reach: GRAZE_REACH, clean: GRAZE_CLEAN };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
@@ -195,6 +198,8 @@ export function initStudio(api) {
     const mm = g.detail * state.paintingWidthCm * 10;
     $('grazeDetail').value = g.detail; $('grazeDetail').nextElementSibling.textContent = g.detail > 0 ? `${mm.toFixed(mm < 10 ? 1 : 0)} mm` : 'all';
     $('grazeFine').value = g.fine; $('grazeFine').nextElementSibling.textContent = `${Math.round(g.fine * 100)}%`;
+    $('grazeReach').value = g.reach; $('grazeReach').nextElementSibling.textContent = `${Math.round(g.reach * 100)}%`;
+    $('grazeClean').value = g.clean; $('grazeClean').nextElementSibling.textContent = `${Math.round(g.clean * 100)}%`;
   }
   // Adjusting any graze control shows the effect, so the change is visible.
   function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); renderGraze(); render(); }
@@ -204,6 +209,8 @@ export function initStudio(api) {
   $('grazeElevation').oninput = e => setGraze({ elevation: +e.target.value });
   $('grazeDetail').oninput = e => setGraze({ detail: +e.target.value });
   $('grazeFine').oninput = e => setGraze({ fine: +e.target.value });
+  $('grazeReach').oninput = e => setGraze({ reach: +e.target.value });
+  $('grazeClean').oninput = e => setGraze({ clean: +e.target.value });
   $('grazeDial').addEventListener('pointerdown', e => {
     const dial = $('grazeDial'); e.preventDefault(); dial.focus(); dial.setPointerCapture(e.pointerId);
     const move = ev => {
@@ -462,9 +469,9 @@ export function initStudio(api) {
     settings.layers=layers.map(L=>{if(!blendModes.some(([k])=>k===L?.mode)||!layerSources.some(([k])=>k===L.source)||!Number.isFinite(L.opacity)||L.opacity<0||L.opacity>1)throw new Error('Invalid layer.');const layer={mode:L.mode,source:L.source,opacity:L.opacity,enabled:L.enabled!==false};if(L.mask!=null){if(typeof L.mask!=='object')throw new Error('Invalid layer mask.');layer.mask={base:L.mask.base?1:0,strokes:checkStrokes(L.mask.strokes??[],['show','hide'])};}return layer;});
     settings.strokes=checkStrokes(p.settings.strokes||[],['add','remove']);
     // Graze settings saved before Detail existed open with every pixel, as they looked.
-    const g=p.settings.graze??GRAZE_DEFAULT, detail=g?.detail??0, fine=g?.fine??1;
-    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1)throw new Error('Invalid graze light.');
-    settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine};
+    const g=p.settings.graze??GRAZE_DEFAULT, detail=g?.detail??0, fine=g?.fine??1, reach=g?.reach??0, clean=g?.clean??0;
+    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1)throw new Error('Invalid graze light.');
+    settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean};
     return settings;
   }
   async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}

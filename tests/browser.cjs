@@ -98,11 +98,21 @@ await slider('grazeOpacity',0.5);{const d=await page.evaluate(async()=>{__bench.
 assert.equal((await setting('graze')).detail,0.01);const atDefault=await pixels();await slider('grazeDetail',0);const allDetail=await pixels();assert.notEqual(allDetail,atDefault);
 await slider('grazeDetail',0.03);const widest=await pixels();assert.notEqual(widest,allDetail);await slider('grazeFine',0);assert.equal((await setting('graze')).fine,0);assert.notEqual(await pixels(),widest);
 {const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'graze detail tile difference '+d);}
-{const v=await page.evaluate(()=>{const check=g=>{const s=__studio.snapshot();s.graze=g;try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).graze;}catch{return null;}};const base={enabled:true,angle:10,elevation:2,opacity:1};return {legacy:check(base),bad:check({...base,detail:0.5}),badFine:check({...base,detail:0.01,fine:2})};});
-assert.deepEqual(v.legacy,{enabled:true,angle:10,elevation:2,opacity:1,detail:0,fine:1});assert.equal(v.bad,null);assert.equal(v.badFine,null);}
+{const v=await page.evaluate(()=>{const check=g=>{const s=__studio.snapshot();s.graze=g;try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).graze;}catch{return null;}};const base={enabled:true,angle:10,elevation:2,opacity:1};return {legacy:check(base),bad:check({...base,detail:0.5}),badFine:check({...base,detail:0.01,fine:2}),badReach:check({...base,reach:1.5}),badClean:check({...base,clean:-0.1}),reached:check({...base,detail:0.01,reach:0.5,clean:0.25})};});
+assert.deepEqual(v.legacy,{enabled:true,angle:10,elevation:2,opacity:1,detail:0,fine:1,reach:0,clean:0});assert.equal(v.bad,null);assert.equal(v.badFine,null);
+assert.equal(v.badReach,null);assert.equal(v.badClean,null);assert.deepEqual(v.reached,{enabled:true,angle:10,elevation:2,opacity:1,detail:0.01,fine:1,reach:0.5,clean:0.25});}
 await page.click('#undo');await settle();assert.equal((await setting('graze')).fine,1);assert.equal(await pixels(),widest);
+// Shadow length: the march normally stops at the main lights' reach, a few pixels, so
+// a degree off the wall the graze light could not throw the long shadows it is for.
+// Clean shadows: a blocker must clear a height first. Both 0 is the merged look
+// exactly, and both reach into the tile margin, so the tiled export must still match.
+await slider('grazeElevation',1);assert.equal((await setting('graze')).reach,0);const short=await pixels();
+await slider('grazeReach',1);assert.equal((await setting('graze')).reach,1);const longer=await pixels();assert.notEqual(longer,short);
+await slider('grazeClean',0.5);assert.equal((await setting('graze')).clean,0.5);assert.notEqual(await pixels(),longer);
+{const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'graze reach tile difference '+d);}
+await slider('grazeClean',0);await slider('grazeReach',0);assert.equal(await pixels(),short);
 await page.click('#grazeVis');await settle();assert.equal(await pixels(),plain);}
-console.log('PASS graze effect: dial, keys, opacity, angle to wall, detail, fine texture, visibility, undo, validate, tiled export');
+console.log('PASS graze effect: dial, keys, opacity, angle to wall, detail, fine texture, shadow length, clean shadows, visibility, undo, validate, tiled export');
 await page.getByText('Layers · blend effects',{exact:true}).click();const noLayer=await pixels();await page.click('#addLayer');await settle();
 let layers=await setting('layers');assert.deepEqual(layers,[{mode:'pinLight',source:'original',opacity:.35,enabled:true}]);const pin=await pixels();assert.notEqual(pin,noLayer);
 await page.locator('.lyOpacity').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});await settle();assert.equal(await pixels(),noLayer);

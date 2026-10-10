@@ -12,11 +12,14 @@
 // Usage: serve the repo root, then
 //   node tools/graze-lab.cjs [--port 8766] [--out DIR] [--elev 1,2.5,5,10]
 //        [--angle 155] [--graze '{"...":...}'] [--state '{"...":...}']
-//        [--ref '{"detail":0,"fine":1}'] [--cache DIR]
+//        [--ref '{"detail":0,"fine":1}'] [--neutral '{"clean":0}'] [--nocast '{"clean":1000}']
+//        [--cache DIR]
 // Writes DIR/<case>.png contact sheets (rows: estimate, truth with the same
 // settings, truth with the reference settings; one column per elevation) and
-// DIR/metrics.json; prints the metrics. Reference renders are cached as PNGs in
-// --cache (default DIR/refcache); only share a cache between runs of the same code.
+// DIR/metrics.json; prints the metrics. Cast shadows are scored on their own too
+// (castCover, falseCast, missCast; see where they are computed). Reference renders
+// are cached as PNGs in --cache (default DIR/refcache); only share a cache between
+// runs of the same code.
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
@@ -30,6 +33,8 @@ const ANGLE = +arg('angle', 155);
 const GRAZE = JSON.parse(arg('graze', '{}'));
 const REF = JSON.parse(arg('ref', '{"detail":0,"fine":1}'));
 const STATE = JSON.parse(arg('state', '{}'));
+const NEUTRAL = JSON.parse(arg('neutral', '{"clean":0}'));
+const NOCAST = JSON.parse(arg('nocast', '{"clean":1000}'));
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(CACHE, { recursive: true });
 
@@ -62,7 +67,7 @@ const CASES = [
     await page.waitForTimeout(300);
     const refs = ELEV.map((e) => { const f = path.join(CACHE, `${c.name}-${ANGLE}-${e}.png`); return fs.existsSync(f) ? fs.readFileSync(f).toString('base64') : null; });
     const t0 = Date.now();
-    const r = await page.evaluate(async ({ photo, elev, angle, graze, ref, refs, extra }) => {
+    const r = await page.evaluate(async ({ photo, elev, angle, graze, ref, refs, extra, neutral, nocast }) => {
       const b = __bench, s = b.state, gl = b.glctx.gl;
       Object.assign(s, photo, extra); b.dirty();
       const W = b.canvas.width, H = b.canvas.height;
@@ -105,6 +110,16 @@ const CASES = [
       const stat = (L) => { const lo = blur(L, 2); let hf = 0, dark = 0, mean = 0, n = 0;
         for (let y = B; y < H - B; y++) for (let x = B; x < W - B; x++) { const i = y * W + x; hf += Math.abs(L[i] - lo[i]); dark += L[i] < 0.06 ? 1 : 0; mean += L[i]; n++; }
         return { hf: hf / n, dark: dark / n, mean: mean / n }; };
+      // Cast shadows alone: the render minus the same render with the march made to find
+      // no blockers (--nocast, default a huge clean). castCover is the share of the image
+      // the cast shadows darken by more than 0.05 in luma. Against the truth rendered with
+      // the same settings but --neutral (default clean 0): falseCast = share of the image
+      // with an estimate shadow the truth lacks (within 2 px: fake blob shadows), missCast
+      // = share with a truth shadow the estimate lacks (real shadows lost).
+      const castMask = (on, off) => { const m = new Float32Array(W * H); for (let i = 0; i < W * H; i++) m[i] = off[i] - on[i] > 0.05 ? 1 : 0; return m; };
+      const maskDiff = (a, c) => { const ca = blur(c, 2); let n = 0, k = 0;
+        for (let y = B; y < H - B; y++) for (let x = B; x < W - B; x++) { const i = y * W + x; k++; if (a[i] > 0 && ca[i] < 0.01) n++; } return n / k; };
+      const cover = (m) => { let n = 0, k = 0; for (let y = B; y < H - B; y++) for (let x = B; x < W - B; x++) { k++; n += m[y * W + x]; } return n / k; };
       const sheet = document.createElement('canvas'); const CW = 300;
       sheet.width = CW * elev.length; sheet.height = CW * 3;
       const sx = sheet.getContext('2d');
@@ -119,12 +134,16 @@ const CASES = [
         else { s.graze = Object.assign({}, g0, base, ref); useTruth(true); f = grab(); useTruth(false); newRefs.push(f.c.toDataURL().split(',')[1]); }
         s.graze = Object.assign({}, g0, base, graze);
         useTruth(false); const e = grab(); useTruth(true); const t = grab(); useTruth(false);
-        const Le = luma(e.d), Lt = luma(t.d), Lf = luma(f.d), se = stat(Le), st = stat(Lt), sf = stat(Lf);
+        s.graze = Object.assign({}, g0, base, graze, neutral); useTruth(true); const tn = grab(); useTruth(false);
+        s.graze = Object.assign({}, g0, base, graze, nocast); const en0 = grab(); useTruth(true); const tn0 = grab(); useTruth(false);
+        const Le = luma(e.d), Lt = luma(t.d), Ln = luma(tn.d), Le0 = luma(en0.d), Lt0 = luma(tn0.d), Lf = luma(f.d), se = stat(Le), st = stat(Lt), sf = stat(Lf);
         const bE = blur(Le, 4);
         out.push({ elevation: elev[k], corr: +corr(Le, Lt).toFixed(3), corrBroad: +corr(bE, blur(Lt, 4)).toFixed(3),
           hfRatio: +(se.hf / st.hf).toFixed(2),
           corrF: +corr(Le, Lf).toFixed(3), corrBroadF: +corr(bE, blur(Lf, 4)).toFixed(3), hfRatioF: +(se.hf / sf.hf).toFixed(2),
           truthSelfF: +corr(Lt, Lf).toFixed(3), truthSelfBroadF: +corr(blur(Lt, 4), blur(Lf, 4)).toFixed(3), truthHfF: +(st.hf / sf.hf).toFixed(2),
+          castCover: +cover(castMask(Le, Le0)).toFixed(4), castCoverTruth: +cover(castMask(Ln, Lt0)).toFixed(4),
+          falseCast: +maskDiff(castMask(Le, Le0), castMask(Ln, Lt0)).toFixed(4), missCast: +maskDiff(castMask(Ln, Lt0), castMask(Le, Le0)).toFixed(4),
           darkEst: +se.dark.toFixed(3), darkTruth: +st.dark.toFixed(3),
           meanEst: +se.mean.toFixed(3), meanTruth: +st.mean.toFixed(3), meanTruthF: +sf.mean.toFixed(3), ms: Math.round(e.ms) });
         const cx = Math.round(W * 0.35), cy = Math.round(H * 0.4);
@@ -134,14 +153,14 @@ const CASES = [
       }
       s.graze = g0; b.dirty(); b.render();
       return { rows: out, sheet: sheet.toDataURL().split(',')[1], newRefs };
-    }, { photo: c.photo, elev: ELEV, angle: ANGLE, graze: GRAZE, ref: REF, refs, extra: STATE });
+    }, { photo: c.photo, elev: ELEV, angle: ANGLE, graze: GRAZE, ref: REF, refs, extra: STATE, neutral: NEUTRAL, nocast: NOCAST });
     r.newRefs.forEach((b64, k) => { if (b64) fs.writeFileSync(path.join(CACHE, `${c.name}-${ANGLE}-${ELEV[k]}.png`), Buffer.from(b64, 'base64')); });
     fs.writeFileSync(path.join(OUT, c.name + '.png'), Buffer.from(r.sheet, 'base64'));
     results[c.name] = r.rows;
     console.error(c.name, 'done in', ((Date.now() - t0) / 1000).toFixed(0), 's');
   }
   fs.writeFileSync(path.join(OUT, 'metrics.json'), JSON.stringify({ graze: GRAZE, state: STATE, results }, null, 1));
-  const line = (r) => `${String(r.elevation).padStart(4)}deg  ${r.corr.toFixed(3)}/${r.corrBroad.toFixed(3)}/${r.hfRatio.toFixed(2)}  vsFull ${r.corrF.toFixed(3)}/${r.corrBroadF.toFixed(3)}/${r.hfRatioF.toFixed(2)}  truthVsFull ${r.truthSelfF.toFixed(3)}/${r.truthSelfBroadF.toFixed(3)}/${r.truthHfF.toFixed(2)}  mean ${r.meanEst}/${r.meanTruth}/${r.meanTruthF} dark ${r.darkEst}/${r.darkTruth} ${r.ms}ms`;
+  const line = (r) => `${String(r.elevation).padStart(4)}deg  ${r.corr.toFixed(3)}/${r.corrBroad.toFixed(3)}/${r.hfRatio.toFixed(2)}  vsFull ${r.corrF.toFixed(3)}/${r.corrBroadF.toFixed(3)}/${r.hfRatioF.toFixed(2)}  truthVsFull ${r.truthSelfF.toFixed(3)}/${r.truthSelfBroadF.toFixed(3)}/${r.truthHfF.toFixed(2)}  mean ${r.meanEst}/${r.meanTruth}/${r.meanTruthF} cast ${r.castCover}/${r.castCoverTruth} false ${r.falseCast} miss ${r.missCast} dark ${r.darkEst}/${r.darkTruth} ${r.ms}ms`;
   for (const [k, rows] of Object.entries(results)) { console.log(k); rows.forEach((r) => console.log('  ' + line(r))); }
   if (errors.length) console.log('ERRORS', errors);
   await browser.close();
