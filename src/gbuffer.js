@@ -80,6 +80,8 @@ void main() {
 // Separable Gaussian. The radius is a uniform rather than a compile-time constant
 // so the relief-scale control is live; taps beyond the radius get zero weight.
 const MAX_TAPS = 48;
+// Below a third of a texel the blur has no taps left: the graze uses the relief as is.
+const GRAZE_MIN_SIGMA = 1 / 3;
 const BLUR_FS = `${HEAD}
 uniform sampler2D uSrc;
 uniform vec2 uStep;      // texel-sized step along the blur axis
@@ -273,13 +275,15 @@ export class GBuffer {
     if (this.size.w === w && this.size.h === h) return;
     const { gl, caps } = this.glctx;
     if (this.targets) {
-      for (const t of Object.values(this.targets)) {
+      // A Set, because T.graze may be T.normal itself.
+      for (const t of new Set(Object.values(this.targets))) {
         gl.deleteTexture(t.tex);
         gl.deleteFramebuffer(t.fbo);
       }
     }
     const mk = () => makeTarget(gl, w, h, { float: true, caps });
     this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
+    this.grazeSigma = -1;
     this.size = { w, h };
   }
 
@@ -296,13 +300,7 @@ export class GBuffer {
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
 
-    const run = (prog, target, textures, setUniforms) => {
-      bindTarget(gl, target);
-      gl.useProgram(prog.program);
-      bindTextures(gl, prog, textures);
-      if (setUniforms) setUniforms(prog.uniforms);
-      drawFullscreen(gl);
-    };
+    const run = (prog, target, textures, setUniforms) => pass(gl, prog, target, textures, setUniforms);
 
     run(this.progs.luma, T.lin, [['uSrc', srcTex]]);
 
@@ -347,11 +345,9 @@ export class GBuffer {
     const stats = !calibrated ? { dir: 1, cav: 1 }
       : opts.measureHeight ? this.heightStats : (opts.heightStats || this.heightStats);
     const share = Math.min(1, Math.max(0, opts.photoDiffuse ?? 0));
-    run(this.progs.normal, T.normal, [['uHeight', T.height.tex]], (u) => {
-      gl.uniform2f(u.uTexel, 1 / w, 1 / h);
-      gl.uniform1f(u.uStrength, reliefStrength);
-      gl.uniform3f(u.uMix, 1 / stats.dir, 1 / stats.cav, share);
-    });
+    // Kept so the graze relief can be rebuilt alone with exactly these normals.
+    this.normalMix = { strength: reliefStrength, mix: [1 / stats.dir, 1 / stats.cav, share] };
+    run(this.progs.normal, T.normal, [['uHeight', T.height.tex]], (u) => this.normalUniforms(u, w, h));
 
     run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex]], (u) => {
       gl.uniform1f(u.uSuppress, albedoSuppress);
@@ -359,7 +355,62 @@ export class GBuffer {
       gl.uniform1f(u.uMeanLuma, opts.meanLuma ?? 0.25);
     });
 
+    this.grazeSigma = -1;
+    this.buildGraze(opts.grazeSigmaPx ?? 0);
     bindTarget(gl, null);
     return T;
   }
+
+  // Shared by the relief normals and the graze light's smoothed ones.
+  normalUniforms(u, w, h) {
+    const { gl } = this.glctx, m = this.normalMix;
+    gl.uniform2f(u.uTexel, 1 / w, 1 / h);
+    gl.uniform1f(u.uStrength, m.strength);
+    gl.uniform3f(u.uMix, m.mix[0], m.mix[1], m.mix[2]);
+  }
+
+  /**
+   * The graze light's own view of the relief: the height field low-passed by a
+   * Gaussian of `sigma` pixels, with normals taken from that. A light a degree or
+   * two off the wall multiplies every slope by 1/tan(angle), so the finest band of
+   * a single-photo estimate (paint grain, pigment mottle, sensor noise) turns into
+   * a leopard-spot pattern of glints and tiny shadows; this keeps the graze to the
+   * forms big enough to be real. T.graze is what the shading pass reads: the full
+   * relief itself when there is nothing to smooth. Reruns alone (a blur and a
+   * normal pass, nothing else) when only the graze Detail changes.
+   */
+  buildGraze(sigma) {
+    const { gl } = this.glctx, T = this.targets;
+    if (!T || sigma === this.grazeSigma) return T;
+    this.grazeSigma = sigma;
+    if (!(sigma >= GRAZE_MIN_SIGMA)) { T.graze = T.normal; return T; }
+    const { w, h } = this.size;
+    // Made on first use, so a session that never grazes carries no extra targets.
+    if (!T.grazeNormal) {
+      const mk = () => makeTarget(gl, w, h, { float: true, caps: this.glctx.caps });
+      Object.assign(T, { grazeHeight: mk(), grazeNormal: mk() });
+    }
+    // A wide blur (a large export) runs in two stages whose variances add: an exact
+    // one of at most 16 texels, then the rest at the blur's own stride, which can no
+    // longer let pixel-scale grain through once the first stage has removed it.
+    const s1 = Math.min(sigma, 16), s2 = Math.sqrt(Math.max(0, sigma * sigma - s1 * s1));
+    let src = T.height;
+    for (const s of s2 > 0.5 ? [s1, s2] : [s1]) {
+      pass(gl, this.progs.blur, T.tmp, [['uSrc', src.tex]], (u) => { gl.uniform2f(u.uStep, 1 / w, 0); gl.uniform1f(u.uSigma, s); });
+      pass(gl, this.progs.blur, T.grazeHeight, [['uSrc', T.tmp.tex]], (u) => { gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, s); });
+      src = T.grazeHeight;
+    }
+    pass(gl, this.progs.normal, T.grazeNormal, [['uHeight', T.grazeHeight.tex]], (u) => this.normalUniforms(u, w, h));
+    bindTarget(gl, null);
+    T.graze = T.grazeNormal;
+    return T;
+  }
+}
+
+function pass(gl, prog, target, textures, setUniforms) {
+  bindTarget(gl, target);
+  gl.useProgram(prog.program);
+  bindTextures(gl, prog, textures);
+  if (setUniforms) setUniforms(prog.uniforms);
+  drawFullscreen(gl);
 }

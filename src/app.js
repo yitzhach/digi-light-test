@@ -588,6 +588,12 @@ function updateDerived(workingW) {
     state.shadowDistPx = state.reliefScale * state.shadowSpread;
     state.shadowDist = state.shadowDistPx / W;
   }
+  // Graze Detail is a feature size in painting widths (the smoothing's full width
+  // at half maximum), so its blur in pixels follows the working width and a
+  // full-resolution export smooths exactly as much of the painting as the preview.
+  const g = state.graze;
+  state.grazeSigmaPx = state.mode === 'single' && g && g.enabled && g.opacity > 0
+    ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
 }
 
 let pendingFrame = 0;
@@ -643,6 +649,8 @@ function renderNow() {
         state.heightStats = { ...gbuf.heightStats };
       }
       dirtySurface = false;
+    } else if (state.mode === 'single') {
+      gbuf.buildGraze(state.grazeSigmaPx);   // no-op unless the graze Detail changed
     }
     let drawTargets = targets;
     if (state.mode === 'photometric' && state.psShowTruth && truthTex) {
