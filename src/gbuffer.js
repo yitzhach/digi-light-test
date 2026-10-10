@@ -336,6 +336,10 @@ export class GBuffer {
       gl.uniform1f(u.uTaps, integrateTaps);
     });
 
+    // Test seam: lets a harness replace the estimated heights (e.g. with a synthetic
+    // painting's known relief) so everything downstream is built from them.
+    if (this.afterHeight) this.afterHeight(T, w, h);
+
     // Calibrated mode measures the preview and reuses that spread for export tiles;
     // legacy mode keeps the raw directional estimate exactly as it always was.
     if (opts.measureHeight) this.heightStats = this.measureHeight(T.height.tex);

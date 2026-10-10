@@ -778,6 +778,7 @@ async function boot() {
       job || { mode: 'single', source: fullSource }, state, onP),
     // --- diagnostics used by the test harness
     shots: () => shots,
+    gbuf, glctx,
     dirty: () => { dirtySurface = true; },
     measureFit: () => photo.measureResidual(imgW, imgH, residualExclusion()),
     residualTarget: () => photo.targets && photo.targets.residual,
