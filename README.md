@@ -37,6 +37,17 @@ shadows. Drag the knob round the **circle** to light from any direction (Shift s
 to 15°, arrow keys nudge), set **Opacity** to fade it over your own lighting (100% =
 graze light alone) and **Angle to wall** (1–20°). **Visible/Hidden** turns it off
 without losing its settings. It is saved with undo, projects, presets and exports.
+A light a degree or two off the wall exaggerates every slope 30–60×, and the finest
+scale of relief estimated from one photo is mostly grain and photo noise, so the
+graze has its own controls for that: **Detail** (only relief at least this wide
+casts graze shadows; the graze sees a smoothed copy of the relief), **Fine texture**
+(finer relief comes back in the shading only, at the contrast a 10° light gives it),
+**Shadow length** (lets graze shadows run as far as height and angle allow),
+**Clean shadows** (a bump must stand this tall to cast), and **Softness** (lamp size,
+bulb to strip light). **Graze preset** offers Gentle raking, Classic raking (the
+default), Long shadows, Long shadows clean surface, Soft strip light, and Every
+detail (raw, the old look). `tools/graze-lab.cjs` measures these against synthetic
+paintings with known relief.
 The **Grazing side light** preset makes one of your own lights a grazing light;
 Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
 
