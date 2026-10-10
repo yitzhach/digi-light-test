@@ -45,8 +45,9 @@ Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fi
 Ctrl/Cmd + mouse wheel, or a trackpad pinch, zooms smoothly about the pointer.
 Zoomed out, lights standing well beyond the painting come into view (**Show all
 lights** picks the zoom that shows every dot). Zoomed in, the stage scrolls
-(scrollbars, wheel, two-finger swipe) and you can pan like an image editor's hand
-tool: hold Space and drag, or drag with the middle button. A dot outside the visible
+(scrollbars, wheel, two-finger swipe, a finger on a touch screen) and you can pan
+like an image editor's hand tool: hold Space and drag, or drag with the middle
+button. A dot outside the visible
 part of the stage, beyond the painting or scrolled out of view, is pinned to its
 edge with a dashed ring. Zoom is a view setting: it is not undone or saved.
 The preview works on a copy of at most 1400 px, so zoomed in on a larger photo the

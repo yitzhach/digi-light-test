@@ -250,9 +250,12 @@ function fitCanvas() {
   const disp = Math.min(availW / imgW, availH / imgH) * (state.viewZoom || 1);
   // Past fit the painting outgrows the stage, which then scrolls. The fit itself is
   // taken from the stage, not the scroller, so scrollbars appearing cannot feed back.
-  scroller.classList.toggle('zoomed', (state.viewZoom || 1) > 1);
+  const zoomed = (state.viewZoom || 1) > 1;
+  scroller.classList.toggle('zoomed', zoomed);
   canvas.style.width = `${Math.round(imgW * disp)}px`;
   canvas.style.height = `${Math.round(imgH * disp)}px`;
+  // At or below fit nothing should be scrolled, not even by a rounding pixel.
+  if (!zoomed) scroller.scrollLeft = scroller.scrollTop = 0;
   repositionHandles();
   scheduleSharp();
 }
@@ -287,9 +290,11 @@ function setZoom(z, at) {
   const u = r.width ? (cx - r.left) / r.width : 0.5, w = r.height ? (cy - r.top) / r.height : 0.5;
   state.viewZoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
   fitCanvas();
-  const n = canvas.getBoundingClientRect();
-  scroller.scrollLeft += n.left + u * n.width - cx;
-  scroller.scrollTop += n.top + w * n.height - cy;
+  if (state.viewZoom > 1) {
+    const n = canvas.getBoundingClientRect();
+    scroller.scrollLeft += n.left + u * n.width - cx;
+    scroller.scrollTop += n.top + w * n.height - cy;
+  }
   repositionHandles();
   document.dispatchEvent(new Event('digilight:zoom'));
 }
@@ -1126,6 +1131,7 @@ function wireSpherePlacement() {
     state.placingSphere = !state.placingSphere;
     btn.className = state.placingSphere ? 'on' : '';
     wrap.style.cursor = state.placingSphere ? 'crosshair' : '';
+    wrap.classList.toggle('placing', state.placingSphere);   // a finger drags the circle, not the view
     $('sphStatus').textContent = state.placingSphere
       ? 'Drag from the centre of the sphere out to its edge.'
       : '';
@@ -1152,6 +1158,7 @@ function wireSpherePlacement() {
       state.placingSphere = false;
       $('sphPlace').className = '';
       wrap.style.cursor = '';
+      wrap.classList.remove('placing');
       reportSphere();
     };
     wrap.addEventListener('pointermove', move);

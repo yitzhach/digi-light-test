@@ -72,7 +72,8 @@ await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=600;});a
 assert.ok((await hs.getAttribute('class')).includes('pinned')&&Math.abs(hb.y+hb.height/2-v.v.y-14)<1.5&&Math.abs(hb.x+hb.width/2-Q[0])<1.5,'dot pins to the visible edge while scrolled '+JSON.stringify(hb));
 await page.evaluate(()=>{document.querySelector('#scroller').scrollTop-=600;});await settle();hb=await hs.boundingBox();assert.ok(Math.hypot(hb.x+hb.width/2-Q[0],hb.y+hb.height/2-Q[1])<1.5&&!(await hs.getAttribute('class')).includes('pinned'));
 await page.click('#undo');await settle();assert.equal(JSON.stringify(await setting('lights')),lights);
-await page.click('#brushRemove');v=await view();const B0=[v.v.x+v.v.w*.4,v.v.y+v.v.h*.55],B1=[B0[0]+80,B0[1]+20],n0=(await setting('strokes')).length;
+const touch=()=>page.evaluate(()=>getComputedStyle(__bench.canvas).touchAction);assert.equal(await touch(),'pan-x pan-y');
+await page.click('#brushRemove');assert.equal(await touch(),'none');v=await view();const B0=[v.v.x+v.v.w*.4,v.v.y+v.v.h*.55],B1=[B0[0]+80,B0[1]+20],n0=(await setting('strokes')).length;
 assert.ok(await page.evaluate(p=>document.elementFromPoint(...p)===__bench.canvas,B0));
 await page.mouse.move(...B0);await page.mouse.down();await page.mouse.move(...B1,{steps:4});await page.mouse.up();await settle();
 const s=(await setting('strokes')).at(-1);assert.equal((await setting('strokes')).length,n0+1);assert.ok(near(s.points[0],at(v,B0),.5,v)&&near(s.points.at(-1),at(v,B1),.5,v),'zoomed stroke '+JSON.stringify([s.points[0],at(v,B0)]));

@@ -43,6 +43,9 @@ input[type=range]:disabled { opacity:.35; }
 .zoomGroup { display:inline-flex; gap:2px; }
 .zoomGroup button { min-width:30px; }
 .handle.pinned { border-style:dashed; }
+/* Zoomed in, a finger drag on the painting scrolls it, unless a brush or the sphere placer wants it */
+#scroller.zoomed #gl { touch-action:pan-x pan-y; }
+#wrap.brushing #gl, #wrap.placing #gl { touch-action:none; }
 /* Hand tool: Space held over the painting, or a middle-button drag */
 #stage.panReady #wrap, #stage.panReady #wrap * { cursor:grab!important; }
 #stage.panning #wrap, #stage.panning #wrap * { cursor:grabbing!important; }
