@@ -68,7 +68,8 @@ export const POWER_MAX = 1024;
  * paint only catches sin(angle) of the light there, so the brightness is raised to
  * keep the centre a little under a normal exposure: ridges facing the lamp catch
  * many times more and would otherwise blow out. 3 degrees is the default because
- * estimated relief turns glittery below that; the angle slider still goes to 1.
+ * estimated relief turns glittery below that; the angle slider still goes to 1, and
+ * the graze effect's Detail (below) is what keeps those low angles clean.
  */
 export const GRAZE_DEG = 3, GRAZE_DISTANCE = 1;
 export function grazePower(dist, deg) {
@@ -78,6 +79,14 @@ const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
 // Graze effect (Graze light section): a small hard source, a dim fill so shadows read
 // as shadows, and the range of angles off the wall its slider offers.
 export const GRAZE_SIZE = 0.005, GRAZE_AMBIENT = 0.06, GRAZE_EL_MIN = 1, GRAZE_EL_MAX = 20;
+// Graze Detail, in painting widths: relief narrower than this casts no graze shadow
+// and is shaded only as a light GRAZE_FINE_DEG off the wall would show it, times
+// the Fine texture amount. A light e degrees off the wall multiplies every slope's
+// effect by 1/tan(e), and the finest band of a one-photo estimate is mostly paint
+// grain, mottle and noise, so without this low angles turn it into a leopard-spot
+// pattern of glints and tiny shadows. 0.01 (6 mm on a 60 cm painting) measured best
+// on the synthetic rigs at 1-2.5 degrees (tools/graze-lab.cjs); 0 is every pixel.
+export const GRAZE_DETAIL = 0.01, GRAZE_DETAIL_MAX = 0.03, GRAZE_FINE_DEG = 10;
 
 // Blend layers: copies of the photo composited over the relit result, the way an
 // image editor's layer blend modes work (in display space, top of the list last).

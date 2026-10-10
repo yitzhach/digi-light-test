@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, grazePower } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, GRAZE_FINE_DEG, grazePower } from './presets.js';
 import { kelvinToLinearRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
@@ -79,6 +79,8 @@ uniform vec4  uMaskOverlay;                   // while painting a mask: tint whe
 uniform vec3  uGrazePos;
 uniform vec3  uGrazeColor;     // colour times power
 uniform float uGrazeOpacity;
+uniform sampler2D uGrazeNormal; // its own relief, smoothed to the graze Detail: rgb normal, a height
+uniform float uGrazeFine;       // share of the finer relief put back into its shading (no shadows)
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -105,9 +107,9 @@ vec3 F_Schlick(float u, vec3 f0) {
   return f0 + (1.0 - f0) * f;
 }
 
-float sampleHeight(vec2 uv) {
+float sampleHeight(sampler2D relief, vec2 uv) {
   vec2 globalUV = uUVOffset + uv * uUVScale;
-  return texture(uNormal, uv).a * uHeightScale * uReliefAmount * (texture(uMask, globalUV).r * 2.0);
+  return texture(relief, uv).a * uHeightScale * uReliefAmount * (texture(uMask, globalUV).r * 2.0);
 }
 
 /**
@@ -121,7 +123,7 @@ float sampleHeight(vec2 uv) {
  * and an overhead one hardly at all. Steps bunch up near the pixel, where the
  * small ridges that matter most sit.
  */
-float shadowMarch(vec2 uv, vec3 L, float penumbra, float strength) {
+float shadowMarch(sampler2D relief, vec2 uv, vec3 L, float penumbra, float strength) {
   if (strength <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
   vec2 dxy = L.xy;
   float lxy = length(dxy);
@@ -131,7 +133,7 @@ float shadowMarch(vec2 uv, vec3 L, float penumbra, float strength) {
   float maxDist = min(uShadowDist, uHeightReach / max(slope, 1e-3));
   float tMin = 0.75 * uTexelGlobal;
   if (maxDist <= tMin) return 1.0;
-  float h0 = sampleHeight(uv);
+  float h0 = sampleHeight(relief, uv);
   float horizon = -1.0e3;                  // tangent of the highest blocker seen
   // Long (grazing) marches take more steps so thin ridges are not stepped over;
   // about one step per three texels, never fewer than the usual 32.
@@ -142,7 +144,7 @@ float shadowMarch(vec2 uv, vec3 L, float penumbra, float strength) {
     float t = tMin + (maxDist - tMin) * pow(f, 1.5);
     vec2 suv = uv + (dir * t / vec2(1.0, uAspect)) / uUVScale;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
-    horizon = max(horizon, (sampleHeight(suv) - h0) / t);
+    horizon = max(horizon, (sampleHeight(relief, suv) - h0) / t);
   }
   // Relative to an open, flat surface: the part of a big low source that sits
   // below the painting's own plane is already accounted for by the light wrap, so
@@ -270,7 +272,7 @@ void main() {
     if (NoLw <= 0.0) continue;
 
     float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
-    float shadow = shadowMarch(vUV, L, penumbra, uShadow);
+    float shadow = shadowMarch(uNormal, vUV, L, penumbra, uShadow);
 
     // A bigger source spreads the highlight: widen the lobe by the source's size
     // relative to its distance (Karis' sphere-light approximation, without the
@@ -300,18 +302,29 @@ void main() {
   vec3 relit = clamp(linearToSrgb(mapped), 0.0, 1.0);
 
   if (uGrazeOpacity > 0.0) {
+    // The graze light shades and shadows the relief down to its Detail size only
+    // (GBuffer buildGraze): at a degree or two off the wall the finest band of a
+    // one-photo estimate is mostly grain and noise, and would turn into glitter.
+    // The finer relief comes back into the shading alone, at the contrast a gentler
+    // light gives it (uGrazeFine), so it reads as surface, not as spots.
+    vec4 gnh = texture(uGrazeNormal, vUV);
+    vec3 gRaw = gnh.rgb * 2.0 - 1.0;
+    vec2 gxy = mix(gRaw.xy, rawN.xy * (gRaw.z / rawN.z), uGrazeFine);
+    vec3 gN = normalize(mix(vec3(0.0, 0.0, 1.0), normalize(vec3(gxy * mask, gRaw.z)), uReliefAmount));
+    float gNoV = max(dot(gN, V), 1e-4);
+    float gAo = 1.0 - uAO * clamp(-gnh.a * mask * uReliefAmount * uAOScale, 0.0, 1.0);
     // Shadows always full strength and crisp here: that is the point of grazing light.
-    vec3 g = albedo * uAmbientColor * ${GRAZE_AMBIENT.toFixed(3)} * ao;
+    vec3 g = albedo * uAmbientColor * ${GRAZE_AMBIENT.toFixed(3)} * gAo;
     vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
     float dist = max(length(Lv), 1e-4);
     vec3 L = Lv / dist;
     float srcAngle = atan(${GRAZE_SIZE.toFixed(4)} / dist);
     float wrap = sin(srcAngle);
-    float NoLw = (dot(N, L) + wrap) / (1.0 + wrap);
+    float NoLw = (dot(gN, L) + wrap) / (1.0 + wrap);
     if (NoLw > 0.0) {
       float aSrc = min(1.0, a + ${GRAZE_SIZE.toFixed(4)} / (2.0 * dist));
-      float shadow = shadowMarch(vUV, L, max(srcAngle, 0.012), 1.0);
-      g += brdf(N, V, L, NoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
+      float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0);
+      g += brdf(gN, V, L, gNoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
     g *= exp2(uExposure);
     vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
@@ -382,6 +395,7 @@ export class Shader {
       ['uLin', targets.lin.tex],
       ['uMask', this.maskTex],
       ['uLayerMask', this.layerMaskTex],
+      ['uGrazeNormal', (targets.graze || targets.normal).tex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -471,6 +485,10 @@ export class Shader {
     gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
     gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
     gl.uniform1f(u.uGrazeOpacity, gOn ? g.opacity : 0);
+    // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading
+    // contrast goes as slope / tan(elevation), so its weight goes as tan(elevation).
+    const fineDeg = GRAZE_FINE_DEG * Math.PI / 180;
+    gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
