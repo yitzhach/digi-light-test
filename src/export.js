@@ -18,7 +18,7 @@ import { uploadShotArray } from './photometric.js';
  * does not fail loudly — it seams, exactly where the relief is strongest.
  */
 export function requiredMargin(state) {
-  const shadow = Math.ceil(state.shadowDistPx || 0);
+  const shadow = Math.ceil(Math.max(state.shadowDistPx || 0, state.grazeReachPx || 0));
   if (state.mode === 'photometric') {
     // Height comes from Jacobi relaxation, which moves information one texel per
     // sweep, so a pixel depends on everything within `iterations` texels. The

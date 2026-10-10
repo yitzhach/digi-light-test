@@ -676,6 +676,15 @@ function updateDerived(workingW, st = state) {
   const g = st.graze;
   st.grazeSigmaPx = st.mode === 'single' && g && g.enabled && g.opacity > 0
     ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
+  // The graze light's own shadow reach: the main lights bound shadowDist, and a
+  // light a degree off the wall throws shadows far longer than any of theirs. Its
+  // Shadow length setting takes that share of the tallest relief over tan(elevation).
+  st.grazeReach = st.shadowDist;
+  if (st.calibrated && g && g.enabled && g.opacity > 0 && g.reach > 0) {
+    const rise = physicalDepth(st) * st.reliefAmount * 1.5;
+    st.grazeReach = Math.max(st.shadowDist, g.reach * Math.min(0.3, rise / Math.tan(g.elevation * Math.PI / 180)));
+  }
+  st.grazeReachPx = st.grazeReach * W;
 }
 
 /**

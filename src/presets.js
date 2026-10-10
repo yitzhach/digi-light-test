@@ -87,6 +87,15 @@ export const GRAZE_SIZE = 0.005, GRAZE_AMBIENT = 0.06, GRAZE_EL_MIN = 1, GRAZE_E
 // pattern of glints and tiny shadows. 0.01 (6 mm on a 60 cm painting) measured best
 // on the synthetic rigs at 1-2.5 degrees (tools/graze-lab.cjs); 0 is every pixel.
 export const GRAZE_DETAIL = 0.01, GRAZE_DETAIL_MAX = 0.03, GRAZE_FINE_DEG = 10;
+// Graze shadows. Shadow length is the share of the physical reach, the tallest
+// relief over tan(angle to wall), the graze light's shadows may travel; the main
+// lights bound it otherwise, a few pixels at their usual height, so a light a degree
+// off the wall could never throw the long shadows it exists for. Clean shadows is
+// the height, as a share of GRAZE_CLEAN_MAX of the relief's measured 2-98% spread,
+// a blocker must clear before it throws any: the bumps the one-photo estimate makes
+// out of grain stay under it and the real ridges do not (tools/graze-lab.cjs).
+// 0 and 0 is the look before either existed.
+export const GRAZE_REACH = 0, GRAZE_CLEAN = 0, GRAZE_CLEAN_MAX = 0.1;
 
 // Blend layers: copies of the photo composited over the relit result, the way an
 // image editor's layer blend modes work (in display space, top of the list last).

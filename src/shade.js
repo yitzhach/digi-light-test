@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, GRAZE_FINE_DEG, grazePower } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower } from './presets.js';
 import { kelvinToLinearRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
@@ -80,6 +80,8 @@ uniform vec3  uGrazePos;
 uniform vec3  uGrazeColor;     // colour times power
 uniform float uGrazeOpacity;
 uniform sampler2D uGrazeNormal; // its own relief, smoothed to the graze Detail: rgb normal, a height
+uniform float uGrazeBias;       // height a blocker must clear before it throws a graze shadow
+uniform float uGrazeReach;      // longest graze march, in whole-image UV units
 uniform float uGrazeFine;       // share of the finer relief put back into its shading (no shadows)
 
 const float PI = 3.14159265359;
@@ -123,14 +125,14 @@ float sampleHeight(sampler2D relief, vec2 uv) {
  * and an overhead one hardly at all. Steps bunch up near the pixel, where the
  * small ridges that matter most sit.
  */
-float shadowMarch(sampler2D relief, vec2 uv, vec3 L, float penumbra, float strength) {
+float shadowMarch(sampler2D relief, vec2 uv, vec3 L, float penumbra, float strength, float bias, float reach) {
   if (strength <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
   vec2 dxy = L.xy;
   float lxy = length(dxy);
   if (lxy < 1e-4) return 1.0;              // light overhead: nothing to cast
   vec2 dir = dxy / lxy;
   float slope = L.z / lxy;                 // world height gained per unit travelled
-  float maxDist = min(uShadowDist, uHeightReach / max(slope, 1e-3));
+  float maxDist = min(reach, uHeightReach / max(slope, 1e-3));
   float tMin = 0.75 * uTexelGlobal;
   if (maxDist <= tMin) return 1.0;
   float h0 = sampleHeight(relief, uv);
@@ -144,7 +146,7 @@ float shadowMarch(sampler2D relief, vec2 uv, vec3 L, float penumbra, float stren
     float t = tMin + (maxDist - tMin) * pow(f, 1.5);
     vec2 suv = uv + (dir * t / vec2(1.0, uAspect)) / uUVScale;
     if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
-    horizon = max(horizon, (sampleHeight(relief, suv) - h0) / t);
+    horizon = max(horizon, (sampleHeight(relief, suv) - h0 - bias) / t);
   }
   // Relative to an open, flat surface: the part of a big low source that sits
   // below the painting's own plane is already accounted for by the light wrap, so
@@ -272,7 +274,7 @@ void main() {
     if (NoLw <= 0.0) continue;
 
     float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
-    float shadow = shadowMarch(uNormal, vUV, L, penumbra, uShadow);
+    float shadow = shadowMarch(uNormal, vUV, L, penumbra, uShadow, 0.0, uShadowDist);
 
     // A bigger source spreads the highlight: widen the lobe by the source's size
     // relative to its distance (Karis' sphere-light approximation, without the
@@ -323,7 +325,7 @@ void main() {
     float NoLw = (dot(gN, L) + wrap) / (1.0 + wrap);
     if (NoLw > 0.0) {
       float aSrc = min(1.0, a + ${GRAZE_SIZE.toFixed(4)} / (2.0 * dist));
-      float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0);
+      float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
       g += brdf(gN, V, L, gNoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
     g *= exp2(uExposure);
@@ -488,6 +490,10 @@ export class Shader {
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading
     // contrast goes as slope / tan(elevation), so its weight goes as tan(elevation).
     const fineDeg = GRAZE_FINE_DEG * Math.PI / 180;
+    // Clean shadows: heights are in units of the relief's measured spread, so the
+    // dead zone follows how much of the relief the estimate can be trusted with.
+    gl.uniform1f(u.uGrazeBias, state.calibrated ? (g?.clean ?? 0) * GRAZE_CLEAN_MAX * state.heightScale * state.reliefAmount : 0);
+    gl.uniform1f(u.uGrazeReach, state.grazeReach ?? state.shadowDist);
     gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, layers.length);
