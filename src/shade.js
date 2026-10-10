@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower } from './presets.js';
 import { kelvinToLinearRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
@@ -82,6 +82,7 @@ uniform float uGrazeOpacity;
 uniform sampler2D uGrazeNormal; // its own relief, smoothed to the graze Detail: rgb normal, a height
 uniform float uGrazeBias;       // height a blocker must clear before it throws a graze shadow
 uniform float uGrazeReach;      // longest graze march, in whole-image UV units
+uniform float uGrazeSize;       // source radius, in painting widths (Softness)
 uniform float uGrazeFine;       // share of the finer relief put back into its shading (no shadows)
 
 const float PI = 3.14159265359;
@@ -320,11 +321,11 @@ void main() {
     vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
     float dist = max(length(Lv), 1e-4);
     vec3 L = Lv / dist;
-    float srcAngle = atan(${GRAZE_SIZE.toFixed(4)} / dist);
+    float srcAngle = atan(uGrazeSize / dist);
     float wrap = sin(srcAngle);
     float NoLw = (dot(gN, L) + wrap) / (1.0 + wrap);
     if (NoLw > 0.0) {
-      float aSrc = min(1.0, a + ${GRAZE_SIZE.toFixed(4)} / (2.0 * dist));
+      float aSrc = min(1.0, a + uGrazeSize / (2.0 * dist));
       float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
       g += brdf(gN, V, L, gNoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
@@ -494,6 +495,7 @@ export class Shader {
     // dead zone follows how much of the relief the estimate can be trusted with.
     gl.uniform1f(u.uGrazeBias, state.calibrated ? (g?.clean ?? 0) * GRAZE_CLEAN_MAX * state.heightScale * state.reliefAmount : 0);
     gl.uniform1f(u.uGrazeReach, state.grazeReach ?? state.shadowDist);
+    gl.uniform1f(u.uGrazeSize, grazeSize(g?.soft ?? 0));
     gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, layers.length);
