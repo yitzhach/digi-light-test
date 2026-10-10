@@ -29,6 +29,12 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-10 (branch, not on `main`): Graze light section replaces the per-light
+  "Graze from L/R/T/B" buttons. `state.graze` `{enabled, angle, elevation, opacity}`
+  (angle = where light comes from, 0° right, 90° top) drives one extra hard light in
+  `shade.js`, rendered separately and cross-faded over the relit result
+  (`uGrazeOpacity`), before layers. Dial in studio.js `renderGraze`; hidden in
+  diagnostic views and during Sweep. In history, projects, presets (validated).
 - 10-10 (branch `claude/epic-wright-h77sdu`, not yet on `main`): layer masks. Each layer
   has Paint hide / Paint show / Hide all / Reset; strokes live in `layer.mask`
   `{base, strokes}` (like relief `strokes`), rasterised in studio.js into

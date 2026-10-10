@@ -58,3 +58,16 @@ input[type=range]:disabled { opacity:.35; }
 .layerMask { display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); }
 .layerMask span { font-size:11px; opacity:.75; margin-right:2px; }
 .layerMask button { padding:3px 7px; font-size:11px; }
+/* Graze light */
+.grazeTop { display:flex; gap:10px; align-items:center; }
+#grazeDial { width:120px; height:120px; flex:none; touch-action:none; cursor:grab; outline:none; border-radius:50%; }
+#grazeDial:focus-visible { box-shadow:0 0 0 2px var(--accent); }
+#grazeDial .ring { fill:none; stroke:var(--line); stroke-width:6; }
+#grazeDial .pic { fill:var(--panel2); stroke:var(--line); }
+#grazeDial text { fill:currentColor; opacity:.55; font-size:9px; text-anchor:middle; }
+#grazeDial .ray { stroke:#ffd27a; stroke-width:1.5; stroke-dasharray:3 2; }
+#grazeDial .knob { fill:#ffd27a; stroke:#fff; stroke-width:1.5; }
+.grazeOff #grazeDial .knob, .grazeOff #grazeDial .ray { opacity:.4; }
+.grazeSide { display:flex; flex-direction:column; gap:6px; align-items:flex-start; min-width:0; }
+.grazeSide output { font-size:12px; }
+.grazeSide .note { margin:0; }

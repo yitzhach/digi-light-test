@@ -14,7 +14,7 @@ import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
-import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, GRAZE_DEG, GRAZE_DISTANCE, grazePower } from './presets.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -406,22 +406,6 @@ function rebuildLightPanel() {
   }
   p.appendChild(types);
 
-  const grazeRow = document.createElement('div');
-  grazeRow.className = 'lightTypes graze';
-  grazeRow.title = 'Lay this light almost flat against the painting for long, hard shadows';
-  grazeRow.append(Object.assign(document.createElement('span'), { textContent: 'Graze from' }));
-  for (const side of ['left', 'right', 'top', 'bottom']) {
-    const b = document.createElement('button');
-    b.textContent = side[0].toUpperCase() + side.slice(1);
-    b.setAttribute('aria-label', `Graze from ${side}`);
-    b.onclick = () => {
-      graze(l, side);
-      rebuildLightPanel(); rebuildHandles(); render();
-      document.dispatchEvent(new Event('digilight:settings'));
-    };
-    grazeRow.appendChild(b);
-  }
-  p.appendChild(grazeRow);
 
   p.appendChild(slider('Diffusion', 0, 1, 0.01, () => characterOf(l), (v) => {
     applyCharacter(l, v);
@@ -471,7 +455,7 @@ function rebuildLightPanel() {
   const note = document.createElement('p');
   note.className = 'note';
   note.textContent = 'Drag the dot to place the light. Lower angles rake across the paint and lengthen shadows; '
-    + 'Graze lays the light nearly flat to the painting for the longest, hardest shadows. '
+    + 'for the longest, hardest shadows use Graze light below. '
     + 'Spot gives crisp shadows and a tight beam; Diffused gives soft shadows that flatten texture. '
     + 'Shift-drag changes distance; Alt/Option-drag changes beam width.';
   p.appendChild(note);
@@ -500,26 +484,6 @@ function placeHandle(d, l) {
 }
 function repositionHandles() {
   wrap.querySelectorAll('.handle').forEach((d, i) => { if (state.lights[i]) placeHandle(d, state.lights[i]); });
-}
-
-/**
- * Turn a light into a grazing light from one side: aimed at the centre, a painting
- * width out, a couple of degrees off the wall, a small hard source. Also makes
- * cast shadows full strength and crisp, since that is the point of grazing light.
- */
-function graze(l, side) {
-  const a = aspectNow();
-  const [dx, dy] = { left: [-1, 0], right: [1, 0], top: [0, 1], bottom: [0, -1] }[side];
-  const z = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
-  Object.assign(l, {
-    aimX: 0.5, aimY: 0.5,
-    x: clamp(0.5 + dx * GRAZE_DISTANCE, LIGHT_MIN, LIGHT_MAX),
-    y: clamp(0.5 + dy * GRAZE_DISTANCE / a, LIGHT_MIN, LIGHT_MAX),
-    z, cone: 0, softness: 0.3, size: 0.005, falloff: 2,
-    power: grazePower(Math.hypot(GRAZE_DISTANCE, z), GRAZE_DEG),
-  });
-  state.shadow = 1;
-  state.shadowSoftness = Math.min(state.shadowSoftness ?? 0.35, 0.03);
 }
 
 function rebuildHandles() {
