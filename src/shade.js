@@ -349,7 +349,8 @@ export class Shader {
   draw(targets, state, aspect, viewW, viewH, tile) {
     const { gl } = this.glctx;
     const p = this.prog;
-    if (!state.exporting) bindTarget(gl, null);
+    // A tile draws into whatever target its caller bound; the preview, to the canvas.
+    if (!tile) bindTarget(gl, null);
     gl.viewport(0, 0, viewW, viewH);
     gl.useProgram(p.program);
     if (this.maskVersion !== (state.maskVersion ?? 0)) {

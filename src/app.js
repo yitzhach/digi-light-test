@@ -10,7 +10,7 @@ import { kelvinToLinearRGB, hexToLinearRGB, linearRGBToHex } from './kelvin.js';
 import { synthesizePainting, synthesizeCaptureSet, normalsToImageData } from './synth.js';
 import { Photometric, buildSolver, uploadShotArray, MAX_SHOTS } from './photometric.js';
 import { chromaSignal } from './measure.js';
-import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
+import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
@@ -254,6 +254,7 @@ function fitCanvas() {
   canvas.style.width = `${Math.round(imgW * disp)}px`;
   canvas.style.height = `${Math.round(imgH * disp)}px`;
   repositionHandles();
+  scheduleSharp();
 }
 
 /** The part of the stage the painting is seen through, in client pixels, scrollbars excluded. */
@@ -313,7 +314,7 @@ function wireZoomGestures() {
       scroller.scrollBy(e.deltaX * px, e.deltaY * px);
     }
   }, { passive: false });
-  scroller.addEventListener('scroll', () => repositionHandles(), { passive: true });
+  scroller.addEventListener('scroll', () => { repositionHandles(); scheduleSharp(); }, { passive: true });
 
   let over = false, held = false;
   const hand = (on) => { held = on; stage.classList.toggle('panReady', on); };
@@ -637,41 +638,64 @@ function rebuildViews() {
 // same in the preview and in a full-resolution export.
 const PS_REFERENCE_W = 700;
 
-function updateDerived(workingW) {
+function updateDerived(workingW, st = state) {
   const W = Math.max(1, workingW);
   // Calibrated relief is a single-photo model; a capture measures its own heights.
-  state.calibrated = state.mode === 'single' && !!state.physical;
-  if (state.mode === 'photometric') {
+  st.calibrated = st.mode === 'single' && !!st.physical;
+  if (st.mode === 'photometric') {
     // Measured relief sits at its true physical scale whatever the resolution,
     // so shadow reach is a fraction of image width and stays put.
-    state.shadowDist = state.shadowSpread * 0.005;
-    state.shadowDistPx = state.shadowDist * W;
-    state.psHeightGain = PS_REFERENCE_W / W;
-  } else if (state.physical) {
+    st.shadowDist = st.shadowSpread * 0.005;
+    st.shadowDistPx = st.shadowDist * W;
+    st.psHeightGain = PS_REFERENCE_W / W;
+  } else if (st.physical) {
     // Calibrated: heights are in painting widths, so a normal's slope is the height
     // difference over the texel's width. That gain grows with resolution, which is
     // exactly the rescale export needs; shadow reach is geometry, not pixels.
-    const depth = physicalDepth(state);
-    state.heightScale = depth;
-    state.reliefStrength = depth * W / 2;
-    state.shadowDist = shadowReach(state, depth, imgH / Math.max(1, imgW));
-    state.shadowDistPx = state.shadowDist * W;
-    state.aoScale = 3 * Math.min(1, Math.sqrt(state.textureDepthMm / 2));
+    const depth = physicalDepth(st);
+    st.heightScale = depth;
+    st.reliefStrength = depth * W / 2;
+    st.shadowDist = shadowReach(st, depth, imgH / Math.max(1, imgW));
+    st.shadowDistPx = st.shadowDist * W;
+    st.aoScale = 3 * Math.min(1, Math.sqrt(st.textureDepthMm / 2));
   } else {
     // Single-image relief is parameterised in PIXELS, so its features shrink as
     // resolution rises; tying shadow reach to the relief scale keeps the two in
     // step. A fixed fraction of image width would leave shadows too long.
-    state.shadowDistPx = state.reliefScale * state.shadowSpread;
-    state.shadowDist = state.shadowDistPx / W;
+    st.shadowDistPx = st.reliefScale * st.shadowSpread;
+    st.shadowDist = st.shadowDistPx / W;
   }
+}
+
+/**
+ * The live settings as they apply to a render `outW` pixels wide, for an export or
+ * the sharp zoom. Single-image surface parameters are measured in pixels of the
+ * working image, so they are rescaled or a full-resolution render shows different
+ * relief from the preview; gradients are taken per texel, so the slope-to-normal
+ * gain scales too, or it reads far harsher. The photometric path measures geometry
+ * directly, so only the terms updateDerived() handles change. Built on a copy, so
+ * an interrupted render can never leave the preview rescaled.
+ */
+function renderState(outW) {
+  const st = { ...state };
+  if (st.mode !== 'photometric') {
+    const ratio = outW / imgW;
+    st.reliefScale *= ratio;
+    st.integrateTaps *= ratio;
+    st.reliefStrength *= ratio;
+  }
+  updateDerived(outW, st);
+  return st;
 }
 
 let pendingFrame = 0;
 function render() {
+  hideSharp();   // whatever is about to change, the sharp overlay would not show it
   if (!pendingFrame) pendingFrame = requestAnimationFrame(() => { pendingFrame = 0; renderNow(); });
 }
 function renderNow() {
   if (!srcTex || state.exporting) return;
+  hideSharp();
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
@@ -735,7 +759,82 @@ function renderNow() {
     } else {
       shader.draw(drawTargets, state, imgH / imgW, imgW, imgH);
     }
+    scheduleSharp();
   } catch (e) { fail(e); }
+}
+
+// ---------------------------------------------------------------- sharp zoom
+
+// The preview works on a copy of at most 1400 px, so zoomed in far enough it shows
+// its own pixels. Once the view has been still for a moment, the visible part is
+// rendered again from the full-resolution source, through the export's tiles with
+// the export's rescaled settings, at about one pixel per screen pixel, and laid
+// exactly over the preview. Anything that changes the picture or the view hides it
+// at once and starts the wait again; a newer request cancels a render in flight.
+const SHARP_IDLE_MS = 250;
+const sharp = document.createElement('canvas');
+sharp.id = 'sharp';
+sharp.style.display = 'none';
+paper.appendChild(sharp);
+let sharpTimer = 0, sharpJob = 0, sharpShown = null;
+
+/** Cancel a pending or running sharp render, leaving what is shown. */
+function cancelSharp() {
+  clearTimeout(sharpTimer);
+  sharpJob++;
+}
+function hideSharp() {
+  cancelSharp();
+  if (sharpShown) { sharp.style.display = 'none'; sharpShown = null; }
+}
+function scheduleSharp() {
+  hideSharp();
+  if (sharpPlan()) sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS);
+}
+
+/**
+ * What a sharp render of the view would cover, or null when it would add nothing:
+ * not zoomed past fit, the screen shows no more pixels than the preview has, or the
+ * photo has no more either. Single photographs only.
+ */
+function sharpPlan() {
+  if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource || (state.viewZoom || 1) <= 1) return null;
+  const c = canvas.getBoundingClientRect(), v = viewBox();
+  if (!c.width || !c.height) return null;
+  // About one output pixel per screen pixel, never more than the photo has.
+  const outW = Math.min(fullW, Math.round(c.width * (window.devicePixelRatio || 1)));
+  if (outW < imgW * 1.05) return null;
+  const outH = Math.max(1, Math.round(fullH * outW / fullW));
+  const x0 = clamp((v.left - c.left) / c.width, 0, 1), x1 = clamp((v.right - c.left) / c.width, 0, 1);
+  const y0 = clamp((v.top - c.top) / c.height, 0, 1), y1 = clamp((v.bottom - c.top) / c.height, 0, 1);
+  const x = Math.floor(x0 * outW), y = Math.floor(y0 * outH);
+  const rect = { x, y, w: Math.ceil(x1 * outW) - x, h: Math.ceil(y1 * outH) - y };
+  return rect.w > 0 && rect.h > 0 ? { outW, outH, rect } : null;
+}
+
+async function renderSharp() {
+  const plan = sharpPlan();
+  if (!plan) return;
+  const job = sharpJob, { outW, outH, rect } = plan;
+  // The tiles reuse the preview's surface targets, so the next frame rebuilds them.
+  dirtySurface = true;
+  let done = false;
+  sharp.width = rect.w; sharp.height = rect.h;
+  try {
+    done = await renderTiles(glctx, { gbuf, photo, shader },
+      { mode: 'single', source: fullSource, width: outW, height: outH }, renderState(outW), rect,
+      sharp.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting });
+  } catch (e) {
+    console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
+  } finally {
+    gbuf.resize(imgW, imgH);   // give back the tile-sized targets now, not at the next frame
+  }
+  if (!done || job !== sharpJob) return;
+  Object.assign(sharp.style, {
+    left: `${rect.x / outW * 100}%`, top: `${rect.y / outH * 100}%`,
+    width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%`, display: '',
+  });
+  sharpShown = { outW, outH, rect: { ...rect } };
 }
 
 function syncOutputs() {
@@ -850,8 +949,11 @@ async function boot() {
   // should be checked against pixels rather than by eye.
   window.__bench = {
     state, render: renderNow, setSource, loadSynthetic, canvas, applyColor,
-    exportFullRes: (job, onP) => exportFullRes(glctx, { gbuf, photo, shader },
-      job || { mode: 'single', source: fullSource }, state, onP),
+    // A real full-resolution export: settings rescaled exactly as the Export button does.
+    exportFullRes: (job, onP) => exportImage(job || { mode: 'single', source: fullSource }, onP),
+    // The sharp zoom overlay, while it is shown: its canvas and the output-pixel
+    // rectangle of an outW x outH render that it holds.
+    sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     // --- diagnostics used by the test harness
     shots: () => shots,
     gbuf, glctx,
@@ -921,29 +1023,12 @@ function wireExport() {
     const fmt = $('exportFmt').value;
     const scalePct = parseFloat($('exportScale').value) / 100;
     const outW = Math.max(1, Math.round(fullW * scalePct));
-    const ratio = outW / imgW;
 
     const photometric = state.mode === 'photometric';
-    const saved = {
-      reliefScale: state.reliefScale,
-      integrateTaps: state.integrateTaps,
-      reliefStrength: state.reliefStrength,
-    };
-    const clamped = [];
-
-    if (!photometric) {
-      // Single-image surface parameters are measured in pixels of the working
-      // image, so they have to be rescaled or the export shows different relief
-      // from the preview.
-      state.reliefScale = saved.reliefScale * ratio;
-      state.integrateTaps = saved.integrateTaps * ratio;
-      // Gradients are taken per texel, so the slope-to-normal gain increases as
-      // texels get smaller, or the export reads far harsher than the preview.
-      state.reliefStrength = saved.reliefStrength * ratio;
-      if (state.reliefScale > 16 || state.integrateTaps > 32) clamped.push('adaptive sampling for large export');
-    }
-    // The photometric path measures geometry directly, so nothing about the
-    // surface needs rescaling; updateDerived() handles the two terms that do.
+    // What the tiles will use: the settings rescaled to the output (renderState).
+    const scaled = renderState(outW);
+    const clamped = !photometric && (scaled.reliefScale > 16 || scaled.integrateTaps > 32)
+      ? ['adaptive sampling for large export'] : [];
 
     let solver = null;
     if (photometric) {
@@ -967,14 +1052,11 @@ function wireExport() {
       : { mode: 'single', source: rescale(fullSource) };
 
     try {
-      status.textContent = `margin ${requiredMargin(state)}px — starting…`;
+      status.textContent = `margin ${requiredMargin(scaled)}px — starting…`;
       const t0 = performance.now();
-      updateDerived(outW);
-      const exportState = { ...state, viewMode: 0 };
-      state.exporting = true;
-      const canvas = await exportFullRes(glctx, { gbuf, photo, shader }, job, exportState, (frac, i, n) => {
+      const canvas = await exportImage(job, (frac, i, n) => {
         status.textContent = `tile ${i}/${n} — ${Math.round(frac * 100)}%`;
-      });
+      }, { viewMode: 0 });
       status.textContent = 'encoding…';
       const bytes = await downloadCanvas(
         canvas,
@@ -989,15 +1071,31 @@ function wireExport() {
       status.textContent = 'failed — see console';
       fail(e);
     } finally {
-      state.exporting = false;
       document.querySelectorAll('[data-export-disabled]').forEach(el => { el.disabled = el.dataset.exportDisabled === 'true'; delete el.dataset.exportDisabled; });
       wrap.style.pointerEvents = '';
-      Object.assign(state, saved);
-      dirtySurface = true;
       render();
       btn.disabled = false;
     }
   });
+}
+
+/**
+ * Render `job` whole at its source's resolution with the live settings rescaled to
+ * it (renderState), for the Export button and the test harness. The preview and the
+ * sharp zoom stand still meanwhile; the preview's surface rebuilds afterwards, since
+ * the tiles reuse its targets. `extra` overrides settings for the export only.
+ */
+async function exportImage(job, onProgress, extra) {
+  const src = job.mode === 'photometric' ? job.sources[0] : job.source;
+  const st = Object.assign(renderState(src.width || src.naturalWidth), extra);
+  state.exporting = true;
+  cancelSharp();
+  try {
+    return await exportFullRes(glctx, { gbuf, photo, shader }, job, st, onProgress);
+  } finally {
+    state.exporting = false;
+    dirtySurface = true;
+  }
 }
 
 // ------------------------------------------------------------- chrome sphere

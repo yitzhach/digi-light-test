@@ -49,6 +49,11 @@ lights** picks the zoom that shows every dot). Zoomed in, the stage scrolls
 tool: hold Space and drag, or drag with the middle button. A dot outside the visible
 part of the stage, beyond the painting or scrolled out of view, is pinned to its
 edge with a dashed ring. Zoom is a view setting: it is not undone or saved.
+The preview works on a copy of at most 1400 px, so zoomed in on a larger photo the
+view sharpens a moment after you stop: the visible part is rendered again from the
+full-resolution photo, through the same tiles as Export, at about one pixel per
+screen pixel. What you inspect at 400% is what the export contains; any change
+shows the working copy until the view is still again (single photographs only).
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
 Split and brush mode.
 
@@ -166,11 +171,13 @@ restoration; quick setup, photo lighting and depth undo; light types, angle and
 mirror; light dots over compare/brush; reopening a photo keeps edits; grazing
 preset and view zoom; zoom to 400% (steps, keys, Ctrl+wheel about the pointer,
 scrolling, Space and middle-button panning, pinned dots, light drags and brush strokes
-while zoomed in); graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
+while zoomed in); sharp zoom detail; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
-of difference across channels. This does not establish physical reconstruction
+of difference across channels. On an 1800 px photo at 400%, the sharp zoom detail
+matched the same region of a full-resolution export to 0.005 byte levels, where the
+magnified 1400 px preview was 4 levels off. This does not establish physical reconstruction
 accuracy or guarantee identical results at every export resolution/device.
 
 To rerun the main browser regression: install Playwright in your test environment,

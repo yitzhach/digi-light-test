@@ -7,7 +7,8 @@
 // It renders in tiles with an overlap margin. The margin is not cosmetic — the
 // blur, the directional integration and the shadow march all read outside the
 // pixel they are writing, so a tile rendered without context would show seams
-// exactly where the relief is strongest.
+// exactly where the relief is strongest. The same tiles render the visible part
+// of a zoomed-in view from the full-resolution source (app.js, sharp zoom).
 
 import { makeTarget, bindTarget } from './gl.js';
 import { uploadShotArray } from './photometric.js';
@@ -32,17 +33,31 @@ export function requiredMargin(state) {
 }
 
 /**
+ * Render the rectangle `rect` ({x, y, w, h} in output pixels) of a job's image into
+ * the 2D context `out`, whose origin is the rectangle's corner. The export and the
+ * zoomed-in view's sharp overlay both come through here.
+ *
+ * The image is the source at its own size, or resampled to `job.width` x
+ * `job.height` (the overlay renders at about screen resolution). Tiles are padded
+ * and clamped to the whole image, never to the rectangle, so any rectangle comes
+ * out as the same pixels of a full render would. One padded tile, no larger than
+ * maxTile, is alive on the GPU at a time.
+ *
  * @param builders {gbuf, photo, shader}
- * @param job      {mode:'single', source} | {mode:'photometric', sources:[], solver}
+ * @param job      {mode:'single', source, width?, height?} | {mode:'photometric', sources:[], solver}
+ * @returns true when done; false if `cancelled()` turned true between tiles
  */
-export async function exportFullRes(glctx, builders, job, state, onProgress) {
+export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled } = {}) {
   const { gl, caps } = glctx;
   const { gbuf, photo, shader } = builders;
   const photometric = job.mode === 'photometric';
   const sources = photometric ? job.sources : [job.source];
   const source = sources[0];
-  const W = source.width || source.naturalWidth;
-  const H = source.height || source.naturalHeight;
+  const SW = source.width || source.naturalWidth;
+  const SH = source.height || source.naturalHeight;
+  const W = job.width || SW, H = job.height || SH;
+  // Source pixels per output pixel: 1 for an export, which resamples beforehand.
+  const kx = SW / W, ky = SH / H;
   const aspect = H / W;
 
   const margin = requiredMargin(state);
@@ -56,13 +71,9 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
   if (2 * margin + 64 > caps.maxTexture) throw new Error('Surface reach exceeds GPU limits. Reduce texture size or export scale.');
   const interior = Math.max(64, maxTile - 2 * margin);
 
-  const cols = Math.ceil(W / interior);
-  const rows = Math.ceil(H / interior);
+  const cols = Math.ceil(rect.w / interior);
+  const rows = Math.ceil(rect.h / interior);
   const total = cols * rows;
-
-  const out = document.createElement('canvas');
-  out.width = W; out.height = H;
-  const octx = out.getContext('2d', { willReadFrequently: false });
 
   // Scratch canvas for cutting padded regions out of the source.
   const cut = document.createElement('canvas');
@@ -73,14 +84,12 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
   let target = null;
   let done = 0;
 
-  const prevExporting = state.exporting;
-  state.exporting = true;
-
   try {
     for (let ty = 0; ty < rows; ty++) {
       for (let tx = 0; tx < cols; tx++) {
-        const ix0 = tx * interior, iy0 = ty * interior;
-        const iw = Math.min(interior, W - ix0), ih = Math.min(interior, H - iy0);
+        if (cancelled && cancelled()) return false;
+        const ix0 = rect.x + tx * interior, iy0 = rect.y + ty * interior;
+        const iw = Math.min(interior, rect.x + rect.w - ix0), ih = Math.min(interior, rect.y + rect.h - iy0);
         if (iw <= 0 || ih <= 0) continue;
 
         // Padded region, clamped to the image. Clamping means edge tiles get less
@@ -91,8 +100,12 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
         const px1 = Math.min(W, ix0 + iw + margin);
         const py1 = Math.min(H, iy0 + ih + margin);
         const pw = px1 - px0, ph = py1 - py0;
+        // The same region in source pixels.
+        const from = [px0 * kx, py0 * ky, pw * kx, ph * ky];
 
         cut.width = pw; cut.height = ph;
+        // Resampling down in one step wants a better filter than the default.
+        if (kx !== 1 || ky !== 1) cutx.imageSmoothingQuality = 'high';
 
         let targets;
         if (photometric) {
@@ -101,7 +114,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
           const pieces = sources.map((src) => {
             const c = document.createElement('canvas');
             c.width = pw; c.height = ph;
-            c.getContext('2d').drawImage(src, px0, py0, pw, ph, 0, 0, pw, ph);
+            c.getContext('2d').drawImage(src, ...from, 0, 0, pw, ph);
             return c;
           });
           if (shotArray) gl.deleteTexture(shotArray);
@@ -114,7 +127,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
           });
         } else {
           cutx.clearRect(0, 0, pw, ph);
-          cutx.drawImage(source, px0, py0, pw, ph, 0, 0, pw, ph);
+          cutx.drawImage(source, ...from, 0, 0, pw, ph);
           gl.bindTexture(gl.TEXTURE_2D, tex);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, cut);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -145,7 +158,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
         // readPixels comes back bottom-up; un-flip while copying only the
         // interior, which is the part that had full context on every side.
         const offX = ix0 - px0, offY = iy0 - py0;
-        const img = octx.createImageData(iw, ih);
+        const img = out.createImageData(iw, ih);
         for (let y = 0; y < ih; y++) {
           const srcRow = ph - 1 - (offY + y);
           let s = (srcRow * pw + offX) * 4;
@@ -156,7 +169,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
             s += 4; d += 4;
           }
         }
-        octx.putImageData(img, ix0, iy0);
+        out.putImageData(img, ix0 - rect.x, iy0 - rect.y);
 
         done++;
         if (onProgress) onProgress(done / total, done, total);
@@ -165,13 +178,34 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
       }
     }
   } finally {
-    state.exporting = prevExporting;
     bindTarget(gl, null);
     if (tex) gl.deleteTexture(tex);
     if (shotArray) gl.deleteTexture(shotArray);
     if (target) { gl.deleteTexture(target.tex); gl.deleteFramebuffer(target.fbo); }
   }
+  return true;
+}
 
+/**
+ * The whole image at the source's own resolution. `state` should already be
+ * scaled to that resolution (renderState in app.js does it).
+ */
+export async function exportFullRes(glctx, builders, job, state, onProgress) {
+  const source = job.mode === 'photometric' ? job.sources[0] : job.source;
+  const W = source.width || source.naturalWidth;
+  const H = source.height || source.naturalHeight;
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d', { willReadFrequently: false });
+
+  // An export leaves out what only the screen shows: the split and the mask tint.
+  const prevExporting = state.exporting;
+  state.exporting = true;
+  try {
+    await renderTiles(glctx, builders, job, state, { x: 0, y: 0, w: W, h: H }, octx, { onProgress });
+  } finally {
+    state.exporting = prevExporting;
+  }
   return out;
 }
 

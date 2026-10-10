@@ -180,6 +180,26 @@ const physics=await page.evaluate(async()=>{
 assert.ok(physics.deep>physics.shallow*2&&physics.low>physics.high*2&&physics.softDeep<physics.spotDeep&&physics.left>0.2&&physics.right<-0.2,JSON.stringify(physics));
 console.log('PASS shadows follow depth, angle, source size and side',JSON.stringify(Object.fromEntries(Object.entries(physics).map(([k,v])=>[k,+v.toFixed(3)]))));
 await page.screenshot({path:outputDir + '/desktop-tested.png'});
+// Sharp zoom: zoomed in on a photo larger than the 1400 px preview, the visible part is rendered
+// again from the full-resolution source once the view is still, and matches a full-resolution export.
+{await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1800;c.height=900;const x=c.getContext('2d'),im=x.createImageData(1800,900);let s=7;
+  for(let i=0;i<im.data.length;i+=4){const a=(i/4)%1800,y=(i/7200)|0;s=(s*1103515245+12345)&0x7fffffff;const v=110+45*Math.sin(a*.9)*Math.cos(y*.7)+30*Math.sin((a+y)*.03)+(s>>24)/6;im.data[i]=v;im.data[i+1]=v*.8;im.data[i+2]=v*.6;im.data[i+3]=255;}
+  x.putImageData(im,0,0);return __bench.setSource(c);});
+await page.waitForFunction(()=>__bench.canvas.width===1400);await settle();await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'no overlay at fit');
+while(await setting('viewZoom')<4)await page.click('#zoomIn');await page.evaluate(()=>{const s=document.querySelector('#scroller');s.scrollLeft=s.scrollWidth*.3;s.scrollTop=s.scrollHeight*.3;});
+await page.waitForFunction(()=>__bench.sharp());await page.screenshot({path:outputDir+'/zoom-400-sharp.png'});
+const r=await page.evaluate(async()=>{const s=__bench.sharp(),{x,y,w,h}=s.rect,o=s.canvas.getBoundingClientRect(),c=__bench.canvas.getBoundingClientRect(),v=document.querySelector('#scroller').getBoundingClientRect();
+  const a=s.canvas.getContext('2d').getImageData(0,0,w,h).data,e=await __bench.exportFullRes(),b=e.getContext('2d').getImageData(x,y,w,h).data;
+  const m=document.createElement('canvas');m.width=w;m.height=h;const k=__bench.canvas.width/s.outW;m.getContext('2d').drawImage(__bench.canvas,x*k,y*k,w*k,h*k,0,0,w,h);const p=m.getContext('2d').getImageData(0,0,w,h).data;
+  let d=0,soft=0,n=0;for(let i=0;i<a.length;i+=4)for(let j=0;j<3;j++){d+=Math.abs(a[i+j]-b[i+j]);soft+=Math.abs(p[i+j]-b[i+j]);n++;}
+  return {outW:s.outW,exportW:e.width,rect:s.rect,diff:d/n,soft:soft/n,edges:[o.left-Math.max(c.left,v.left),o.top-Math.max(c.top,v.top),o.right-Math.min(c.right,v.right),o.bottom-Math.min(c.bottom,v.bottom)]};});
+assert.ok(r.outW===1800&&r.exportW===1800&&r.rect.x>0&&r.rect.y>0,JSON.stringify(r));assert.ok(r.diff<0.5,'overlay vs export '+r.diff);assert.ok(r.soft>3*r.diff+1,'preview is softer '+JSON.stringify(r));
+assert.ok(r.edges.every(e=>Math.abs(e)<3),'overlay lies over the visible part '+r.edges);
+await page.evaluate(()=>{document.querySelector('#sharp').style.display='none';});await page.screenshot({path:outputDir+'/zoom-400-preview.png'});await page.evaluate(()=>{document.querySelector('#sharp').style.display='';});
+await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));assert.equal(await page.evaluate(()=>__bench.sharp()),null,'scrolling hides it');
+await page.waitForFunction(()=>__bench.sharp());await slider('fineRelief',1.1);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'a slider hides it');
+await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
+console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
 for(let i=0;i<6;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
 await page.click('#zoomFit');console.log('PASS mobile layout, also at 400%');
