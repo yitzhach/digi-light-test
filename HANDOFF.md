@@ -5,8 +5,8 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-10
-- Last code change on `main`: `2e83379` (2026-10-09) — merged `claude/charming-goodall-k3m6fo`:
-  light dots toggle, safe photo reopen + undoable new photo, view zoom, grazing light, blend layers
+- Last code change on `main`: `c074e30` (2026-10-10) — merged `claude/epic-wright-h77sdu`:
+  layer masks, Graze light effect (any-direction dial, opacity, visible/hidden)
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -29,13 +29,13 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
-- 10-10 (branch, not on `main`): Graze light section replaces the per-light
+- 10-10 (merged `c074e30`): Graze light section replaces the per-light
   "Graze from L/R/T/B" buttons. `state.graze` `{enabled, angle, elevation, opacity}`
   (angle = where light comes from, 0° right, 90° top) drives one extra hard light in
   `shade.js`, rendered separately and cross-faded over the relit result
   (`uGrazeOpacity`), before layers. Dial in studio.js `renderGraze`; hidden in
   diagnostic views and during Sweep. In history, projects, presets (validated).
-- 10-10 (branch `claude/epic-wright-h77sdu`, not yet on `main`): layer masks. Each layer
+- 10-10 (merged `c074e30`): layer masks. Each layer
   has Paint hide / Paint show / Hide all / Reset; strokes live in `layer.mask`
   `{base, strokes}` (like relief `strokes`), rasterised in studio.js into
   `state.layerMaskData` (768², one RGBA channel per layer slot) and sampled in
