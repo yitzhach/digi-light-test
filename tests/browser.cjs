@@ -98,21 +98,36 @@ await slider('grazeOpacity',0.5);{const d=await page.evaluate(async()=>{__bench.
 assert.equal((await setting('graze')).detail,0.01);const atDefault=await pixels();await slider('grazeDetail',0);const allDetail=await pixels();assert.notEqual(allDetail,atDefault);
 await slider('grazeDetail',0.03);const widest=await pixels();assert.notEqual(widest,allDetail);await slider('grazeFine',0);assert.equal((await setting('graze')).fine,0);assert.notEqual(await pixels(),widest);
 {const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'graze detail tile difference '+d);}
-{const v=await page.evaluate(()=>{const check=g=>{const s=__studio.snapshot();s.graze=g;try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).graze;}catch{return null;}};const base={enabled:true,angle:10,elevation:2,opacity:1};return {legacy:check(base),bad:check({...base,detail:0.5}),badFine:check({...base,detail:0.01,fine:2}),badReach:check({...base,reach:1.5}),badClean:check({...base,clean:-0.1}),reached:check({...base,detail:0.01,reach:0.5,clean:0.25})};});
-assert.deepEqual(v.legacy,{enabled:true,angle:10,elevation:2,opacity:1,detail:0,fine:1,reach:0,clean:0});assert.equal(v.bad,null);assert.equal(v.badFine,null);
-assert.equal(v.badReach,null);assert.equal(v.badClean,null);assert.deepEqual(v.reached,{enabled:true,angle:10,elevation:2,opacity:1,detail:0.01,fine:1,reach:0.5,clean:0.25});}
-await page.click('#undo');await settle();assert.equal((await setting('graze')).fine,1);assert.equal(await pixels(),widest);
+{const v=await page.evaluate(()=>{const check=g=>{const s=__studio.snapshot();s.graze=g;try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).graze;}catch{return null;}};const base={enabled:true,angle:10,elevation:2,opacity:1};return {legacy:check(base),bad:check({...base,detail:0.5}),badFine:check({...base,detail:0.01,fine:2}),badReach:check({...base,reach:1.5}),badClean:check({...base,clean:-0.1}),badSoft:check({...base,soft:1.5}),badSoftLow:check({...base,soft:-0.1}),softened:check({...base,soft:0.5}),reached:check({...base,detail:0.01,reach:0.5,clean:0.25,soft:1})};});
+assert.deepEqual(v.legacy,{enabled:true,angle:10,elevation:2,opacity:1,detail:0,fine:1,reach:0,clean:0,soft:0});assert.equal(v.bad,null);assert.equal(v.badFine,null);
+assert.equal(v.badReach,null);assert.equal(v.badClean,null);assert.equal(v.badSoft,null);assert.equal(v.badSoftLow,null);assert.equal(v.softened.soft,0.5);assert.deepEqual(v.reached,{enabled:true,angle:10,elevation:2,opacity:1,detail:0.01,fine:1,reach:0.5,clean:0.25,soft:1});}
+await page.click('#undo');await settle();assert.equal((await setting('graze')).fine,0.8);assert.equal(await pixels(),widest);
 // Shadow length: the march normally stops at the main lights' reach, a few pixels, so
 // a degree off the wall the graze light could not throw the long shadows it is for.
 // Clean shadows: a blocker must clear a height first. Both 0 is the merged look
 // exactly, and both reach into the tile margin, so the tiled export must still match.
-await slider('grazeElevation',1);assert.equal((await setting('graze')).reach,0);const short=await pixels();
+await slider('grazeElevation',1);await slider('grazeReach',0);await slider('grazeClean',0);assert.equal((await setting('graze')).reach,0);assert.equal((await setting('graze')).clean,0);const short=await pixels();
 await slider('grazeReach',1);assert.equal((await setting('graze')).reach,1);const longer=await pixels();assert.notEqual(longer,short);
 await slider('grazeClean',0.5);assert.equal((await setting('graze')).clean,0.5);assert.notEqual(await pixels(),longer);
 {const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'graze reach tile difference '+d);}
 await slider('grazeClean',0);await slider('grazeReach',0);assert.equal(await pixels(),short);
+// Softness: the source's radius, from a bare bulb (0) to a strip (1); its shadow edges widen.
+await slider('grazeSoft',0);assert.equal((await setting('graze')).soft,0);const bare=await pixels();assert.notEqual(bare,short);
+await slider('grazeSoft',1);assert.equal((await setting('graze')).soft,1);assert.notEqual(await pixels(),bare);
+await page.click('#undo');await settle();assert.equal((await setting('graze')).soft,0);assert.equal(await pixels(),bare);
+await page.click('#undo');await settle();assert.equal((await setting('graze')).soft,0.2);assert.equal(await pixels(),short);
+// Presets: each sets every field but keeps the direction; the dropdown names the look the values match, else ''.
+{const preset=name=>page.evaluate(async n=>(await import('/src/presets.js')).grazePresets[n],name),shown=()=>page.locator('#grazePreset').inputValue();
+const tileDiff=()=>page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});
+const names=await page.evaluate(()=>[...document.querySelectorAll('#grazePreset option')].map(o=>o.value).filter(Boolean));assert.equal(names.length,6);assert.ok(names.includes('Long shadows'));
+assert.equal(await shown(),'');const angle=(await setting('graze')).angle,long=await preset('Long shadows');
+await page.selectOption('#grazePreset','Long shadows');await settle();gz=await setting('graze');assert.equal(gz.angle,angle);assert.equal(gz.enabled,true);for(const k of Object.keys(long))assert.equal(gz[k],long[k],k);assert.equal(Object.keys(long).length,7);assert.equal(await shown(),'Long shadows');
+const longPixels=await pixels();assert.notEqual(longPixels,short);
+const d=await tileDiff();assert.ok(d<1,'graze preset tile difference '+d);
+for(const [id,v] of [['grazeOpacity',0.5],['grazeElevation',5],['grazeDetail',0.02],['grazeFine',0.1],['grazeReach',0.5],['grazeClean',0.1],['grazeSoft',0.9]]){await page.selectOption('#grazePreset','Long shadows');await settle();assert.equal(await shown(),'Long shadows');await slider(id,v);assert.equal(await shown(),'',id);}
+await page.selectOption('#grazePreset','Every detail (raw)');await settle();assert.equal(await shown(),'Every detail (raw)');assert.equal((await setting('graze')).angle,angle);await page.selectOption('#grazePreset','Long shadows');await settle();assert.equal(await pixels(),longPixels);}
 await page.click('#grazeVis');await settle();assert.equal(await pixels(),plain);}
-console.log('PASS graze effect: dial, keys, opacity, angle to wall, detail, fine texture, shadow length, clean shadows, visibility, undo, validate, tiled export');
+console.log('PASS graze effect: dial, keys, opacity, angle to wall, detail, fine texture, shadow length, clean shadows, softness, presets, visibility, undo, validate, tiled export');
 await page.getByText('Layers · blend effects',{exact:true}).click();const noLayer=await pixels();await page.click('#addLayer');await settle();
 let layers=await setting('layers');assert.deepEqual(layers,[{mode:'pinLight',source:'original',opacity:.35,enabled:true}]);const pin=await pixels();assert.notEqual(pin,noLayer);
 await page.locator('.lyOpacity').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});await settle();assert.equal(await pixels(),noLayer);
@@ -207,13 +222,15 @@ await page.screenshot({path:outputDir + '/desktop-tested.png'});
 await page.waitForFunction(()=>__bench.canvas.width===1400);await settle();await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'no overlay at fit');
 while(await setting('viewZoom')<4)await page.click('#zoomIn');await page.evaluate(()=>{const s=document.querySelector('#scroller');s.scrollLeft=s.scrollWidth*.3;s.scrollTop=s.scrollHeight*.3;});
 await page.waitForFunction(()=>__bench.sharp());await page.screenshot({path:outputDir+'/zoom-400-sharp.png'});
-const r=await page.evaluate(async()=>{const s=__bench.sharp(),{x,y,w,h}=s.rect,o=s.canvas.getBoundingClientRect(),c=__bench.canvas.getBoundingClientRect(),v=document.querySelector('#scroller').getBoundingClientRect();
+const compareSharp=()=>page.evaluate(async()=>{const s=__bench.sharp(),{x,y,w,h}=s.rect,o=s.canvas.getBoundingClientRect(),c=__bench.canvas.getBoundingClientRect(),v=document.querySelector('#scroller').getBoundingClientRect();
   const a=s.canvas.getContext('2d').getImageData(0,0,w,h).data,e=await __bench.exportFullRes(),b=e.getContext('2d').getImageData(x,y,w,h).data;
   const m=document.createElement('canvas');m.width=w;m.height=h;const k=__bench.canvas.width/s.outW;m.getContext('2d').drawImage(__bench.canvas,x*k,y*k,w*k,h*k,0,0,w,h);const p=m.getContext('2d').getImageData(0,0,w,h).data;
   let d=0,soft=0,n=0;for(let i=0;i<a.length;i+=4)for(let j=0;j<3;j++){d+=Math.abs(a[i+j]-b[i+j]);soft+=Math.abs(p[i+j]-b[i+j]);n++;}
   return {outW:s.outW,exportW:e.width,rect:s.rect,diff:d/n,soft:soft/n,edges:[o.left-Math.max(c.left,v.left),o.top-Math.max(c.top,v.top),o.right-Math.min(c.right,v.right),o.bottom-Math.min(c.bottom,v.bottom)]};});
-assert.ok(r.outW===1800&&r.exportW===1800&&r.rect.x>0&&r.rect.y>0,JSON.stringify(r));assert.ok(r.diff<0.5,'overlay vs export '+r.diff);assert.ok(r.soft>3*r.diff+1,'preview is softer '+JSON.stringify(r));
+const r=await compareSharp();assert.ok(r.outW===1800&&r.exportW===1800&&r.rect.x>0&&r.rect.y>0,JSON.stringify(r));assert.ok(r.diff<0.5,'overlay vs export '+r.diff);assert.ok(r.soft>3*r.diff+1,'preview is softer '+JSON.stringify(r));
 assert.ok(r.edges.every(e=>Math.abs(e)<3),'overlay lies over the visible part '+r.edges);
+// With the graze light on (Long shadows) the overlay must still match the export of the same region.
+await page.selectOption('#grazePreset','Long shadows');await settle();assert.equal((await setting('graze')).enabled,true);await page.waitForFunction(()=>__bench.sharp());{const g=await compareSharp();assert.ok(g.diff<0.5,'graze overlay vs export '+g.diff);assert.deepEqual(g.rect,r.rect,'same region');console.log('graze overlay diff',+g.diff.toFixed(4));}
 await page.evaluate(()=>{document.querySelector('#sharp').style.display='none';});await page.screenshot({path:outputDir+'/zoom-400-preview.png'});await page.evaluate(()=>{document.querySelector('#sharp').style.display='';});
 await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));assert.equal(await page.evaluate(()=>__bench.sharp()),null,'scrolling hides it');
 await page.waitForFunction(()=>__bench.sharp());await slider('fineRelief',1.1);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'a slider hides it');
