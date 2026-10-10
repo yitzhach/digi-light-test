@@ -673,8 +673,8 @@ function updateDerived(workingW, st = state) {
   // Graze Detail is a feature size in painting widths (the smoothing's full width
   // at half maximum), so its blur in pixels follows the working width and a
   // full-resolution export smooths exactly as much of the painting as the preview.
-  const g = state.graze;
-  state.grazeSigmaPx = state.mode === 'single' && g && g.enabled && g.opacity > 0
+  const g = st.graze;
+  st.grazeSigmaPx = st.mode === 'single' && g && g.enabled && g.opacity > 0
     ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
 }
 
