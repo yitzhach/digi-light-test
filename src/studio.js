@@ -8,7 +8,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Shrink the view to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Enlarge the view ( + key )">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 400% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -111,7 +111,7 @@ export function initStudio(api) {
   const beam = document.createElementNS('http://www.w3.org/2000/svg','svg');
   beam.id='beamGuide';beam.setAttribute('viewBox','0 0 100 100');beam.setAttribute('preserveAspectRatio','none');
   beam.innerHTML='<title>Approximate beam footprint and aim</title><ellipse fill="none" stroke="white" stroke-opacity=".3" stroke-width=".3" stroke-dasharray="1 1"/><line stroke="white" stroke-opacity=".45" stroke-width=".3" stroke-dasharray="1 1"/>';
-  $('wrap').append(beam);
+  $('paper').append(beam);
   function updateBeam(){const l=state.lights[state.selected];beam.style.display=l?.enabled?'':'none';if(!l)return;const x=(l.aimX??l.x)*100,y=(1-(l.aimY??l.y))*100;const cos=.02+.965*l.cone;const radius=Math.min(180,l.z*Math.sqrt(1-cos*cos)/cos*100);const ell=beam.querySelector('ellipse');for(const [k,v] of Object.entries({cx:x,cy:y,rx:radius,ry:radius/(api.canvas.height/api.canvas.width)}))ell.setAttribute(k,v);const line=beam.querySelector('line');for(const [k,v] of Object.entries({x1:l.x*100,y1:(1-l.y)*100,x2:x,y2:y}))line.setAttribute(k,v);}
   document.addEventListener('digilight:render',updateBeam); updateBeam();
   function stamp(point, mode, radius, aspect, c = ctx, alpha = 0.22) {
@@ -254,10 +254,11 @@ export function initStudio(api) {
     if (e.key === 'Escape') stopSweep();
     if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (e.key === '-' || e.key === '_') $('zoomOut').click(); else if (e.key === '=' || e.key === '+') $('zoomIn').click(); else if (e.key === '0') $('zoomFit').click(); }
   });
-  const zoomSteps=[1,0.85,0.7,0.55,0.4,0.3,0.2];
+  // View zoom: 100% fits the stage. Steps from any zoom (a pinch lands between them) go to the next one.
+  const zoomSteps=[4,3,2,1.5,1.25,1,0.85,0.7,0.55,0.4,0.3,0.2];
   const zoomTo=z=>api.setZoom(z);
   $('zoomOut').onclick=()=>zoomTo(zoomSteps.find(z=>z<(state.viewZoom||1)-0.01)??0.2);
-  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??1);
+  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??4);
   $('zoomFit').onclick=()=>zoomTo(1);
   $('zoomLights').onclick=()=>zoomTo('lights');
   document.addEventListener('digilight:zoom',()=>{$('zoomFit').textContent=`${Math.round((state.viewZoom||1)*100)}%`;});
@@ -406,7 +407,8 @@ export function initStudio(api) {
     const mode=layer?(brush==='maskShow'?'show':'hide'):brush, slot=maskLayer;
     const stroke={mode,radius:+$(layer?'maskBrushSize':'brushSize').value/r.width,aspect:r.height/r.width,points:[]};
     const add=ev=>{
-      const p=[Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height))];
+      // Measured per point: a zoomed-in view can scroll mid-stroke.
+      const b=api.canvas.getBoundingClientRect(),p=[Math.max(0,Math.min(1,(ev.clientX-b.left)/b.width)),Math.max(0,Math.min(1,(ev.clientY-b.top)/b.height))];
       const prev=stroke.points.at(-1)||p;const n=Math.max(1,Math.ceil(Math.hypot(p[0]-prev[0],(p[1]-prev[1])*stroke.aspect)/(stroke.radius*0.25)));
       for(let i=1;i<=n;i++){const q=[prev[0]+(p[0]-prev[0])*i/n,prev[1]+(p[1]-prev[1])*i/n];stroke.points.push(q);if(layer)stamp(q,mode,stroke.radius,stroke.aspect,lctx,MASK_ALPHA);else stamp(q,mode,stroke.radius,stroke.aspect);}
       if(layer){copyLayerChannel(slot);state.layerMaskVersion++;}else state.maskVersion++;

@@ -23,9 +23,16 @@
   /* ---- stage ---- */
   /* min-height:0 lets this grid row actually shrink; without it the canvas
      pushes the row taller than the viewport and slides under the panel. */
-  #stage { position: relative; display: grid; place-items: center; padding: 16px;
-           min-width: 0; min-height: 0; overflow: hidden; }
-  #wrap { position: relative; line-height: 0; box-shadow: 0 18px 60px rgba(0,0,0,.6); }
+  #stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  /* #wrap is the visible frame and holds the light dots; the painting (#paper) scrolls
+     inside #scroller once zoomed past fit. Dots stay out of the scrolling box so a dot
+     near an edge can never widen the scroll area. Auto margins centre the painting
+     while it fits and let it overflow to the right and bottom, where scrolling
+     reaches, once it does not. */
+  #wrap { position: absolute; inset: 0; overflow: hidden; }
+  #scroller { position: absolute; inset: 0; display: grid; padding: 16px; overflow: hidden; }
+  #scroller.zoomed { overflow: auto; }
+  #paper { position: relative; margin: auto; line-height: 0; box-shadow: 0 18px 60px rgba(0,0,0,.6); }
   canvas { display: block; touch-action: none; }
   .handle {
     position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px;
@@ -86,7 +93,7 @@
 </head>
 <body>
   <div id="stage">
-    <div id="wrap"><canvas id="gl"></canvas></div>
+    <div id="wrap"><div id="scroller"><div id="paper"><canvas id="gl"></canvas></div></div></div>
     <div id="hint"></div>
     <div id="err"></div>
   </div>

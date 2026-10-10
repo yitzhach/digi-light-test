@@ -18,7 +18,9 @@ import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_M
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
-const wrap = $('wrap');
+const wrap = $('wrap');          // the visible frame; light dots live here
+const scroller = $('scroller');  // scrolls the painting once zoomed past fit
+const paper = $('paper');        // the painting's own box: canvas, beam guide, sphere ring
 
 let glctx, gbuf, shader, photo, srcTex = null, targets = null;
 // Photometric capture: one texture per exposure plus its light direction.
@@ -42,6 +44,7 @@ const state = {
   shadowDist: 0.02, shadowDistPx: 12, exporting: false,
   ambientColor: [1, 1, 1],
   viewMode: 0,
+  viewZoom: 1,     // view only (1 = fit the stage): never undone or saved
   selected: 0,
   mode: 'single',           // 'single' | 'photometric'
   psFitAmbient: true,
@@ -245,27 +248,103 @@ function fitCanvas() {
   const availW = Math.max(80, r.width - 32);
   const availH = Math.max(80, r.height - 32);
   const disp = Math.min(availW / imgW, availH / imgH) * (state.viewZoom || 1);
+  // Past fit the painting outgrows the stage, which then scrolls. The fit itself is
+  // taken from the stage, not the scroller, so scrollbars appearing cannot feed back.
+  scroller.classList.toggle('zoomed', (state.viewZoom || 1) > 1);
   canvas.style.width = `${Math.round(imgW * disp)}px`;
   canvas.style.height = `${Math.round(imgH * disp)}px`;
   repositionHandles();
 }
 
+/** The part of the stage the painting is seen through, in client pixels, scrollbars excluded. */
+function viewBox() {
+  const r = scroller.getBoundingClientRect();
+  const left = r.left + scroller.clientLeft, top = r.top + scroller.clientTop;
+  return { left, top, right: left + scroller.clientWidth, bottom: top + scroller.clientHeight };
+}
+
+const ZOOM_MIN = 0.2, ZOOM_MAX = 4;
+
 /**
- * View zoom: shrink the painting inside the stage so lights placed beyond its
- * edges come into view. 'lights' picks the largest zoom that shows every dot.
+ * View zoom, 20% to 400% of the size that fits the stage. Below fit it brings lights
+ * placed beyond the painting into view; above it the stage scrolls. The painting
+ * point under `at` (client x, y; default the middle of the view) stays where it is.
+ * 'lights' picks the largest zoom, up to fit, that shows every dot.
  */
-function setZoom(z) {
+function setZoom(z, at) {
+  if (!imgW || !imgH) return;
   if (z === 'lights') {
     const r = $('stage').getBoundingClientRect();
     const availW = Math.max(80, r.width - 32), availH = Math.max(80, r.height - 32);
     const fit = Math.min(availW / imgW, availH / imgH);
     let hx = 0.5, hy = 0.5;
     for (const l of state.lights) { hx = Math.max(hx, Math.abs(l.x - 0.5) + 0.04); hy = Math.max(hy, Math.abs(l.y - 0.5) + 0.04); }
-    z = Math.min(availW / (imgW * fit * 2 * hx), availH / (imgH * fit * 2 * hy));
+    z = Math.min(1, availW / (imgW * fit * 2 * hx), availH / (imgH * fit * 2 * hy));
   }
-  state.viewZoom = clamp(z, 0.2, 1);
+  const v = viewBox(), r = canvas.getBoundingClientRect();
+  const [cx, cy] = at || [(v.left + v.right) / 2, (v.top + v.bottom) / 2];
+  const u = r.width ? (cx - r.left) / r.width : 0.5, w = r.height ? (cy - r.top) / r.height : 0.5;
+  state.viewZoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
   fitCanvas();
+  const n = canvas.getBoundingClientRect();
+  scroller.scrollLeft += n.left + u * n.width - cx;
+  scroller.scrollTop += n.top + w * n.height - cy;
+  repositionHandles();
   document.dispatchEvent(new Event('digilight:zoom'));
+}
+
+/**
+ * Zoom and pan gestures on the stage. Ctrl/Cmd + wheel zooms about the pointer (a
+ * trackpad pinch arrives as exactly that in Chromium); a plain wheel or two-finger
+ * swipe scrolls natively. Hold Space over the painting and drag, or drag with the
+ * middle button, to pan like an image editor's hand tool: it wins over dots and brushes.
+ */
+function wireZoomGestures() {
+  const stage = $('stage');
+  wrap.addEventListener('wheel', (e) => {
+    const px = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      // A wheel notch is one capped step; a pinch sends many small deltas, so it glides.
+      setZoom((state.viewZoom || 1) * Math.exp(clamp(-e.deltaY * px * 0.01, -0.22, 0.22)), [e.clientX, e.clientY]);
+    } else if (!scroller.contains(e.target)) {
+      // The dots sit outside the scrolling box; scrolling over one still scrolls.
+      e.preventDefault();
+      scroller.scrollBy(e.deltaX * px, e.deltaY * px);
+    }
+  }, { passive: false });
+  scroller.addEventListener('scroll', () => repositionHandles(), { passive: true });
+
+  let over = false, held = false;
+  const hand = (on) => { held = on; stage.classList.toggle('panReady', on); };
+  stage.addEventListener('pointerenter', () => { over = true; });
+  stage.addEventListener('pointerleave', () => { over = false; });
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || (!over && !held) || e.ctrlKey || e.metaKey || e.altKey
+      || e.target.matches('input:not([type=range]),textarea,select')) return;
+    e.preventDefault();   // no page scroll, and no click on a focused button
+    if (!held) hand(true);
+  });
+  document.addEventListener('keyup', (e) => { if (e.code === 'Space' && held) { e.preventDefault(); hand(false); } });
+  window.addEventListener('blur', () => hand(false));
+  // Capture on the stage, ahead of the dots, the brush and the sphere placer.
+  stage.addEventListener('pointerdown', (e) => {
+    if (!wrap.contains(e.target) || !(e.button === 1 || (e.button === 0 && held))) return;
+    e.preventDefault(); e.stopPropagation();
+    wrap.setPointerCapture(e.pointerId);
+    const x0 = e.clientX, y0 = e.clientY, sl = scroller.scrollLeft, st = scroller.scrollTop;
+    stage.classList.add('panning');
+    const move = (ev) => { scroller.scrollLeft = sl - (ev.clientX - x0); scroller.scrollTop = st - (ev.clientY - y0); };
+    const up = () => {
+      wrap.removeEventListener('pointermove', move); wrap.removeEventListener('pointerup', up); wrap.removeEventListener('pointercancel', up);
+      stage.classList.remove('panning');
+    };
+    wrap.addEventListener('pointermove', move);
+    wrap.addEventListener('pointerup', up);
+    wrap.addEventListener('pointercancel', up);
+  }, true);
+  // Keep the middle button from starting the browser's autoscroll.
+  wrap.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
 }
 
 // ---------------------------------------------------------------- lights UI
@@ -465,22 +544,19 @@ function applyColor(l) {
   l.rgb = l.useKelvin ? kelvinToLinearRGB(l.kelvin) : hexToLinearRGB(l.hex);
 }
 
-// Lights may sit beyond the visible stage; pin those dots to its edge (dashed) so
-// they stay grabbable. Zooming out shows where they really are.
+// Lights may sit beyond the visible part of the stage, off the painting or scrolled
+// out of view; pin those dots to its edge (dashed) so they stay grabbable. Dots are
+// placed in the frame's pixels, so they follow every zoom, scroll and resize.
 function placeHandle(d, l) {
-  let x = l.x * 100, y = (1 - l.y) * 100;
-  const s = $('stage').getBoundingClientRect(), w = canvas.getBoundingClientRect();
-  if (w.width > 0 && w.height > 0) {
-    const pad = 14;
-    const px = clamp(x, (s.left + pad - w.left) / w.width * 100, (s.right - pad - w.left) / w.width * 100);
-    const py = clamp(y, (s.top + pad - w.top) / w.height * 100, (s.bottom - pad - w.top) / w.height * 100);
-    const pinned = Math.abs(px - x) > 0.01 || Math.abs(py - y) > 0.01;
-    d.classList.toggle('pinned', pinned);
-    d.title = pinned ? 'This light is beyond the view. Zoom out (−) or Show all lights to see where it is.' : '';
-    x = px; y = py;
-  }
-  d.style.left = `${x}%`;
-  d.style.top = `${y}%`;
+  const c = canvas.getBoundingClientRect(), f = wrap.getBoundingClientRect(), v = viewBox(), pad = 14;
+  const x = c.left + l.x * c.width, y = c.top + (1 - l.y) * c.height;
+  const px = clamp(x, v.left + pad, Math.max(v.left + pad, v.right - pad));
+  const py = clamp(y, v.top + pad, Math.max(v.top + pad, v.bottom - pad));
+  const pinned = Math.abs(px - x) > 0.5 || Math.abs(py - y) > 0.5;
+  d.classList.toggle('pinned', pinned);
+  d.title = pinned ? 'This light is beyond the view. Scroll, zoom out (−) or Show all lights to see where it is.' : '';
+  d.style.left = `${px - f.left}px`;
+  d.style.top = `${py - f.top}px`;
 }
 function repositionHandles() {
   wrap.querySelectorAll('.handle').forEach((d, i) => { if (state.lights[i]) placeHandle(d, state.lights[i]); });
@@ -818,12 +894,14 @@ async function boot() {
     getFullSource: () => fullSource,
     caps: () => glctx.caps,
   };
-  const relayout = () => { fitCanvas(); if (srcTex) render(); };
+  // Re-fitting goes through setZoom so a zoomed-in view keeps its centre in place.
+  const relayout = () => { setZoom(state.viewZoom); if (srcTex) render(); };
   window.addEventListener('resize', relayout);
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   // The panel can change height as sections show and hide, which changes the
   // stage box; observing it is more reliable than guessing when that happens.
-  if (window.ResizeObserver) new ResizeObserver(() => fitCanvas()).observe($('stage'));
+  if (window.ResizeObserver) new ResizeObserver(() => setZoom(state.viewZoom)).observe($('stage'));
+  wireZoomGestures();
   $('hint').addEventListener('click', () => $('hint').classList.add('gone'));
 }
 
@@ -984,12 +1062,12 @@ function wireSpherePlacement() {
 }
 
 function drawSphereOverlay() {
-  let el = wrap.querySelector('.sphere-ring');
+  let el = paper.querySelector('.sphere-ring');
   if (!state.sphere) { if (el) el.remove(); return; }
   if (!el) {
     el = document.createElement('div');
     el.className = 'sphere-ring';
-    wrap.appendChild(el);
+    paper.appendChild(el);
   }
   const s = state.sphere;
   el.style.left = `${s.cx * 100}%`;

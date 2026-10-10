@@ -41,6 +41,44 @@ const hb=await page.locator('.handle').nth(sel).boundingBox(),cb=await page.loca
 await page.click('#zoomOut');assert.ok(await setting('viewZoom')<0.85);await page.click('#zoomFit');assert.equal(await setting('viewZoom'),1);
 await page.click('#undo');await settle();assert.equal((await setting('lights'))[sel].x,preX);}
 console.log('PASS grazing preset, view zoom and off-painting dots');
+// Zoom past fit: the stage scrolls, and gestures, pinned dots, light drags and brush strokes all map to the painting.
+{const view=()=>page.evaluate(()=>{const s=document.querySelector('#scroller'),c=__bench.canvas.getBoundingClientRect(),r=s.getBoundingClientRect();return {z:__bench.state.viewZoom,sl:s.scrollLeft,st:s.scrollTop,c:{x:c.left,y:c.top,w:c.width,h:c.height},v:{x:r.left+s.clientLeft,y:r.top+s.clientTop,w:s.clientWidth,h:s.clientHeight}};});
+const at=(v,p)=>[(p[0]-v.c.x)/v.c.w,(p[1]-v.c.y)/v.c.h],near=(a,b,px,v)=>Math.hypot((a[0]-b[0])*v.c.w,(a[1]-b[1])*v.c.h)<px;
+const hist=await page.evaluate(()=>__studio.history.index),fit=await view(),steps=[];
+for(let i=0;i<6;i++){await page.click('#zoomIn');steps.push(await setting('viewZoom'));}
+assert.deepEqual(steps,[1.25,1.5,2,3,4,4]);assert.equal(await page.locator('#zoomFit').textContent(),'400%');
+let v=await view();assert.ok(Math.abs(v.c.w/fit.c.w-4)<.01&&v.sl>0&&v.st>0,JSON.stringify(v));assert.ok(near(at(v,[v.v.x+v.v.w/2,v.v.y+v.v.h/2]),[.5,.5],1,v),'buttons zoom about the centre');
+await page.keyboard.press('-');assert.equal(await setting('viewZoom'),3);await page.keyboard.press('=');assert.equal(await setting('viewZoom'),4);
+await page.keyboard.press('0');assert.equal(await setting('viewZoom'),1);assert.deepEqual((await view()).c,fit.c);
+await page.click('#zoomIn');await page.click('#zoomIn');v=await view();const P=[v.v.x+v.v.w*.3,v.v.y+v.v.h*.4],u0=at(v,P);
+await page.mouse.move(...P);await page.keyboard.down('Control');await page.mouse.wheel(0,-100);await page.mouse.wheel(0,-100);await page.keyboard.up('Control');await settle();
+v=await view();assert.ok(Math.abs(v.z-1.5*Math.exp(.44))<.01,'wheel zoom '+v.z);assert.ok(near(at(v,P),u0,1.5,v),'Ctrl+wheel keeps the point under the pointer');
+await page.keyboard.down('Control');await page.mouse.wheel(0,40);await page.keyboard.up('Control');await settle();v=await view();assert.ok(v.z<1.5*Math.exp(.44)&&near(at(v,P),u0,1.5,v),'wheel out '+v.z);
+const st0=v.st;await page.mouse.wheel(0,150);await page.waitForFunction(s=>document.querySelector('#scroller').scrollTop>s+100,st0);
+while(await setting('viewZoom')<4)await page.click('#zoomIn');v=await view();
+const C=[v.v.x+v.v.w*.5,v.v.y+v.v.h*.45],lights=JSON.stringify(await setting('lights'));
+await page.mouse.move(...C);await page.keyboard.down('Space');assert.ok((await page.locator('#stage').getAttribute('class')).includes('panReady'));
+await page.mouse.down();await page.mouse.move(C[0]-120,C[1]-90,{steps:5});await page.mouse.up();await page.keyboard.up('Space');
+let w=await view();assert.ok(Math.abs(w.sl-v.sl-120)<2&&Math.abs(w.st-v.st-90)<2,'Space-drag pan '+[w.sl-v.sl,w.st-v.st]);assert.equal(JSON.stringify(await setting('lights')),lights);assert.equal(w.z,4);
+assert.ok(!(await page.locator('#stage').getAttribute('class')).includes('panReady'));
+await page.mouse.down({button:'middle'});await page.mouse.move(C[0]-50,C[1]-50,{steps:4});await page.mouse.up({button:'middle'});
+v=await view();assert.ok(Math.abs(w.sl-v.sl-70)<2&&Math.abs(w.st-v.st-40)<2,'middle-drag pan '+[w.sl-v.sl,w.st-v.st]);assert.equal(JSON.stringify(await setting('lights')),lights);
+assert.equal(await page.evaluate(()=>__studio.history.index),hist);assert.ok(!('viewZoom' in await page.evaluate(()=>__studio.snapshot())));
+const last=(await setting('lights')).length-1,hs=page.locator('.handle').last(),Q=[v.v.x+v.v.w*.62,v.v.y+v.v.h*.3];let hb=await hs.boundingBox();
+await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await page.mouse.down();await page.mouse.move(...Q,{steps:6});await page.mouse.up();await settle();
+v=await view();let q=at(v,Q),l=(await setting('lights'))[last];assert.ok(Math.abs(l.x-q[0])<.002&&Math.abs(l.y-(1-q[1]))<.002,'zoomed drag '+JSON.stringify([l.x,l.y,q]));
+hb=await hs.boundingBox();assert.ok(Math.hypot(hb.x+hb.width/2-Q[0],hb.y+hb.height/2-Q[1])<1.5&&!(await hs.getAttribute('class')).includes('pinned'));
+await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=600;});await settle();hb=await hs.boundingBox();
+assert.ok((await hs.getAttribute('class')).includes('pinned')&&Math.abs(hb.y+hb.height/2-v.v.y-14)<1.5&&Math.abs(hb.x+hb.width/2-Q[0])<1.5,'dot pins to the visible edge while scrolled '+JSON.stringify(hb));
+await page.evaluate(()=>{document.querySelector('#scroller').scrollTop-=600;});await settle();hb=await hs.boundingBox();assert.ok(Math.hypot(hb.x+hb.width/2-Q[0],hb.y+hb.height/2-Q[1])<1.5&&!(await hs.getAttribute('class')).includes('pinned'));
+await page.click('#undo');await settle();assert.equal(JSON.stringify(await setting('lights')),lights);
+await page.click('#brushRemove');v=await view();const B0=[v.v.x+v.v.w*.4,v.v.y+v.v.h*.55],B1=[B0[0]+80,B0[1]+20],n0=(await setting('strokes')).length;
+assert.ok(await page.evaluate(p=>document.elementFromPoint(...p)===__bench.canvas,B0));
+await page.mouse.move(...B0);await page.mouse.down();await page.mouse.move(...B1,{steps:4});await page.mouse.up();await settle();
+const s=(await setting('strokes')).at(-1);assert.equal((await setting('strokes')).length,n0+1);assert.ok(near(s.points[0],at(v,B0),.5,v)&&near(s.points.at(-1),at(v,B1),.5,v),'zoomed stroke '+JSON.stringify([s.points[0],at(v,B0)]));
+assert.ok(Math.abs(s.radius-(await page.locator('#brushSize').inputValue())/v.c.w)<1e-9);await page.click('#undo');await page.click('#brushOff');await settle();assert.equal((await setting('strokes')).length,n0);
+await page.click('#zoomLights');assert.ok(await setting('viewZoom')<=1);await page.click('#zoomFit');assert.deepEqual((await view()).c,fit.c);assert.equal(await page.evaluate(()=>__studio.history.index),hist);}
+console.log('PASS zoom to 400%: steps, keys, Ctrl+wheel about the pointer, scrolling, Space/middle-drag pan, pinned dots, light drag and brush while zoomed');
 {await page.getByText('Graze light · raking texture',{exact:true}).click();const plain=await pixels();assert.equal((await setting('graze')).enabled,false);
 await page.click('#grazeVis');await settle();assert.equal((await setting('graze')).enabled,true);const fromLeft=await pixels();assert.notEqual(fromLeft,plain);
 const dial=await page.locator('#grazeDial').boundingBox();await page.mouse.move(dial.x+dial.width*.95,dial.y+dial.height/2);await page.mouse.down();await page.mouse.up();await settle();
@@ -142,6 +180,8 @@ const physics=await page.evaluate(async()=>{
 assert.ok(physics.deep>physics.shallow*2&&physics.low>physics.high*2&&physics.softDeep<physics.spotDeep&&physics.left>0.2&&physics.right<-0.2,JSON.stringify(physics));
 console.log('PASS shadows follow depth, angle, source size and side',JSON.stringify(Object.fromEntries(Object.entries(physics).map(([k,v])=>[k,+v.toFixed(3)]))));
 await page.screenshot({path:outputDir + '/desktop-tested.png'});
-await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});console.log('PASS mobile layout');
+await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
+for(let i=0;i<6;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
+await page.click('#zoomFit');console.log('PASS mobile layout, also at 400%');
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
