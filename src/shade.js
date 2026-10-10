@@ -67,6 +67,9 @@ uniform int   uLayerCount;
 uniform int   uLayerMode[${MAX_LAYERS}];
 uniform int   uLayerSource[${MAX_LAYERS}];   // 0 original photo, 1 relit image
 uniform float uLayerOpacity[${MAX_LAYERS}];
+uniform sampler2D uLayerMask;                 // one channel per layer slot, white = applies
+uniform vec4  uLayerSel[${MAX_LAYERS}];      // picks this layer's channel from uLayerMask
+uniform vec4  uMaskOverlay;                   // while painting a mask: tint where it hides
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -286,14 +289,17 @@ void main() {
   vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
   vec3 relit = clamp(linearToSrgb(mapped), 0.0, 1.0);
   vec3 col = relit;
+  vec4 lmask = texture(uLayerMask, gUV);
   if (uLayerCount > 0) {
     vec3 orig = clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0);
     for (int i = 0; i < ${MAX_LAYERS}; i++) {
       if (i >= uLayerCount) break;
       vec3 b = uLayerSource[i] == 0 ? orig : relit;
-      col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i]);
+      col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i] * dot(lmask, uLayerSel[i]));
     }
   }
+  float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
+  col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
   outColor = vec4(col, 1.0);
 }`;
 
@@ -303,6 +309,8 @@ export class Shader {
     this.prog = program(glctx.gl, SHADE_FS, 'shade');
     this.maskTex = glctx.gl.createTexture();
     this.maskVersion = -1;
+    this.layerMaskTex = glctx.gl.createTexture();
+    this.layerMaskVersion = -1;
   }
 
   /**
@@ -326,11 +334,24 @@ export class Shader {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.maskVersion = state.maskVersion ?? 0;
     }
+    if (this.layerMaskVersion !== (state.layerMaskVersion ?? 0)) {
+      gl.activeTexture(gl.TEXTURE0 + 4);
+      gl.bindTexture(gl.TEXTURE_2D, this.layerMaskTex);
+      const d = state.layerMaskData, n = d ? Math.round(Math.sqrt(d.length / 4)) : 1;
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, n, n, 0, gl.RGBA, gl.UNSIGNED_BYTE, d || new Uint8Array([255, 255, 255, 255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.layerMaskVersion = state.layerMaskVersion ?? 0;
+    }
     bindTextures(gl, p, [
       ['uAlbedo', targets.albedo.tex],
       ['uNormal', targets.normal.tex],
       ['uLin', targets.lin.tex],
       ['uMask', this.maskTex],
+      ['uLayerMask', this.layerMaskTex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -396,14 +417,22 @@ export class Shader {
     gl.uniform1f(u.uExposure, state.exposure);
     gl.uniform1i(u.uViewMode, state.viewMode);
 
-    // Only visible layers go to the GPU, in order, bottom first.
-    const layers = (state.layers || []).filter((l) => l.enabled && l.opacity > 0).slice(0, MAX_LAYERS);
+    // Only visible layers go to the GPU, in order, bottom first. Each keeps the mask
+    // channel of its place in state.layers.
+    const all = (state.layers || []).slice(0, MAX_LAYERS);
+    const layers = all.filter((l) => l.enabled && l.opacity > 0);
     const lMode = new Int32Array(MAX_LAYERS), lSrc = new Int32Array(MAX_LAYERS), lOp = new Float32Array(MAX_LAYERS);
+    const lSel = new Float32Array(MAX_LAYERS * 4), overlay = new Float32Array(4);
     layers.forEach((l, i) => {
       lMode[i] = Math.max(0, B[l.mode] ?? 0);
       lSrc[i] = Math.max(0, layerSources.findIndex(([k]) => k === l.source));
       lOp[i] = l.opacity;
+      lSel[i * 4 + all.indexOf(l)] = 1;
     });
+    const shown = state.exporting ? -1 : state.maskOverlay ?? -1;
+    if (shown >= 0 && shown < MAX_LAYERS) overlay[shown] = 1;
+    gl.uniform4fv(u.uLayerSel, lSel);
+    gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
     gl.uniform1iv(u.uLayerSource, lSrc);

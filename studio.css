@@ -55,3 +55,6 @@ input[type=range]:disabled { opacity:.35; }
 .layer .row { margin:6px 0 2px; }
 .layerTools { display:flex; gap:4px; justify-content:flex-end; }
 .layerTools button { padding:3px 8px; font-size:11px; }
+.layerMask { display:flex; gap:4px; align-items:center; flex-wrap:wrap; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); }
+.layerMask span { font-size:11px; opacity:.75; margin-right:2px; }
+.layerMask button { padding:3px 7px; font-size:11px; }

@@ -45,6 +45,11 @@ Relit image) over the result with a blend mode (Normal, Multiply, Screen, Overla
 Soft/Hard/Linear/Vivid/Pin light, Color dodge/burn, Darken, Lighten) and opacity.
 Layers apply in display space, appear in exports, and are saved with undo,
 projects and presets. Pin light or Soft light of the original adds natural highlights.
+Each layer has a **mask**: *Paint hide* / *Paint show* brush where the layer applies
+(a red tint marks hidden areas while you paint), *Hide all* starts from nothing so
+you can paint the effect in, *Reset* removes the mask. Masks are saved with undo
+(one step per stroke), projects and exports; presets carry layers without masks,
+and opening a new photo clears them.
 
 **Sweep light** (toolbar) orbits a low raking light round the painting to inspect
 its texture, then gives your lights back (Esc or click again). The **Shadows** view
@@ -147,7 +152,7 @@ local project save/reopen and variations; portable project import/export; PNG an
 scaled JPEG exports; reusable preset save/apply/default/download/import; preview
 restoration; quick setup, photo lighting and depth undo; light types, angle and
 mirror; light dots over compare/brush; reopening a photo keeps edits; graze
-light and view zoom; blend layers; sweep light; legacy project import; shadow physics; mobile layout;
+light and view zoom; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
