@@ -4,7 +4,7 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-09
+- Last updated: 2026-10-10
 - Last code change on `main`: `2e83379` (2026-10-09) — merged `claude/charming-goodall-k3m6fo`:
   light dots toggle, safe photo reopen + undoable new photo, view zoom, grazing light, blend layers
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
@@ -29,6 +29,19 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-10 (branch, not on `main`): Graze light section replaces the per-light
+  "Graze from L/R/T/B" buttons. `state.graze` `{enabled, angle, elevation, opacity}`
+  (angle = where light comes from, 0° right, 90° top) drives one extra hard light in
+  `shade.js`, rendered separately and cross-faded over the relit result
+  (`uGrazeOpacity`), before layers. Dial in studio.js `renderGraze`; hidden in
+  diagnostic views and during Sweep. In history, projects, presets (validated).
+- 10-10 (branch `claude/epic-wright-h77sdu`, not yet on `main`): layer masks. Each layer
+  has Paint hide / Paint show / Hide all / Reset; strokes live in `layer.mask`
+  `{base, strokes}` (like relief `strokes`), rasterised in studio.js into
+  `state.layerMaskData` (768², one RGBA channel per layer slot) and sampled in
+  `shade.js` (`uLayerMask`, `uLayerSel`); red overlay (`maskOverlay`) only while
+  painting, never in exports. Presets drop masks; new photo clears them. Fixed: a
+  deferred checkpoint landing mid-stroke split one stroke into two undo steps.
 - 10-09 (merged `2e83379`): "Light dots: on/off" toggle (was
   "Light guides") is the only thing hiding dots besides Sweep; grabbing a dot leaves
   Before/Split and brush mode; off-painting lights pin to the edge. Open your painting
@@ -59,7 +72,8 @@ of a painting → estimate surface relief → relight with movable virtual light
 3. Project save for the multi-photo capture workflow (currently single-photo only)
 4. Large-export memory limits / preview vs export differences at very high res
 5. User feedback on grazing light (3° default; estimated relief gets glittery below
-   that) and on layers (maybe layer masks, or a "current result" source)
+   that) and on layers/masks (maybe a "current result" source, mask brush hardness,
+   showing the mask alone)
 
 ## Gotchas
 - Calibrated mode (`state.physical`, single photo only) derives heightScale,

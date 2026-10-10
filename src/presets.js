@@ -75,6 +75,9 @@ export function grazePower(dist, deg) {
   return Math.min(POWER_MAX, 0.35 * Math.PI / ((0.5 / dist) ** 2 * Math.sin(deg * Math.PI / 180)));
 }
 const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
+// Graze effect (Graze light section): a small hard source, a dim fill so shadows read
+// as shadows, and the range of angles off the wall its slider offers.
+export const GRAZE_SIZE = 0.005, GRAZE_AMBIENT = 0.06, GRAZE_EL_MIN = 1, GRAZE_EL_MAX = 20;
 
 // Blend layers: copies of the photo composited over the relit result, the way an
 // image editor's layer blend modes work (in display space, top of the list last).

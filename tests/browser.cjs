@@ -33,14 +33,29 @@ await page.click('#showHandles');assert.ok(!(await page.locator('.handle').first
 await slider('fineRelief',1.3);await page.click('#openPhoto');await settle();assert.equal(await setting('fineRelief'),1.3);
 await page.locator('#file').setInputFiles({name:'again.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.state.fineRelief!==1.3);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),1.3);
 console.log('PASS light dots override compare/brush; reopening keeps edits; new photo undoable');
-{const sel=await setting('selected');const preX=(await setting('lights'))[sel].x;await page.getByRole('button',{name:'Graze from left'}).click();await settle();const g=(await setting('lights'))[sel];
+{const preX=(await setting('lights'))[0].x;await page.selectOption('#lightingPreset','Grazing side light');await settle();const sel=0,g=(await setting('lights'))[sel];
 const deg=Math.atan2(g.z,Math.hypot(g.x-g.aimX,(g.y-g.aimY)*300/240))*180/Math.PI;assert.ok(g.x<0&&Math.abs(deg-3)<0.2&&g.power>8,JSON.stringify(g));assert.equal(await setting('shadow'),1);
 await page.click('#zoomFit');assert.ok((await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
 await page.click('#zoomLights');await settle();assert.ok(await setting('viewZoom')<1);assert.ok(!(await page.locator('.handle').nth(sel).getAttribute('class')).includes('pinned'));
 const hb=await page.locator('.handle').nth(sel).boundingBox(),cb=await page.locator('#gl').boundingBox();assert.ok(hb.x+hb.width/2<cb.x);
 await page.click('#zoomOut');assert.ok(await setting('viewZoom')<0.85);await page.click('#zoomFit');assert.equal(await setting('viewZoom'),1);
 await page.click('#undo');await settle();assert.equal((await setting('lights'))[sel].x,preX);}
-console.log('PASS graze light, view zoom and off-painting dots');
+console.log('PASS grazing preset, view zoom and off-painting dots');
+{await page.getByText('Graze light · raking texture',{exact:true}).click();const plain=await pixels();assert.equal((await setting('graze')).enabled,false);
+await page.click('#grazeVis');await settle();assert.equal((await setting('graze')).enabled,true);const fromLeft=await pixels();assert.notEqual(fromLeft,plain);
+const dial=await page.locator('#grazeDial').boundingBox();await page.mouse.move(dial.x+dial.width*.95,dial.y+dial.height/2);await page.mouse.down();await page.mouse.up();await settle();
+let gz=await setting('graze');assert.ok(gz.angle<3||gz.angle>357,JSON.stringify(gz));const fromRight=await pixels();assert.notEqual(fromRight,fromLeft);
+await page.mouse.move(dial.x+dial.width/2,dial.y+dial.height*.05);await page.mouse.down();await page.mouse.move(dial.x+dial.width*.1,dial.y+dial.height*.15,{steps:4});await page.mouse.up();await settle();gz=await setting('graze');assert.ok(gz.angle>120&&gz.angle<150,JSON.stringify(gz));
+await page.focus('#grazeDial');await page.keyboard.press('ArrowUp');await settle();assert.equal((await setting('graze')).angle,gz.angle+1);
+await slider('grazeOpacity',0);assert.equal(await pixels(),plain);await slider('grazeOpacity',1);const full=await pixels();await slider('grazeElevation',12);assert.notEqual(await pixels(),full);
+await page.click('#grazeVis');await settle();assert.equal((await setting('graze')).enabled,false);assert.equal(await pixels(),plain);
+await page.click('#undo');await settle();assert.equal((await setting('graze')).enabled,true);assert.equal((await setting('graze')).elevation,12);
+await page.click('#undo');await settle();assert.equal((await setting('graze')).elevation,3);
+const checked=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:__studio.snapshot()}).graze);assert.deepEqual(checked,await setting('graze'));
+await page.locator('#grazeSection').screenshot({path:outputDir+'/graze-panel.png'});await page.screenshot({path:outputDir+'/graze.png'});
+await slider('grazeOpacity',0.5);{const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'graze tile difference '+d);}
+await page.click('#grazeVis');await settle();assert.equal(await pixels(),plain);}
+console.log('PASS graze effect: dial, keys, opacity, angle to wall, visibility, undo, validate, tiled export');
 await page.getByText('Layers · blend effects',{exact:true}).click();const noLayer=await pixels();await page.click('#addLayer');await settle();
 let layers=await setting('layers');assert.deepEqual(layers,[{mode:'pinLight',source:'original',opacity:.35,enabled:true}]);const pin=await pixels();assert.notEqual(pin,noLayer);
 await page.locator('.lyOpacity').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});await settle();assert.equal(await pixels(),noLayer);
@@ -50,6 +65,20 @@ await page.click('#compare');await settle();assert.notEqual(await pixels(),mult)
 await page.click('.lyDup');await settle();assert.equal((await setting('layers')).length,2);await page.click('#undo');await settle();assert.equal((await setting('layers')).length,1);
 await page.selectOption('.lyMode','pinLight');await settle();assert.equal(await pixels(),pin);
 console.log('PASS blend layers: add, opacity, mode, visibility, duplicate, undo');
+{const drag=async(x0,x1)=>{await page.mouse.move(box.x+box.width*x0,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*x1,box.y+box.height*.5,{steps:8});await page.mouse.up();await settle();};
+await page.selectOption('.lyMode','multiply');await settle();const full=await pixels();
+await page.click('.lyHideAll');await settle();assert.deepEqual((await setting('layers'))[0].mask,{base:0,strokes:[]});assert.equal(await setting('maskOverlay'),0);const tinted=await pixels();assert.notEqual(tinted,noLayer);
+await drag(.3,.6);let mask=(await setting('layers'))[0].mask;assert.equal(mask.strokes.length,1);assert.equal(mask.strokes[0].mode,'show');
+await page.click('.lyShow');await settle();assert.equal(await setting('maskOverlay'),-1);const shown=await pixels();assert.notEqual(shown,noLayer);assert.notEqual(shown,full);
+const corner=u=>page.evaluate(async u=>{const im=new Image();await new Promise(r=>{im.onload=r;im.src=u;});const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');x.drawImage(im,0,0);return [...x.getImageData(2,2,1,1).data];},u);
+assert.deepEqual(await corner(shown),await corner(noLayer));assert.notDeepEqual(await corner(full),await corner(noLayer));
+await page.click('#undo');await settle();assert.equal((await setting('layers'))[0].mask.strokes.length,0);assert.equal(await pixels(),noLayer);await page.click('#redo');await settle();assert.equal(await pixels(),shown);
+await page.click('.lyHide');await drag(.3,.6);assert.equal((await setting('layers'))[0].mask.strokes.at(-1).mode,'hide');await page.click('#undo');await settle();await page.click('.lyHide');await settle();assert.equal(await pixels(),shown);
+const checked=await page.evaluate(()=>{const s=__studio.snapshot();return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).layers;});assert.deepEqual(checked,await setting('layers'));
+{const d=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,240,300).data;__bench.state.maxTile=160;const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,240,300).data;let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});assert.ok(d<1,'masked layer tile difference '+d);}
+await page.click('.lyShow');await page.locator('#layersSection').screenshot({path:outputDir+'/layer-mask-panel.png'});await page.screenshot({path:outputDir+'/layer-mask-overlay.png'});await page.click('.lyShow');
+await page.click('.lyReset');await settle();assert.equal((await setting('layers'))[0].mask,undefined);assert.equal(await pixels(),full);await page.click('#undo');await settle();assert.equal(await pixels(),shown);}
+console.log('PASS layer masks: hide all, paint show/hide, overlay, undo, validate, tiled export, reset');
 await page.getByText('My reusable presets',{exact:true}).click();await page.fill('#presetName','My gallery look');const presetStrength=await setting('fineRelief');await page.click('#savePreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('Saved'));
 await slider('fineRelief',.15);await page.click('#applyPreset');await settle();assert.equal(await setting('fineRelief'),presetStrength);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),.15);await page.click('#redo');await settle();assert.equal(await setting('fineRelief'),presetStrength);
 await page.check('#defaultPreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('This preset'));

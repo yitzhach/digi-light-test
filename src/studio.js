@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -52,8 +52,22 @@ export function initStudio(api) {
   const tabs=$('tabs'), lightPanel=$('lightPanel');tabs.previousElementSibling.remove();lights.append(tabs,lightPanel);
   panel.insertBefore(lights,panel.querySelectorAll('h2')[1]);
   const layersBox = document.createElement('details');layersBox.className='sectionDetails';layersBox.id='layersSection';
-  layersBox.innerHTML='<summary>Layers · blend effects</summary><div class="grp"><p class="note">Copies of the photo blended over the relit result, like layer blend modes in an image editor. Pin light or Soft light of the original adds natural highlights. Top of the list is applied last.</p><div id="layerList"></div><button id="addLayer" class="full">+ Add layer</button></div>';
+  layersBox.innerHTML='<summary>Layers · blend effects</summary><div class="grp"><p class="note">Copies of the photo blended over the relit result, like layer blend modes in an image editor. Pin light or Soft light of the original adds natural highlights. Top of the list is applied last.</p><div id="layerList"></div><button id="addLayer" class="full">+ Add layer</button><label class="selectRow">Mask brush<input id="maskBrushSize" type="range" min="5" max="240" value="60"></label><p class="note">Mask: Paint hide / Paint show to brush where a layer applies (red marks where it is hidden while you paint). Hide all, then Paint show, to apply it only where you paint.</p></div>';
   lights.after(layersBox);
+  // Graze effect: an extra raking light at any direction round the painting, faded
+  // over the main lighting. The dial's knob sits where the light comes from.
+  const grazeBox = document.createElement('details');grazeBox.className='sectionDetails';grazeBox.id='grazeSection';
+  grazeBox.innerHTML=`<summary>Graze light · raking texture</summary><div class="grp">
+    <div class="grazeTop"><svg id="grazeDial" viewBox="-56 -56 112 112" role="slider" tabindex="0" aria-label="Graze direction" aria-valuemin="0" aria-valuemax="359">
+      <circle class="ring" r="40"/><rect class="pic" x="-12" y="-15" width="24" height="30" rx="1.5"/>
+      <text x="-50" y="3">L</text><text x="50" y="3">R</text><text x="0" y="-46">T</text><text x="0" y="52">B</text>
+      <line class="ray" x2="0" y2="0"/><circle class="knob" r="7"/></svg>
+      <div class="grazeSide"><button id="grazeVis" title="Show or hide the graze light; its settings are kept">Hidden</button><output id="grazeReadout"></output>
+      <p class="note">Drag round the circle to set where the light comes from. Shift snaps to 15°; arrow keys nudge.</p></div></div>
+    <div class="row"><label for="grazeOpacity">Opacity</label><input id="grazeOpacity" type="range" min="0" max="1" step="0.01"><output data-own></output></div>
+    <div class="row"><label for="grazeElevation">Angle to wall</label><input id="grazeElevation" type="range" min="${GRAZE_EL_MIN}" max="${GRAZE_EL_MAX}" step="0.5"><output data-own></output></div>
+    <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p></div>`;
+  lights.after(grazeBox);
   for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
     const details=document.createElement('details');details.className='sectionDetails';details.innerHTML=`<summary>${title}</summary>`;
@@ -69,16 +83,17 @@ export function initStudio(api) {
     b.setAttribute('aria-label', b.title);
     $('photoCompass').append(b);
   }
+  const GRAZE_DEFAULT = { enabled: false, angle: 180, elevation: 3, opacity: 0.75 };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
-    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [] };
+    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], graze: GRAZE_DEFAULT };
   const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0 };
   const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
   const DERIVED = ['heightScale', 'reliefStrength'];
   // Fill in only what the bench has not already set (the demo source sets how it was lit).
-  for (const [k, v] of Object.entries(defaults)) if (!(k in state)) state[k] = v;
+  for (const [k, v] of Object.entries(defaults)) if (!(k in state)) state[k] = structuredClone(v);
   const extraKeys = Object.keys(defaults);
   const baseMap = { reliefScale:'reliefScale', azimuth:'azimuthDeg', taps:'integrateTaps', reliefStrength:'reliefStrength', chromaReject:'chromaReject', albedoSuppress:'albedoSuppress', reliefAmount:'reliefAmount', heightScale:'heightScale', roughness:'roughness', specular:'specular', shadow:'shadow', shadowSpread:'shadowSpread', ao:'ao', ambient:'ambient', exposure:'exposure' };
   const keys = [...new Set([...Object.values(baseMap), ...extraKeys, 'lights', 'selected'])];
@@ -88,7 +103,7 @@ export function initStudio(api) {
   const live = k => sweep && (k === 'lights' || k === 'selected') ? sweep[k] : state[k];
   const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(live(k))]));
   const history = new History();
-  let before = false, split = false, brush = '', restoring = false, loading = false, projectId = null;
+  let before = false, split = false, brush = '', maskLayer = -1, painting = false, restoring = false, loading = false, projectId = null;
   let sourceRevision = 0;
   const mask = document.createElement('canvas'); mask.width = mask.height = 768;
   state.maskCanvas = mask; state.maskVersion = 0;
@@ -99,21 +114,40 @@ export function initStudio(api) {
   $('wrap').append(beam);
   function updateBeam(){const l=state.lights[state.selected];beam.style.display=l?.enabled?'':'none';if(!l)return;const x=(l.aimX??l.x)*100,y=(1-(l.aimY??l.y))*100;const cos=.02+.965*l.cone;const radius=Math.min(180,l.z*Math.sqrt(1-cos*cos)/cos*100);const ell=beam.querySelector('ellipse');for(const [k,v] of Object.entries({cx:x,cy:y,rx:radius,ry:radius/(api.canvas.height/api.canvas.width)}))ell.setAttribute(k,v);const line=beam.querySelector('line');for(const [k,v] of Object.entries({x1:l.x*100,y1:(1-l.y)*100,x2:x,y2:y}))line.setAttribute(k,v);}
   document.addEventListener('digilight:render',updateBeam); updateBeam();
-  function stamp(point, mode, radius, aspect) {
+  function stamp(point, mode, radius, aspect, c = ctx, alpha = 0.22) {
     const x = point[0]*768, y = point[1]*768;
-    ctx.save(); ctx.translate(x,y); ctx.scale(1,1/aspect);
-    const g = ctx.createRadialGradient(0,0,0,0,0,radius*768);
-    const rgb = mode === 'add' ? '255,255,255' : '0,0,0';
-    g.addColorStop(0,`rgba(${rgb},0.22)`); g.addColorStop(1,`rgba(${rgb},0)`);
-    ctx.fillStyle = g; ctx.fillRect(-radius*768,-radius*768,radius*1536,radius*1536); ctx.restore();
+    c.save(); c.translate(x,y); c.scale(1,1/aspect);
+    const g = c.createRadialGradient(0,0,0,0,0,radius*768);
+    const rgb = mode === 'add' || mode === 'show' ? '255,255,255' : '0,0,0';
+    g.addColorStop(0,`rgba(${rgb},${alpha})`); g.addColorStop(1,`rgba(${rgb},0)`);
+    c.fillStyle = g; c.fillRect(-radius*768,-radius*768,radius*1536,radius*1536); c.restore();
   }
   function rebuildMask() {
     ctx.fillStyle = '#808080'; ctx.fillRect(0,0,768,768);
     for (const stroke of state.strokes) for (const point of stroke.points) stamp(point,stroke.mode,stroke.radius,stroke.aspect);
     state.maskVersion++; render();
   }
+  // Layer masks: white where a layer applies. Strokes are kept as data, like the relief
+  // corrections, and rasterised one layer at a time into its channel of layerMaskData
+  // (channel = the layer's place in state.layers). No mask means it applies everywhere.
+  const layerCanvas = document.createElement('canvas'); layerCanvas.width = layerCanvas.height = 768;
+  const lctx = layerCanvas.getContext('2d', { willReadFrequently: true });
+  state.layerMaskData = new Uint8Array(768*768*4).fill(255); state.layerMaskVersion = 0; state.maskOverlay = -1;
+  const MASK_ALPHA = 0.35;
+  function copyLayerChannel(i) {
+    const src = lctx.getImageData(0,0,768,768).data, d = state.layerMaskData;
+    for (let p = 0; p < d.length; p += 4) d[p+i] = src[p];
+  }
+  function drawLayerMask(i) {
+    const m = state.layers?.[i]?.mask, d = state.layerMaskData;
+    if (!m) { for (let p = i; p < d.length; p += 4) d[p] = 255; return; }
+    lctx.fillStyle = m.base ? '#fff' : '#000'; lctx.fillRect(0,0,768,768);
+    for (const stroke of m.strokes) for (const point of stroke.points) stamp(point,stroke.mode,stroke.radius,stroke.aspect,lctx,MASK_ALPHA);
+    copyLayerChannel(i);
+  }
+  function rebuildLayerMasks() { for (let i = 0; i < MAX_LAYERS; i++) drawLayerMask(i); state.layerMaskVersion++; }
   function historyUI() { $('undo').disabled = history.index <= 0; $('redo').disabled = history.index >= history.entries.length-1; }
-  function checkpoint() { if (!restoring && !loading && !state.exporting && !sweep) { history.push(snapshot()); historyUI(); } }
+  function checkpoint() { if (!restoring && !loading && !painting && !state.exporting && !sweep) { history.push(snapshot()); historyUI(); } }
   function syncQuick() {
     const mm = state.textureDepthMm, w = state.paintingWidthCm;
     $('textureDepthMm').nextElementSibling.textContent = `${mm.toFixed(mm < 1 ? 2 : 1)} mm`;
@@ -140,8 +174,44 @@ export function initStudio(api) {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { row.querySelector('output').textContent = Number(row.querySelector('input').value).toFixed(2); });
-    syncQuick(); refresh(); rebuildMask(); renderLayers(); historyUI();
+    syncQuick(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
   }
+  const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
+  function renderGraze() {
+    const g = state.graze, r = g.angle * Math.PI / 180, x = 40 * Math.cos(r), y = -40 * Math.sin(r), dial = $('grazeDial');
+    for (const [k, v] of Object.entries({ cx: x, cy: y })) dial.querySelector('.knob').setAttribute(k, v);
+    for (const [k, v] of Object.entries({ x1: x, y1: y })) dial.querySelector('.ray').setAttribute(k, v);
+    dial.setAttribute('aria-valuenow', Math.round(g.angle));
+    const where = `${Math.round(g.angle)}° · from ${COMPASS[Math.round(g.angle / 45) % 8]}`;
+    dial.setAttribute('aria-valuetext', where); $('grazeReadout').textContent = where;
+    $('grazeVis').textContent = g.enabled ? 'Visible' : 'Hidden'; $('grazeVis').classList.toggle('on', g.enabled);
+    grazeBox.classList.toggle('grazeOff', !g.enabled);
+    $('grazeOpacity').value = g.opacity; $('grazeOpacity').nextElementSibling.textContent = `${Math.round(g.opacity * 100)}%`;
+    $('grazeElevation').value = g.elevation; $('grazeElevation').nextElementSibling.textContent = `${g.elevation.toFixed(1)}°`;
+  }
+  // Adjusting any graze control shows the effect, so the change is visible.
+  function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); renderGraze(); render(); }
+  const grazeAngle = deg => ((Math.round(deg * 2) / 2) % 360 + 360) % 360;
+  $('grazeVis').onclick = () => { state.graze.enabled = !state.graze.enabled; renderGraze(); render(); };
+  $('grazeOpacity').oninput = e => setGraze({ opacity: +e.target.value });
+  $('grazeElevation').oninput = e => setGraze({ elevation: +e.target.value });
+  $('grazeDial').addEventListener('pointerdown', e => {
+    const dial = $('grazeDial'); e.preventDefault(); dial.focus(); dial.setPointerCapture(e.pointerId);
+    const move = ev => {
+      const b = dial.getBoundingClientRect();
+      let d = Math.atan2(b.top + b.height / 2 - ev.clientY, ev.clientX - b.left - b.width / 2) * 180 / Math.PI;
+      if (ev.shiftKey) d = Math.round(d / 15) * 15;
+      setGraze({ angle: grazeAngle(d) });
+    };
+    move(e); dial.onpointermove = move; dial.onpointerup = dial.onpointercancel = () => { dial.onpointermove = null; };
+  });
+  $('grazeDial').addEventListener('keydown', e => {
+    const step = { ArrowRight: -1, ArrowDown: -1, ArrowLeft: 1, ArrowUp: 1 }[e.key];
+    if (!step) return;
+    e.preventDefault(); e.stopPropagation();
+    setGraze({ angle: grazeAngle(state.graze.angle + step * (e.shiftKey ? 15 : 1)) });
+  });
+  $('grazeDial').addEventListener('keyup', () => setTimeout(checkpoint, 0));
   // Shown top-first like an image editor's layer list; state.layers is bottom-first.
   function renderLayers() {
     const list=$('layerList'); list.textContent='';
@@ -151,19 +221,27 @@ export function initStudio(api) {
       const opt=(items,v)=>items.map(([k,label])=>`<option value="${k}"${k===v?' selected':''}>${label}</option>`).join('');
       row.innerHTML=`<div class="layerHead"><button class="lyVis${L.enabled?' on':''}" title="Show or hide this layer">${L.enabled?'Visible':'Hidden'}</button><select class="lyMode" aria-label="Blend mode">${opt(blendModes,L.mode)}</select><select class="lySrc" aria-label="Layer image">${opt(layerSources,L.source)}</select></div>
         <div class="row"><label>Opacity</label><input class="lyOpacity" type="range" min="0" max="1" step="0.01" value="${L.opacity}" aria-label="Layer opacity"><output data-own>${Math.round(L.opacity*100)}%</output></div>
-        <div class="layerTools"><button class="lyUp" title="Move up"${i===layers.length-1?' disabled':''}>↑</button><button class="lyDown" title="Move down"${i===0?' disabled':''}>↓</button><button class="lyDup" title="Duplicate"${layers.length>=MAX_LAYERS?' disabled':''}>Duplicate</button><button class="lyDel">Delete</button></div>`;
+        <div class="layerTools"><button class="lyUp" title="Move up"${i===layers.length-1?' disabled':''}>↑</button><button class="lyDown" title="Move down"${i===0?' disabled':''}>↓</button><button class="lyDup" title="Duplicate"${layers.length>=MAX_LAYERS?' disabled':''}>Duplicate</button><button class="lyDel">Delete</button></div>
+        <div class="layerMask"><span>Mask</span><button class="lyHide${brush==='maskHide'&&maskLayer===i?' on':''}" title="Brush on the painting to hide this layer there">Paint hide</button><button class="lyShow${brush==='maskShow'&&maskLayer===i?' on':''}" title="Brush on the painting to show this layer there">Paint show</button><button class="lyHideAll" title="Hide this layer everywhere, then Paint show where you want it">Hide all</button><button class="lyReset" title="Remove the mask: the layer applies everywhere"${L.mask?'':' disabled'}>Reset</button></div>`;
       const q=c=>row.querySelector(c);
       q('.lyVis').onclick=()=>{L.enabled=!L.enabled;renderLayers();render();};
       q('.lyMode').onchange=e=>{L.mode=e.target.value;render();};
       q('.lySrc').onchange=e=>{L.source=e.target.value;render();};
       q('.lyOpacity').oninput=e=>{L.opacity=+e.target.value;q('output').textContent=`${Math.round(L.opacity*100)}%`;render();};
-      const move=d=>{layers.splice(i,1);layers.splice(i+d,0,L);renderLayers();render();};
+      const move=d=>{layers.splice(i,1);layers.splice(i+d,0,L);if(maskLayer===i)maskLayer=i+d;else if(maskLayer===i+d)maskLayer=i;renderLayers();render();};
       q('.lyUp').onclick=()=>move(1); q('.lyDown').onclick=()=>move(-1);
-      q('.lyDup').onclick=()=>{layers.splice(i+1,0,{...L});renderLayers();render();};
-      q('.lyDel').onclick=()=>{layers.splice(i,1);renderLayers();render();};
+      q('.lyDup').onclick=()=>{layers.splice(i+1,0,structuredClone(L));if(maskLayer>i)maskLayer++;renderLayers();render();};
+      q('.lyDel').onclick=()=>{layers.splice(i,1);if(maskLayer===i)setBrush('');else if(maskLayer>i)maskLayer--;renderLayers();render();};
+      const paint=mode=>{if(brush===mode&&maskLayer===i)setBrush('');else setBrush(mode,i);};
+      q('.lyHide').onclick=()=>paint('maskHide'); q('.lyShow').onclick=()=>paint('maskShow');
+      q('.lyHideAll').onclick=()=>{L.mask={base:0,strokes:[]};setBrush('maskShow',i);};
+      q('.lyReset').onclick=()=>{delete L.mask;renderLayers();render();};
       list.append(row);
     }
     $('addLayer').disabled=layers.length>=MAX_LAYERS;
+    if(maskLayer>=layers.length&&brush.startsWith('mask'))setBrush('');
+    state.maskOverlay=brush.startsWith('mask')?maskLayer:-1;
+    rebuildLayerMasks();
   }
   $('addLayer').onclick=()=>{const layers=state.layers||(state.layers=[]);if(layers.length>=MAX_LAYERS)return;layers.push({mode:'pinLight',source:'original',opacity:0.35,enabled:true});renderLayers();render();};
   function restore(value) { if (!value || state.exporting) return; restoring = true; Object.assign(state,value); sync(); restoring = false; }
@@ -270,7 +348,7 @@ export function initStudio(api) {
     if(sweep||state.exporting||!api.source())return;
     const l=makeLight({x:0,y:0,z:0.2,power:3,kelvin:5000,cone:0,softness:0.2,size:0.02});
     sweep={lights:state.lights,selected:state.selected,angle:Math.PI*0.75,last:performance.now(),light:l};
-    state.lights=[l];state.selected=0;
+    state.lights=[l];state.selected=0;state.sweeping=true;
     $('sweepLight').classList.add('on');$('wrap').classList.add('sweeping');
     refresh();
     const step=now=>{
@@ -288,7 +366,7 @@ export function initStudio(api) {
   function stopSweep(){
     if(!sweep)return;
     cancelAnimationFrame(sweepFrame);
-    state.lights=sweep.lights;state.selected=sweep.selected;sweep=null;
+    state.lights=sweep.lights;state.selected=sweep.selected;sweep=null;state.sweeping=false;
     $('sweepLight').classList.remove('on');$('wrap').classList.remove('sweeping');
     refresh(); checkpoint();
   }
@@ -316,22 +394,29 @@ export function initStudio(api) {
   // Grabbing a light dot always wins: leave Before/Split and brush mode so the move is visible.
   $('wrap').addEventListener('pointerdown',e=>{if(!e.target.closest('.handle'))return;if(before||split){before=false;split=false;comparison();}if(brush)setBrush('');},true);
   $('views').addEventListener('click',()=>{before=false;split=false;state.compareSplit=-1;splitRow.hidden=true;$('wrap').classList.remove('comparing');$('compare').classList.remove('on');$('splitView').classList.remove('on');$('compareLabel').textContent='DIAGNOSTIC VIEW';render();});
-  function setBrush(value){brush=value;$('wrap').classList.toggle('brushing',!!brush);for(const [id,v] of [['brushOff',''],['brushAdd','add'],['brushRemove','remove']])$(id).classList.toggle('on',value===v);}
+  // Relief brushes are 'add'/'remove'; layer mask brushes are 'maskHide'/'maskShow' on layer maskLayer.
+  function setBrush(value,layer=-1){const was=brush.startsWith('mask')||value.startsWith('mask');brush=value;maskLayer=value.startsWith('mask')?layer:-1;$('wrap').classList.toggle('brushing',!!brush);for(const [id,v] of [['brushOff',''],['brushAdd','add'],['brushRemove','remove']])$(id).classList.toggle('on',value===v);if(was){renderLayers();render();}}
   $('brushOff').onclick=()=>setBrush('');$('brushAdd').onclick=()=>setBrush('add');$('brushRemove').onclick=()=>setBrush('remove');
   $('clearMask').onclick=()=>{state.strokes=[];rebuildMask();};
   api.canvas.addEventListener('pointerdown',e=>{
     if(!brush||state.exporting||before||split||state.mode!=='single')return;
     e.preventDefault();api.canvas.setPointerCapture(e.pointerId);
-    const r=api.canvas.getBoundingClientRect();
-    const stroke={mode:brush,radius:+$('brushSize').value/r.width,aspect:r.height/r.width,points:[]};
+    const r=api.canvas.getBoundingClientRect(), layer=brush.startsWith('mask')?state.layers[maskLayer]:null;
+    if(brush.startsWith('mask')&&!layer)return;
+    const mode=layer?(brush==='maskShow'?'show':'hide'):brush, slot=maskLayer;
+    const stroke={mode,radius:+$(layer?'maskBrushSize':'brushSize').value/r.width,aspect:r.height/r.width,points:[]};
     const add=ev=>{
       const p=[Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height))];
       const prev=stroke.points.at(-1)||p;const n=Math.max(1,Math.ceil(Math.hypot(p[0]-prev[0],(p[1]-prev[1])*stroke.aspect)/(stroke.radius*0.25)));
-      for(let i=1;i<=n;i++){const q=[prev[0]+(p[0]-prev[0])*i/n,prev[1]+(p[1]-prev[1])*i/n];stroke.points.push(q);stamp(q,brush,stroke.radius,stroke.aspect);}
-      state.maskVersion++;render();
+      for(let i=1;i<=n;i++){const q=[prev[0]+(p[0]-prev[0])*i/n,prev[1]+(p[1]-prev[1])*i/n];stroke.points.push(q);if(layer)stamp(q,mode,stroke.radius,stroke.aspect,lctx,MASK_ALPHA);else stamp(q,mode,stroke.radius,stroke.aspect);}
+      if(layer){copyLayerChannel(slot);state.layerMaskVersion++;}else state.maskVersion++;
+      render();
     };
-    state.strokes.push(stroke);add(e);
-    const end=()=>{api.canvas.removeEventListener('pointermove',add);api.canvas.removeEventListener('pointerup',end);api.canvas.removeEventListener('pointercancel',end);checkpoint();};
+    if(layer){if(!layer.mask){layer.mask={base:1,strokes:[]};renderLayers();}layer.mask.strokes.push(stroke);drawLayerMask(slot);}
+    else state.strokes.push(stroke);
+    // One stroke is one undo step, even if a deferred checkpoint fires mid-stroke.
+    painting=true;add(e);
+    const end=()=>{api.canvas.removeEventListener('pointermove',add);api.canvas.removeEventListener('pointerup',end);api.canvas.removeEventListener('pointercancel',end);painting=false;checkpoint();};
     api.canvas.addEventListener('pointermove',add);api.canvas.addEventListener('pointerup',end);api.canvas.addEventListener('pointercancel',end);
   });
   let dbPromise;
@@ -354,16 +439,20 @@ export function initStudio(api) {
     if(p?.format!=='digilight'||p.version!==1||!/^data:image\/(png|jpeg|webp);base64,/.test(p.image||''))throw new Error('Not a supported DigiLight project.');
     if(!p.settings||!Array.isArray(p.settings.lights)||p.settings.lights.length<1||p.settings.lights.length>8)throw new Error('Invalid project lights.');
     const settings={};
-    for(const k of keys)if(!['lights','strokes','layers'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
+    for(const k of keys)if(!['lights','strokes','layers','graze'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
+    let points=0;
+    const checkStrokes=(strokes,modes)=>{if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');return strokes.map(s=>{if(!modes.includes(s?.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});};
     const layers=p.settings.layers??[];if(!Array.isArray(layers)||layers.length>MAX_LAYERS)throw new Error('Invalid layers.');
-    settings.layers=layers.map(L=>{if(!blendModes.some(([k])=>k===L?.mode)||!layerSources.some(([k])=>k===L.source)||!Number.isFinite(L.opacity)||L.opacity<0||L.opacity>1)throw new Error('Invalid layer.');return {mode:L.mode,source:L.source,opacity:L.opacity,enabled:L.enabled!==false};});
-    const strokes=p.settings.strokes||[];let points=0;if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');
-    settings.strokes=strokes.map(s=>{if(!['add','remove'].includes(s.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});
+    settings.layers=layers.map(L=>{if(!blendModes.some(([k])=>k===L?.mode)||!layerSources.some(([k])=>k===L.source)||!Number.isFinite(L.opacity)||L.opacity<0||L.opacity>1)throw new Error('Invalid layer.');const layer={mode:L.mode,source:L.source,opacity:L.opacity,enabled:L.enabled!==false};if(L.mask!=null){if(typeof L.mask!=='object')throw new Error('Invalid layer mask.');layer.mask={base:L.mask.base?1:0,strokes:checkStrokes(L.mask.strokes??[],['show','hide'])};}return layer;});
+    settings.strokes=checkStrokes(p.settings.strokes||[],['add','remove']);
+    const g=p.settings.graze??GRAZE_DEFAULT;
+    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1)throw new Error('Invalid graze light.');
+    settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity};
     return settings;
   }
   async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
@@ -374,7 +463,9 @@ export function initStudio(api) {
   const defaultId=()=>{try{return localStorage.getItem('digilight-default-preset')||'';}catch{return '';}};
   const setDefaultId=id=>{try{id?localStorage.setItem('digilight-default-preset',id):localStorage.removeItem('digilight-default-preset');}catch{throw new Error('Browser storage is unavailable.');}};
   function presetStatus(message){$('presetStatus').textContent=message;}
-  function presetSettings(){return Object.fromEntries(presetKeys.map(k=>[k,structuredClone(live(k))]));}
+  // Layer masks are painted on one photo, so presets carry layers without them.
+  const unmasked=layers=>layers.map(({mask,...L})=>L);
+  function presetSettings(){const s=Object.fromEntries(presetKeys.map(k=>[k,structuredClone(live(k))]));s.layers=unmasked(s.layers||[]);return s;}
   function presetRecord(id=crypto.randomUUID(), name=$('presetName').value.trim()){
     if(!name)throw new Error('Name the preset first.');
     return {format:'digilight-preset',version:1,id,name:name.slice(0,120),updated:Date.now(),settings:presetSettings()};
@@ -382,7 +473,7 @@ export function initStudio(api) {
   function validatePreset(p){
     if(p?.format!=='digilight-preset'||p.version!==1||!p.settings)throw new Error('Not a supported DigiLight preset.');
     // Presets from before calibrated relief keep their hand-set depth and strength.
-    const merged={...snapshot(),...('physical' in p.settings?{}:LEGACY),...p.settings,strokes:[]};
+    const merged={...snapshot(),...('physical' in p.settings?{}:LEGACY),...p.settings,strokes:[]};if(Array.isArray(merged.layers))merged.layers=unmasked(merged.layers);
     const checked=validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:merged});
     return {format:'digilight-preset',version:1,id:typeof p.id==='string'&&p.id?p.id:crypto.randomUUID(),name:String(p.name||'Imported preset').slice(0,120),updated:Number.isFinite(p.updated)?p.updated:Date.now(),settings:Object.fromEntries(presetKeys.map(k=>[k,checked[k]]))};
   }
@@ -416,10 +507,10 @@ export function initStudio(api) {
   $('importPreset').onclick=()=>$('presetFile').click();
   $('presetFile').onchange=()=>busy(async()=>{const f=$('presetFile').files[0];if(!f)return;if(f.size>1024*1024)throw new Error('Preset exceeds the 1 MB import limit.');const p=validatePreset(JSON.parse(await f.text()));p.id=crypto.randomUUID();p.updated=Date.now();await storage('presets','readwrite',s=>s.put(p));await listPresets(p.id);applyUserPreset(p);$('presetFile').value='';presetStatus(`Imported and applied “${p.name}”.`);});
   Promise.all([list(),listPresets()]).catch(()=>status('Browser storage unavailable. Downloaded projects and presets still work.'));
-  const onSource=async e=>{stopSweep();if(e.detail?.keep){sync();return;}const revision=++sourceRevision;state.strokes=[];projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();checkpointSource();};
+  const onSource=async e=>{stopSweep();if(e.detail?.keep){sync();return;}const revision=++sourceRevision;state.strokes=[];for(const L of state.layers||[])delete L.mask;projectId=null;before=false;split=false;setBrush('');comparison();if(state.mode==='single'&&!loading){autoSetup();const id=defaultId();if(id){try{const p=await storage('presets','readonly',s=>s.get(id));if(p&&revision===sourceRevision&&!loading){applyUserPreset(p,false);presetStatus(`Automatically applied “${p.name}”.`);}}catch{presetStatus('The automatic preset could not be loaded.');}}}sync();checkpointSource();};
   // A new photo keeps the undo history, so Undo brings back the previous settings.
   function checkpointSource(){if(history.index<0)history.reset(snapshot());else history.push(snapshot());historyUI();}
   document.addEventListener('digilight:source',onSource);
-  syncQuick();rebuildMask();history.reset(snapshot());historyUI();
+  syncQuick();rebuildMask();renderGraze();history.reset(snapshot());historyUI();
   window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

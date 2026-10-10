@@ -13,7 +13,10 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, GRAZE_SIZE, GRAZE_AMBIENT, grazePower } from './presets.js';
+import { kelvinToLinearRGB } from './kelvin.js';
+
+const GRAZE_RGB = kelvinToLinearRGB(5000);
 
 const B = Object.fromEntries(blendModes.map(([k], i) => [k, i]));
 
@@ -67,6 +70,15 @@ uniform int   uLayerCount;
 uniform int   uLayerMode[${MAX_LAYERS}];
 uniform int   uLayerSource[${MAX_LAYERS}];   // 0 original photo, 1 relit image
 uniform float uLayerOpacity[${MAX_LAYERS}];
+uniform sampler2D uLayerMask;                 // one channel per layer slot, white = applies
+uniform vec4  uLayerSel[${MAX_LAYERS}];      // picks this layer's channel from uLayerMask
+uniform vec4  uMaskOverlay;                   // while painting a mask: tint where it hides
+
+// Graze effect: one extra hard light almost in the painting's plane, rendered on its
+// own and cross-faded over the main lighting by uGrazeOpacity (0 = off).
+uniform vec3  uGrazePos;
+uniform vec3  uGrazeColor;     // colour times power
+uniform float uGrazeOpacity;
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -109,8 +121,8 @@ float sampleHeight(vec2 uv) {
  * and an overhead one hardly at all. Steps bunch up near the pixel, where the
  * small ridges that matter most sit.
  */
-float shadowMarch(vec2 uv, vec3 L, float penumbra) {
-  if (uShadow <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
+float shadowMarch(vec2 uv, vec3 L, float penumbra, float strength) {
+  if (strength <= 0.0 || uHeightScale <= 0.0 || uReliefAmount <= 0.0) return 1.0;
   vec2 dxy = L.xy;
   float lxy = length(dxy);
   if (lxy < 1e-4) return 1.0;              // light overhead: nothing to cast
@@ -138,7 +150,20 @@ float shadowMarch(vec2 uv, vec3 L, float penumbra) {
   float elev = atan(slope);
   float open = smoothstep(-penumbra, penumbra, elev);
   float vis = smoothstep(-penumbra, penumbra, elev - atan(horizon)) / max(open, 1e-3);
-  return 1.0 - (1.0 - min(vis, 1.0)) * uShadow;
+  return 1.0 - (1.0 - min(vis, 1.0)) * strength;
+}
+
+// Diffuse plus GGX specular for one light. aSrc is the roughness already widened by
+// the source's size; NoLw the wrapped cosine.
+vec3 brdf(vec3 N, vec3 V, vec3 L, float NoV, float NoLw, vec3 albedo, vec3 f0, float aSrc) {
+  vec3 H = normalize(L + V);
+  float NoH = max(dot(N, H), 0.0);
+  float VoH = max(dot(V, H), 0.0);
+  float NoLs = max(dot(N, L), 0.0);
+  float D = D_GGX(NoH, aSrc);
+  float Vis = V_SmithGGX(NoV, max(NoLs, 1e-4), aSrc);
+  vec3 F = F_Schlick(VoH, f0);
+  return D * Vis * F * NoLs + albedo * (1.0 - F) * (1.0 - uMetallic) / PI * NoLw;
 }
 
 // Layer blend modes, per channel on display values: a is what lies below, b the layer.
@@ -245,26 +270,14 @@ void main() {
     if (NoLw <= 0.0) continue;
 
     float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
-    float shadow = shadowMarch(vUV, L, penumbra);
-
-    vec3 H = normalize(L + V);
-    float NoH = max(dot(N, H), 0.0);
-    float VoH = max(dot(V, H), 0.0);
-    float NoLs = max(NoL, 0.0);
+    float shadow = shadowMarch(vUV, L, penumbra, uShadow);
 
     // A bigger source spreads the highlight: widen the lobe by the source's size
     // relative to its distance (Karis' sphere-light approximation, without the
     // representative-point term). D stays normalised, so the energy is spread
     // rather than added.
     float aSrc = min(1.0, a + uLightSize[i] / (2.0 * dist));
-    float D = D_GGX(NoH, aSrc);
-    float Vis = V_SmithGGX(NoV, max(NoLs, 1e-4), aSrc);
-    vec3 F = F_Schlick(VoH, f0);
-
-    vec3 spec = D * Vis * F * NoLs;
-    vec3 diff = albedo * (1.0 - F) * (1.0 - uMetallic) / PI * NoLw;
-
-    acc += (diff + spec) * incoming * shadow;
+    acc += brdf(N, V, L, NoV, NoLw, albedo, f0, aSrc) * incoming * shadow;
     litShare += weight * shadow * smoothstep(0.0, 0.1, NoLw);
   }
 
@@ -285,15 +298,37 @@ void main() {
   acc *= exp2(uExposure);
   vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
   vec3 relit = clamp(linearToSrgb(mapped), 0.0, 1.0);
+
+  if (uGrazeOpacity > 0.0) {
+    // Shadows always full strength and crisp here: that is the point of grazing light.
+    vec3 g = albedo * uAmbientColor * ${GRAZE_AMBIENT.toFixed(3)} * ao;
+    vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
+    float dist = max(length(Lv), 1e-4);
+    vec3 L = Lv / dist;
+    float srcAngle = atan(${GRAZE_SIZE.toFixed(4)} / dist);
+    float wrap = sin(srcAngle);
+    float NoLw = (dot(N, L) + wrap) / (1.0 + wrap);
+    if (NoLw > 0.0) {
+      float aSrc = min(1.0, a + ${GRAZE_SIZE.toFixed(4)} / (2.0 * dist));
+      float shadow = shadowMarch(vUV, L, max(srcAngle, 0.012), 1.0);
+      g += brdf(N, V, L, NoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
+    }
+    g *= exp2(uExposure);
+    vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
+    relit = mix(relit, clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeOpacity);
+  }
   vec3 col = relit;
+  vec4 lmask = texture(uLayerMask, gUV);
   if (uLayerCount > 0) {
     vec3 orig = clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0);
     for (int i = 0; i < ${MAX_LAYERS}; i++) {
       if (i >= uLayerCount) break;
       vec3 b = uLayerSource[i] == 0 ? orig : relit;
-      col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i]);
+      col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i] * dot(lmask, uLayerSel[i]));
     }
   }
+  float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
+  col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
   outColor = vec4(col, 1.0);
 }`;
 
@@ -303,6 +338,8 @@ export class Shader {
     this.prog = program(glctx.gl, SHADE_FS, 'shade');
     this.maskTex = glctx.gl.createTexture();
     this.maskVersion = -1;
+    this.layerMaskTex = glctx.gl.createTexture();
+    this.layerMaskVersion = -1;
   }
 
   /**
@@ -326,11 +363,24 @@ export class Shader {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.maskVersion = state.maskVersion ?? 0;
     }
+    if (this.layerMaskVersion !== (state.layerMaskVersion ?? 0)) {
+      gl.activeTexture(gl.TEXTURE0 + 4);
+      gl.bindTexture(gl.TEXTURE_2D, this.layerMaskTex);
+      const d = state.layerMaskData, n = d ? Math.round(Math.sqrt(d.length / 4)) : 1;
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, n, n, 0, gl.RGBA, gl.UNSIGNED_BYTE, d || new Uint8Array([255, 255, 255, 255]));
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.layerMaskVersion = state.layerMaskVersion ?? 0;
+    }
     bindTextures(gl, p, [
       ['uAlbedo', targets.albedo.tex],
       ['uNormal', targets.normal.tex],
       ['uLin', targets.lin.tex],
       ['uMask', this.maskTex],
+      ['uLayerMask', this.layerMaskTex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -396,14 +446,31 @@ export class Shader {
     gl.uniform1f(u.uExposure, state.exposure);
     gl.uniform1i(u.uViewMode, state.viewMode);
 
-    // Only visible layers go to the GPU, in order, bottom first.
-    const layers = (state.layers || []).filter((l) => l.enabled && l.opacity > 0).slice(0, MAX_LAYERS);
+    // Only visible layers go to the GPU, in order, bottom first. Each keeps the mask
+    // channel of its place in state.layers.
+    const all = (state.layers || []).slice(0, MAX_LAYERS);
+    const layers = all.filter((l) => l.enabled && l.opacity > 0);
     const lMode = new Int32Array(MAX_LAYERS), lSrc = new Int32Array(MAX_LAYERS), lOp = new Float32Array(MAX_LAYERS);
+    const lSel = new Float32Array(MAX_LAYERS * 4), overlay = new Float32Array(4);
     layers.forEach((l, i) => {
       lMode[i] = Math.max(0, B[l.mode] ?? 0);
       lSrc[i] = Math.max(0, layerSources.findIndex(([k]) => k === l.source));
       lOp[i] = l.opacity;
+      lSel[i * 4 + all.indexOf(l)] = 1;
     });
+    const shown = state.exporting ? -1 : state.maskOverlay ?? -1;
+    if (shown >= 0 && shown < MAX_LAYERS) overlay[shown] = 1;
+    gl.uniform4fv(u.uLayerSel, lSel);
+
+    // Graze effect: direction is where the light comes from, 0 deg = right, 90 = top.
+    const g = state.graze;
+    const gOn = g && g.enabled && g.opacity > 0 && state.viewMode === 0 && !state.sweeping;
+    const gEl = (g?.elevation ?? 3) * Math.PI / 180, gDir = (g?.angle ?? 180) * Math.PI / 180;
+    const gz = GRAZE_DISTANCE * Math.tan(gEl), gPow = grazePower(Math.hypot(GRAZE_DISTANCE, gz), g?.elevation ?? 3);
+    gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
+    gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
+    gl.uniform1f(u.uGrazeOpacity, gOn ? g.opacity : 0);
+    gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
     gl.uniform1iv(u.uLayerSource, lSrc);

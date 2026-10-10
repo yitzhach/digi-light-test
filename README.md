@@ -31,10 +31,14 @@ large one casts wide soft penumbrae, wraps light round the relief and flattens i
 **Distance** reads in cm from the painting's width. **Mirror** adds a matched light
 on the other side. Up to eight lights.
 
-**Graze from Left/Right/Top/Bottom** lays a light almost flat to the painting (3°,
-one painting width out, brightness compensated) for long, hard cast shadows; the
-**Grazing side light** preset does the same. Angle to wall goes down to 1°, and
-Brightness is logarithmic so these powers fit. Lights can stand well beyond the
+**Graze light · raking texture** adds a hard light almost flat to the painting (3°
+by default, one painting width out, brightness compensated) for long, crisp cast
+shadows. Drag the knob round the **circle** to light from any direction (Shift snaps
+to 15°, arrow keys nudge), set **Opacity** to fade it over your own lighting (100% =
+graze light alone) and **Angle to wall** (1–20°). **Visible/Hidden** turns it off
+without losing its settings. It is saved with undo, projects, presets and exports.
+The **Grazing side light** preset makes one of your own lights a grazing light;
+Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit. Lights can stand well beyond the
 painting: the toolbar **− / 100% / +** and **Show all lights** shrink the view
 (keys - = 0), and a dot outside the view is pinned to its edge with a dashed ring.
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
@@ -45,6 +49,11 @@ Relit image) over the result with a blend mode (Normal, Multiply, Screen, Overla
 Soft/Hard/Linear/Vivid/Pin light, Color dodge/burn, Darken, Lighten) and opacity.
 Layers apply in display space, appear in exports, and are saved with undo,
 projects and presets. Pin light or Soft light of the original adds natural highlights.
+Each layer has a **mask**: *Paint hide* / *Paint show* brush where the layer applies
+(a red tint marks hidden areas while you paint), *Hide all* starts from nothing so
+you can paint the effect in, *Reset* removes the mask. Masks are saved with undo
+(one step per stroke), projects and exports; presets carry layers without masks,
+and opening a new photo clears them.
 
 **Sweep light** (toolbar) orbits a low raking light round the painting to inspect
 its texture, then gives your lights back (Esc or click again). The **Shadows** view
@@ -146,8 +155,8 @@ and light undo/redo; light dragging and duplication; brush pixels and stroke und
 local project save/reopen and variations; portable project import/export; PNG and
 scaled JPEG exports; reusable preset save/apply/default/download/import; preview
 restoration; quick setup, photo lighting and depth undo; light types, angle and
-mirror; light dots over compare/brush; reopening a photo keeps edits; graze
-light and view zoom; blend layers; sweep light; legacy project import; shadow physics; mobile layout;
+mirror; light dots over compare/brush; reopening a photo keeps edits; grazing
+preset and view zoom; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
