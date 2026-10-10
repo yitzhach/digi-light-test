@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 const outputDir=require('fs').mkdtempSync(require('path').join(require('os').tmpdir(),'digilight-test-'));
-// Start a static server on port 8766 from the repository root before running.
+// Start a static server on port 8766 (or $DIGILIGHT_PORT) from the repository root before running.
 
 const {chromium}=require('playwright');
 (async()=>{
@@ -11,7 +11,7 @@ const settle=async()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=
 const pixels=()=>page.evaluate(()=>{__bench.render();return __bench.canvas.toDataURL()});
 const setting=k=>page.evaluate(k=>__bench.state[k],k);
 const slider=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
-await page.goto('http://127.0.0.1:8766');await page.waitForFunction(()=>window.__bench&&window.__studio);await settle();assert.equal(await page.locator('#err').textContent(),'');console.log('PASS boot and shader compilation');
+await page.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766));await page.waitForFunction(()=>window.__bench&&window.__studio);await settle();assert.equal(await page.locator('#err').textContent(),'');console.log('PASS boot and shader compilation');
 const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');for(let y=0;y<300;y++)for(let a=0;a<240;a++){const v=120+40*Math.sin(a*.35)+25*Math.cos(y*.19);x.fillStyle=`rgb(${v},${v*.7},${v*.5})`;x.fillRect(a,y,1,1);}return c.toDataURL().split(',')[1];});
 await page.locator('#file').setInputFiles({name:'painting.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.canvas.width===240);await settle();
 console.log('PASS uploaded image automatic setup');
