@@ -37,10 +37,35 @@ shadows. Drag the knob round the **circle** to light from any direction (Shift s
 to 15°, arrow keys nudge), set **Opacity** to fade it over your own lighting (100% =
 graze light alone) and **Angle to wall** (1–20°). **Visible/Hidden** turns it off
 without losing its settings. It is saved with undo, projects, presets and exports.
+A light a degree or two off the wall exaggerates every slope 30–60×, and the finest
+scale of relief estimated from one photo is mostly grain and photo noise, so the
+graze has its own controls for that: **Detail** (only relief at least this wide
+casts graze shadows; the graze sees a smoothed copy of the relief), **Fine texture**
+(finer relief comes back in the shading only, at the contrast a 10° light gives it),
+**Shadow length** (lets graze shadows run as far as height and angle allow),
+**Clean shadows** (a bump must stand this tall to cast), and **Softness** (lamp size,
+bulb to strip light). **Graze preset** offers Gentle raking, Classic raking (the
+default), Long shadows, Long shadows clean surface, Soft strip light, and Every
+detail (raw, the old look). `tools/graze-lab.cjs` measures these against synthetic
+paintings with known relief.
 The **Grazing side light** preset makes one of your own lights a grazing light;
-Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit. Lights can stand well beyond the
-painting: the toolbar **− / 100% / +** and **Show all lights** shrink the view
-(keys - = 0), and a dot outside the view is pinned to its edge with a dashed ring.
+Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
+
+**View zoom.** The toolbar **− / 100% / +** zooms the view from 20% to 400%
+(keys - = 0); 100% fits the painting to the stage and the percentage button returns there.
+Ctrl/Cmd + mouse wheel, or a trackpad pinch, zooms smoothly about the pointer.
+Zoomed out, lights standing well beyond the painting come into view (**Show all
+lights** picks the zoom that shows every dot). Zoomed in, the stage scrolls
+(scrollbars, wheel, two-finger swipe, a finger on a touch screen) and you can pan
+like an image editor's hand tool: hold Space and drag, or drag with the middle
+button. A dot outside the visible
+part of the stage, beyond the painting or scrolled out of view, is pinned to its
+edge with a dashed ring. Zoom is a view setting: it is not undone or saved.
+The preview works on a copy of at most 1400 px, so zoomed in on a larger photo the
+view sharpens a moment after you stop: the visible part is rendered again from the
+full-resolution photo, through the same tiles as Export, at about one pixel per
+screen pixel. What you inspect at 400% is what the export contains; any change
+shows the working copy until the view is still again (single photographs only).
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
 Split and brush mode.
 
@@ -156,11 +181,15 @@ local project save/reopen and variations; portable project import/export; PNG an
 scaled JPEG exports; reusable preset save/apply/default/download/import; preview
 restoration; quick setup, photo lighting and depth undo; light types, angle and
 mirror; light dots over compare/brush; reopening a photo keeps edits; grazing
-preset and view zoom; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
+preset and view zoom; zoom to 400% (steps, keys, Ctrl+wheel about the pointer,
+scrolling, Space and middle-button panning, pinned dots, light drags and brush strokes
+while zoomed in); sharp zoom detail; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels
-of difference across channels. This does not establish physical reconstruction
+of difference across channels. On an 1800 px photo at 400%, the sharp zoom detail
+matched the same region of a full-resolution export to 0.005 byte levels, where the
+magnified 1400 px preview was 4 levels off. This does not establish physical reconstruction
 accuracy or guarantee identical results at every export resolution/device.
 
 To rerun the main browser regression: install Playwright in your test environment,

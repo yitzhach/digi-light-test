@@ -68,7 +68,8 @@ export const POWER_MAX = 1024;
  * paint only catches sin(angle) of the light there, so the brightness is raised to
  * keep the centre a little under a normal exposure: ridges facing the lamp catch
  * many times more and would otherwise blow out. 3 degrees is the default because
- * estimated relief turns glittery below that; the angle slider still goes to 1.
+ * estimated relief turns glittery below that; the angle slider still goes to 1, and
+ * the graze effect's Detail (below) is what keeps those low angles clean.
  */
 export const GRAZE_DEG = 3, GRAZE_DISTANCE = 1;
 export function grazePower(dist, deg) {
@@ -78,6 +79,41 @@ const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
 // Graze effect (Graze light section): a small hard source, a dim fill so shadows read
 // as shadows, and the range of angles off the wall its slider offers.
 export const GRAZE_SIZE = 0.005, GRAZE_AMBIENT = 0.06, GRAZE_EL_MIN = 1, GRAZE_EL_MAX = 20;
+// Graze Detail, in painting widths: relief narrower than this casts no graze shadow
+// and is shaded only as a light GRAZE_FINE_DEG off the wall would show it, times
+// the Fine texture amount. A light e degrees off the wall multiplies every slope's
+// effect by 1/tan(e), and the finest band of a one-photo estimate is mostly paint
+// grain, mottle and noise, so without this low angles turn it into a leopard-spot
+// pattern of glints and tiny shadows. 0.01 (6 mm on a 60 cm painting) measured best
+// on the synthetic rigs at 1-2.5 degrees (tools/graze-lab.cjs); 0 is every pixel.
+export const GRAZE_DETAIL_MAX = 0.03, GRAZE_FINE_DEG = 10;
+// Graze shadows. Shadow length is the share of the physical reach, the tallest
+// relief over tan(angle to wall), the graze light's shadows may travel; the main
+// lights bound it otherwise, a few pixels at their usual height, so a light a degree
+// off the wall could never throw the long shadows it exists for. Clean shadows is
+// the height, as a share of GRAZE_CLEAN_MAX of the relief's measured 2-98% spread,
+// a blocker must clear before it throws any: the bumps the one-photo estimate makes
+// out of grain stay under it and the real ridges do not (tools/graze-lab.cjs).
+// Saved settings without them open at 0 and 0, the look before either existed.
+export const GRAZE_CLEAN_MAX = 0.1;
+// Graze Softness: the source's radius, from GRAZE_SIZE (a bare bulb) up to
+// GRAZE_SIZE_MAX (a strip or small softbox). A bigger source softens shadow edges
+// and wraps light past the terminator, which calms what grain is left at low angles
+// more than spreading several hard lights round the painting did (tools/graze-lab.cjs).
+export const GRAZE_SIZE_MAX = 0.04;
+export const grazeSize = (soft) => GRAZE_SIZE + Math.min(1, Math.max(0, soft)) * (GRAZE_SIZE_MAX - GRAZE_SIZE);
+
+// Graze presets: starting points for common looks. Each keeps the light's direction;
+// a new graze light starts as Classic raking. Lower angles need more Detail and Clean
+// shadows, or grain turns into glitter.
+export const grazePresets = {
+  'Gentle raking':               { elevation: 6,   detail: 0.006, fine: 1,   reach: 1, clean: 0.15, soft: 0.2, opacity: 0.6 },
+  'Classic raking':              { elevation: 3,   detail: 0.01,  fine: 0.8, reach: 1, clean: 0.3,  soft: 0.2, opacity: 0.75 },
+  'Long shadows':                { elevation: 1.5, detail: 0.01,  fine: 0.6, reach: 1, clean: 0.15, soft: 0.15, opacity: 0.9 },
+  'Long shadows, clean surface': { elevation: 1,   detail: 0.012, fine: 0.5, reach: 1, clean: 0.3,  soft: 0.15, opacity: 0.9 },
+  'Soft strip light':            { elevation: 2.5, detail: 0.01,  fine: 0.7, reach: 1, clean: 0.3,  soft: 0.5, opacity: 0.8 },
+  'Every detail (raw)':          { elevation: 3,   detail: 0,     fine: 1,   reach: 1, clean: 0,    soft: 0,   opacity: 0.75 },
+};
 
 // Blend layers: copies of the photo composited over the relit result, the way an
 // image editor's layer blend modes work (in display space, top of the list last).

@@ -10,7 +10,7 @@ import { kelvinToLinearRGB, hexToLinearRGB, linearRGBToHex } from './kelvin.js';
 import { synthesizePainting, synthesizeCaptureSet, normalsToImageData } from './synth.js';
 import { Photometric, buildSolver, uploadShotArray, MAX_SHOTS } from './photometric.js';
 import { chromaSignal } from './measure.js';
-import { exportFullRes, downloadCanvas, requiredMargin } from './export.js';
+import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
@@ -18,7 +18,9 @@ import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_M
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
-const wrap = $('wrap');
+const wrap = $('wrap');          // the visible frame; light dots live here
+const scroller = $('scroller');  // scrolls the painting once zoomed past fit
+const paper = $('paper');        // the painting's own box: canvas, beam guide, sphere ring
 
 let glctx, gbuf, shader, photo, srcTex = null, targets = null;
 // Photometric capture: one texture per exposure plus its light direction.
@@ -42,6 +44,7 @@ const state = {
   shadowDist: 0.02, shadowDistPx: 12, exporting: false,
   ambientColor: [1, 1, 1],
   viewMode: 0,
+  viewZoom: 1,     // view only (1 = fit the stage): never undone or saved
   selected: 0,
   mode: 'single',           // 'single' | 'photometric'
   psFitAmbient: true,
@@ -245,27 +248,109 @@ function fitCanvas() {
   const availW = Math.max(80, r.width - 32);
   const availH = Math.max(80, r.height - 32);
   const disp = Math.min(availW / imgW, availH / imgH) * (state.viewZoom || 1);
+  // Past fit the painting outgrows the stage, which then scrolls. The fit itself is
+  // taken from the stage, not the scroller, so scrollbars appearing cannot feed back.
+  const zoomed = (state.viewZoom || 1) > 1;
+  scroller.classList.toggle('zoomed', zoomed);
   canvas.style.width = `${Math.round(imgW * disp)}px`;
   canvas.style.height = `${Math.round(imgH * disp)}px`;
+  // At or below fit nothing should be scrolled, not even by a rounding pixel.
+  if (!zoomed) scroller.scrollLeft = scroller.scrollTop = 0;
   repositionHandles();
+  scheduleSharp();
 }
 
+/** The part of the stage the painting is seen through, in client pixels, scrollbars excluded. */
+function viewBox() {
+  const r = scroller.getBoundingClientRect();
+  const left = r.left + scroller.clientLeft, top = r.top + scroller.clientTop;
+  return { left, top, right: left + scroller.clientWidth, bottom: top + scroller.clientHeight };
+}
+
+const ZOOM_MIN = 0.2, ZOOM_MAX = 4;
+
 /**
- * View zoom: shrink the painting inside the stage so lights placed beyond its
- * edges come into view. 'lights' picks the largest zoom that shows every dot.
+ * View zoom, 20% to 400% of the size that fits the stage. Below fit it brings lights
+ * placed beyond the painting into view; above it the stage scrolls. The painting
+ * point under `at` (client x, y; default the middle of the view) stays where it is.
+ * 'lights' picks the largest zoom, up to fit, that shows every dot.
  */
-function setZoom(z) {
+function setZoom(z, at) {
+  if (!imgW || !imgH) return;
   if (z === 'lights') {
     const r = $('stage').getBoundingClientRect();
     const availW = Math.max(80, r.width - 32), availH = Math.max(80, r.height - 32);
     const fit = Math.min(availW / imgW, availH / imgH);
     let hx = 0.5, hy = 0.5;
     for (const l of state.lights) { hx = Math.max(hx, Math.abs(l.x - 0.5) + 0.04); hy = Math.max(hy, Math.abs(l.y - 0.5) + 0.04); }
-    z = Math.min(availW / (imgW * fit * 2 * hx), availH / (imgH * fit * 2 * hy));
+    z = Math.min(1, availW / (imgW * fit * 2 * hx), availH / (imgH * fit * 2 * hy));
   }
-  state.viewZoom = clamp(z, 0.2, 1);
+  const v = viewBox(), r = canvas.getBoundingClientRect();
+  const [cx, cy] = at || [(v.left + v.right) / 2, (v.top + v.bottom) / 2];
+  const u = r.width ? (cx - r.left) / r.width : 0.5, w = r.height ? (cy - r.top) / r.height : 0.5;
+  state.viewZoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
   fitCanvas();
+  if (state.viewZoom > 1) {
+    const n = canvas.getBoundingClientRect();
+    scroller.scrollLeft += n.left + u * n.width - cx;
+    scroller.scrollTop += n.top + w * n.height - cy;
+  }
+  repositionHandles();
   document.dispatchEvent(new Event('digilight:zoom'));
+}
+
+/**
+ * Zoom and pan gestures on the stage. Ctrl/Cmd + wheel zooms about the pointer (a
+ * trackpad pinch arrives as exactly that in Chromium); a plain wheel or two-finger
+ * swipe scrolls natively. Hold Space over the painting and drag, or drag with the
+ * middle button, to pan like an image editor's hand tool: it wins over dots and brushes.
+ */
+function wireZoomGestures() {
+  const stage = $('stage');
+  wrap.addEventListener('wheel', (e) => {
+    const px = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      // A wheel notch is one capped step; a pinch sends many small deltas, so it glides.
+      setZoom((state.viewZoom || 1) * Math.exp(clamp(-e.deltaY * px * 0.01, -0.22, 0.22)), [e.clientX, e.clientY]);
+    } else if (!scroller.contains(e.target)) {
+      // The dots sit outside the scrolling box; scrolling over one still scrolls.
+      e.preventDefault();
+      scroller.scrollBy(e.deltaX * px, e.deltaY * px);
+    }
+  }, { passive: false });
+  scroller.addEventListener('scroll', () => { repositionHandles(); scheduleSharp(); }, { passive: true });
+
+  let over = false, held = false;
+  const hand = (on) => { held = on; stage.classList.toggle('panReady', on); };
+  stage.addEventListener('pointerenter', () => { over = true; });
+  stage.addEventListener('pointerleave', () => { over = false; });
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || (!over && !held) || e.ctrlKey || e.metaKey || e.altKey
+      || e.target.matches('input:not([type=range]),textarea,select')) return;
+    e.preventDefault();   // no page scroll, and no click on a focused button
+    if (!held) hand(true);
+  });
+  document.addEventListener('keyup', (e) => { if (e.code === 'Space' && held) { e.preventDefault(); hand(false); } });
+  window.addEventListener('blur', () => hand(false));
+  // Capture on the stage, ahead of the dots, the brush and the sphere placer.
+  stage.addEventListener('pointerdown', (e) => {
+    if (!wrap.contains(e.target) || !(e.button === 1 || (e.button === 0 && held))) return;
+    e.preventDefault(); e.stopPropagation();
+    wrap.setPointerCapture(e.pointerId);
+    const x0 = e.clientX, y0 = e.clientY, sl = scroller.scrollLeft, st = scroller.scrollTop;
+    stage.classList.add('panning');
+    const move = (ev) => { scroller.scrollLeft = sl - (ev.clientX - x0); scroller.scrollTop = st - (ev.clientY - y0); };
+    const up = () => {
+      wrap.removeEventListener('pointermove', move); wrap.removeEventListener('pointerup', up); wrap.removeEventListener('pointercancel', up);
+      stage.classList.remove('panning');
+    };
+    wrap.addEventListener('pointermove', move);
+    wrap.addEventListener('pointerup', up);
+    wrap.addEventListener('pointercancel', up);
+  }, true);
+  // Keep the middle button from starting the browser's autoscroll.
+  wrap.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
 }
 
 // ---------------------------------------------------------------- lights UI
@@ -465,22 +550,19 @@ function applyColor(l) {
   l.rgb = l.useKelvin ? kelvinToLinearRGB(l.kelvin) : hexToLinearRGB(l.hex);
 }
 
-// Lights may sit beyond the visible stage; pin those dots to its edge (dashed) so
-// they stay grabbable. Zooming out shows where they really are.
+// Lights may sit beyond the visible part of the stage, off the painting or scrolled
+// out of view; pin those dots to its edge (dashed) so they stay grabbable. Dots are
+// placed in the frame's pixels, so they follow every zoom, scroll and resize.
 function placeHandle(d, l) {
-  let x = l.x * 100, y = (1 - l.y) * 100;
-  const s = $('stage').getBoundingClientRect(), w = canvas.getBoundingClientRect();
-  if (w.width > 0 && w.height > 0) {
-    const pad = 14;
-    const px = clamp(x, (s.left + pad - w.left) / w.width * 100, (s.right - pad - w.left) / w.width * 100);
-    const py = clamp(y, (s.top + pad - w.top) / w.height * 100, (s.bottom - pad - w.top) / w.height * 100);
-    const pinned = Math.abs(px - x) > 0.01 || Math.abs(py - y) > 0.01;
-    d.classList.toggle('pinned', pinned);
-    d.title = pinned ? 'This light is beyond the view. Zoom out (−) or Show all lights to see where it is.' : '';
-    x = px; y = py;
-  }
-  d.style.left = `${x}%`;
-  d.style.top = `${y}%`;
+  const c = canvas.getBoundingClientRect(), f = wrap.getBoundingClientRect(), v = viewBox(), pad = 14;
+  const x = c.left + l.x * c.width, y = c.top + (1 - l.y) * c.height;
+  const px = clamp(x, v.left + pad, Math.max(v.left + pad, v.right - pad));
+  const py = clamp(y, v.top + pad, Math.max(v.top + pad, v.bottom - pad));
+  const pinned = Math.abs(px - x) > 0.5 || Math.abs(py - y) > 0.5;
+  d.classList.toggle('pinned', pinned);
+  d.title = pinned ? 'This light is beyond the view. Scroll, zoom out (−) or Show all lights to see where it is.' : '';
+  d.style.left = `${px - f.left}px`;
+  d.style.top = `${py - f.top}px`;
 }
 function repositionHandles() {
   wrap.querySelectorAll('.handle').forEach((d, i) => { if (state.lights[i]) placeHandle(d, state.lights[i]); });
@@ -561,41 +643,79 @@ function rebuildViews() {
 // same in the preview and in a full-resolution export.
 const PS_REFERENCE_W = 700;
 
-function updateDerived(workingW) {
+function updateDerived(workingW, st = state) {
   const W = Math.max(1, workingW);
   // Calibrated relief is a single-photo model; a capture measures its own heights.
-  state.calibrated = state.mode === 'single' && !!state.physical;
-  if (state.mode === 'photometric') {
+  st.calibrated = st.mode === 'single' && !!st.physical;
+  if (st.mode === 'photometric') {
     // Measured relief sits at its true physical scale whatever the resolution,
     // so shadow reach is a fraction of image width and stays put.
-    state.shadowDist = state.shadowSpread * 0.005;
-    state.shadowDistPx = state.shadowDist * W;
-    state.psHeightGain = PS_REFERENCE_W / W;
-  } else if (state.physical) {
+    st.shadowDist = st.shadowSpread * 0.005;
+    st.shadowDistPx = st.shadowDist * W;
+    st.psHeightGain = PS_REFERENCE_W / W;
+  } else if (st.physical) {
     // Calibrated: heights are in painting widths, so a normal's slope is the height
     // difference over the texel's width. That gain grows with resolution, which is
     // exactly the rescale export needs; shadow reach is geometry, not pixels.
-    const depth = physicalDepth(state);
-    state.heightScale = depth;
-    state.reliefStrength = depth * W / 2;
-    state.shadowDist = shadowReach(state, depth, imgH / Math.max(1, imgW));
-    state.shadowDistPx = state.shadowDist * W;
-    state.aoScale = 3 * Math.min(1, Math.sqrt(state.textureDepthMm / 2));
+    const depth = physicalDepth(st);
+    st.heightScale = depth;
+    st.reliefStrength = depth * W / 2;
+    st.shadowDist = shadowReach(st, depth, imgH / Math.max(1, imgW));
+    st.shadowDistPx = st.shadowDist * W;
+    st.aoScale = 3 * Math.min(1, Math.sqrt(st.textureDepthMm / 2));
   } else {
     // Single-image relief is parameterised in PIXELS, so its features shrink as
     // resolution rises; tying shadow reach to the relief scale keeps the two in
     // step. A fixed fraction of image width would leave shadows too long.
-    state.shadowDistPx = state.reliefScale * state.shadowSpread;
-    state.shadowDist = state.shadowDistPx / W;
+    st.shadowDistPx = st.reliefScale * st.shadowSpread;
+    st.shadowDist = st.shadowDistPx / W;
   }
+  // Graze Detail is a feature size in painting widths (the smoothing's full width
+  // at half maximum), so its blur in pixels follows the working width and a
+  // full-resolution export smooths exactly as much of the painting as the preview.
+  const g = st.graze;
+  st.grazeSigmaPx = st.mode === 'single' && g && g.enabled && g.opacity > 0
+    ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
+  // The graze light's own shadow reach: the main lights bound shadowDist, and a
+  // light a degree off the wall throws shadows far longer than any of theirs. Its
+  // Shadow length setting takes that share of the tallest relief over tan(elevation).
+  st.grazeReach = st.shadowDist;
+  if (st.calibrated && g && g.enabled && g.opacity > 0 && g.reach > 0) {
+    const rise = physicalDepth(st) * st.reliefAmount * 1.5;
+    st.grazeReach = Math.max(st.shadowDist, g.reach * Math.min(0.3, rise / Math.tan(g.elevation * Math.PI / 180)));
+  }
+  st.grazeReachPx = st.grazeReach * W;
+}
+
+/**
+ * The live settings as they apply to a render `outW` pixels wide, for an export or
+ * the sharp zoom. Single-image surface parameters are measured in pixels of the
+ * working image, so they are rescaled or a full-resolution render shows different
+ * relief from the preview; gradients are taken per texel, so the slope-to-normal
+ * gain scales too, or it reads far harsher. The photometric path measures geometry
+ * directly, so only the terms updateDerived() handles change. Built on a copy, so
+ * an interrupted render can never leave the preview rescaled.
+ */
+function renderState(outW) {
+  const st = { ...state };
+  if (st.mode !== 'photometric') {
+    const ratio = outW / imgW;
+    st.reliefScale *= ratio;
+    st.integrateTaps *= ratio;
+    st.reliefStrength *= ratio;
+  }
+  updateDerived(outW, st);
+  return st;
 }
 
 let pendingFrame = 0;
 function render() {
+  hideSharp();   // whatever is about to change, the sharp overlay would not show it
   if (!pendingFrame) pendingFrame = requestAnimationFrame(() => { pendingFrame = 0; renderNow(); });
 }
 function renderNow() {
   if (!srcTex || state.exporting) return;
+  hideSharp();
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
@@ -643,6 +763,8 @@ function renderNow() {
         state.heightStats = { ...gbuf.heightStats };
       }
       dirtySurface = false;
+    } else if (state.mode === 'single') {
+      gbuf.buildGraze(state.grazeSigmaPx);   // no-op unless the graze Detail changed
     }
     let drawTargets = targets;
     if (state.mode === 'photometric' && state.psShowTruth && truthTex) {
@@ -659,7 +781,82 @@ function renderNow() {
     } else {
       shader.draw(drawTargets, state, imgH / imgW, imgW, imgH);
     }
+    scheduleSharp();
   } catch (e) { fail(e); }
+}
+
+// ---------------------------------------------------------------- sharp zoom
+
+// The preview works on a copy of at most 1400 px, so zoomed in far enough it shows
+// its own pixels. Once the view has been still for a moment, the visible part is
+// rendered again from the full-resolution source, through the export's tiles with
+// the export's rescaled settings, at about one pixel per screen pixel, and laid
+// exactly over the preview. Anything that changes the picture or the view hides it
+// at once and starts the wait again; a newer request cancels a render in flight.
+const SHARP_IDLE_MS = 250;
+const sharp = document.createElement('canvas');
+sharp.id = 'sharp';
+sharp.style.display = 'none';
+paper.appendChild(sharp);
+let sharpTimer = 0, sharpJob = 0, sharpShown = null;
+
+/** Cancel a pending or running sharp render, leaving what is shown. */
+function cancelSharp() {
+  clearTimeout(sharpTimer);
+  sharpJob++;
+}
+function hideSharp() {
+  cancelSharp();
+  if (sharpShown) { sharp.style.display = 'none'; sharpShown = null; }
+}
+function scheduleSharp() {
+  hideSharp();
+  if (sharpPlan()) sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS);
+}
+
+/**
+ * What a sharp render of the view would cover, or null when it would add nothing:
+ * not zoomed past fit, the screen shows no more pixels than the preview has, or the
+ * photo has no more either. Single photographs only.
+ */
+function sharpPlan() {
+  if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource || (state.viewZoom || 1) <= 1) return null;
+  const c = canvas.getBoundingClientRect(), v = viewBox();
+  if (!c.width || !c.height) return null;
+  // About one output pixel per screen pixel, never more than the photo has.
+  const outW = Math.min(fullW, Math.round(c.width * (window.devicePixelRatio || 1)));
+  if (outW < imgW * 1.05) return null;
+  const outH = Math.max(1, Math.round(fullH * outW / fullW));
+  const x0 = clamp((v.left - c.left) / c.width, 0, 1), x1 = clamp((v.right - c.left) / c.width, 0, 1);
+  const y0 = clamp((v.top - c.top) / c.height, 0, 1), y1 = clamp((v.bottom - c.top) / c.height, 0, 1);
+  const x = Math.floor(x0 * outW), y = Math.floor(y0 * outH);
+  const rect = { x, y, w: Math.ceil(x1 * outW) - x, h: Math.ceil(y1 * outH) - y };
+  return rect.w > 0 && rect.h > 0 ? { outW, outH, rect } : null;
+}
+
+async function renderSharp() {
+  const plan = sharpPlan();
+  if (!plan) return;
+  const job = sharpJob, { outW, outH, rect } = plan;
+  // The tiles reuse the preview's surface targets, so the next frame rebuilds them.
+  dirtySurface = true;
+  let done = false;
+  sharp.width = rect.w; sharp.height = rect.h;
+  try {
+    done = await renderTiles(glctx, { gbuf, photo, shader },
+      { mode: 'single', source: fullSource, width: outW, height: outH }, renderState(outW), rect,
+      sharp.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting });
+  } catch (e) {
+    console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
+  } finally {
+    gbuf.resize(imgW, imgH);   // give back the tile-sized targets now, not at the next frame
+  }
+  if (!done || job !== sharpJob) return;
+  Object.assign(sharp.style, {
+    left: `${rect.x / outW * 100}%`, top: `${rect.y / outH * 100}%`,
+    width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%`, display: '',
+  });
+  sharpShown = { outW, outH, rect: { ...rect } };
 }
 
 function syncOutputs() {
@@ -774,10 +971,14 @@ async function boot() {
   // should be checked against pixels rather than by eye.
   window.__bench = {
     state, render: renderNow, setSource, loadSynthetic, canvas, applyColor,
-    exportFullRes: (job, onP) => exportFullRes(glctx, { gbuf, photo, shader },
-      job || { mode: 'single', source: fullSource }, state, onP),
+    // A real full-resolution export: settings rescaled exactly as the Export button does.
+    exportFullRes: (job, onP) => exportImage(job || { mode: 'single', source: fullSource }, onP),
+    // The sharp zoom overlay, while it is shown: its canvas and the output-pixel
+    // rectangle of an outW x outH render that it holds.
+    sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     // --- diagnostics used by the test harness
     shots: () => shots,
+    gbuf, glctx,
     dirty: () => { dirtySurface = true; },
     measureFit: () => photo.measureResidual(imgW, imgH, residualExclusion()),
     residualTarget: () => photo.targets && photo.targets.residual,
@@ -817,12 +1018,14 @@ async function boot() {
     getFullSource: () => fullSource,
     caps: () => glctx.caps,
   };
-  const relayout = () => { fitCanvas(); if (srcTex) render(); };
+  // Re-fitting goes through setZoom so a zoomed-in view keeps its centre in place.
+  const relayout = () => { setZoom(state.viewZoom); if (srcTex) render(); };
   window.addEventListener('resize', relayout);
   window.addEventListener('orientationchange', () => setTimeout(relayout, 120));
   // The panel can change height as sections show and hide, which changes the
   // stage box; observing it is more reliable than guessing when that happens.
-  if (window.ResizeObserver) new ResizeObserver(() => fitCanvas()).observe($('stage'));
+  if (window.ResizeObserver) new ResizeObserver(() => setZoom(state.viewZoom)).observe($('stage'));
+  wireZoomGestures();
   $('hint').addEventListener('click', () => $('hint').classList.add('gone'));
 }
 
@@ -842,29 +1045,12 @@ function wireExport() {
     const fmt = $('exportFmt').value;
     const scalePct = parseFloat($('exportScale').value) / 100;
     const outW = Math.max(1, Math.round(fullW * scalePct));
-    const ratio = outW / imgW;
 
     const photometric = state.mode === 'photometric';
-    const saved = {
-      reliefScale: state.reliefScale,
-      integrateTaps: state.integrateTaps,
-      reliefStrength: state.reliefStrength,
-    };
-    const clamped = [];
-
-    if (!photometric) {
-      // Single-image surface parameters are measured in pixels of the working
-      // image, so they have to be rescaled or the export shows different relief
-      // from the preview.
-      state.reliefScale = saved.reliefScale * ratio;
-      state.integrateTaps = saved.integrateTaps * ratio;
-      // Gradients are taken per texel, so the slope-to-normal gain increases as
-      // texels get smaller, or the export reads far harsher than the preview.
-      state.reliefStrength = saved.reliefStrength * ratio;
-      if (state.reliefScale > 16 || state.integrateTaps > 32) clamped.push('adaptive sampling for large export');
-    }
-    // The photometric path measures geometry directly, so nothing about the
-    // surface needs rescaling; updateDerived() handles the two terms that do.
+    // What the tiles will use: the settings rescaled to the output (renderState).
+    const scaled = renderState(outW);
+    const clamped = !photometric && (scaled.reliefScale > 16 || scaled.integrateTaps > 32)
+      ? ['adaptive sampling for large export'] : [];
 
     let solver = null;
     if (photometric) {
@@ -888,14 +1074,11 @@ function wireExport() {
       : { mode: 'single', source: rescale(fullSource) };
 
     try {
-      status.textContent = `margin ${requiredMargin(state)}px — starting…`;
+      status.textContent = `margin ${requiredMargin(scaled)}px — starting…`;
       const t0 = performance.now();
-      updateDerived(outW);
-      const exportState = { ...state, viewMode: 0 };
-      state.exporting = true;
-      const canvas = await exportFullRes(glctx, { gbuf, photo, shader }, job, exportState, (frac, i, n) => {
+      const canvas = await exportImage(job, (frac, i, n) => {
         status.textContent = `tile ${i}/${n} — ${Math.round(frac * 100)}%`;
-      });
+      }, { viewMode: 0 });
       status.textContent = 'encoding…';
       const bytes = await downloadCanvas(
         canvas,
@@ -910,15 +1093,31 @@ function wireExport() {
       status.textContent = 'failed — see console';
       fail(e);
     } finally {
-      state.exporting = false;
       document.querySelectorAll('[data-export-disabled]').forEach(el => { el.disabled = el.dataset.exportDisabled === 'true'; delete el.dataset.exportDisabled; });
       wrap.style.pointerEvents = '';
-      Object.assign(state, saved);
-      dirtySurface = true;
       render();
       btn.disabled = false;
     }
   });
+}
+
+/**
+ * Render `job` whole at its source's resolution with the live settings rescaled to
+ * it (renderState), for the Export button and the test harness. The preview and the
+ * sharp zoom stand still meanwhile; the preview's surface rebuilds afterwards, since
+ * the tiles reuse its targets. `extra` overrides settings for the export only.
+ */
+async function exportImage(job, onProgress, extra) {
+  const src = job.mode === 'photometric' ? job.sources[0] : job.source;
+  const st = Object.assign(renderState(src.width || src.naturalWidth), extra);
+  state.exporting = true;
+  cancelSharp();
+  try {
+    return await exportFullRes(glctx, { gbuf, photo, shader }, job, st, onProgress);
+  } finally {
+    state.exporting = false;
+    dirtySurface = true;
+  }
 }
 
 // ------------------------------------------------------------- chrome sphere
@@ -949,6 +1148,7 @@ function wireSpherePlacement() {
     state.placingSphere = !state.placingSphere;
     btn.className = state.placingSphere ? 'on' : '';
     wrap.style.cursor = state.placingSphere ? 'crosshair' : '';
+    wrap.classList.toggle('placing', state.placingSphere);   // a finger drags the circle, not the view
     $('sphStatus').textContent = state.placingSphere
       ? 'Drag from the centre of the sphere out to its edge.'
       : '';
@@ -975,6 +1175,7 @@ function wireSpherePlacement() {
       state.placingSphere = false;
       $('sphPlace').className = '';
       wrap.style.cursor = '';
+      wrap.classList.remove('placing');
       reportSphere();
     };
     wrap.addEventListener('pointermove', move);
@@ -983,12 +1184,12 @@ function wireSpherePlacement() {
 }
 
 function drawSphereOverlay() {
-  let el = wrap.querySelector('.sphere-ring');
+  let el = paper.querySelector('.sphere-ring');
   if (!state.sphere) { if (el) el.remove(); return; }
   if (!el) {
     el = document.createElement('div');
     el.className = 'sphere-ring';
-    wrap.appendChild(el);
+    paper.appendChild(el);
   }
   const s = state.sphere;
   el.style.left = `${s.cx * 100}%`;

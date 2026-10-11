@@ -5,10 +5,9 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-11
-- Last code change on `main`: `b7997a6` (2026-10-10), merged via `c074e30` —
-  layer masks, Graze light effect (any-direction dial, opacity, visible/hidden).
-  Pushed to `main` 10-11 by fast-forwarding `claude/nice-carson-xrfdd2` (`684b6dd`);
-  `node tests/browser.cjs` passes (28/28)
+- Last code change on `main`: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom
+  to 400%, graze relief/Shadow length/Softness/presets fixes, graze lab
+- Before that: `b7997a6` (2026-10-10), via `c074e30` — layer masks, Graze light effect
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -31,8 +30,22 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
-- 10-11: `claude/nice-carson-xrfdd2` (layer masks, Graze light, handoff notes) pushed to
-  `main` as a fast-forward; no code changes in this push, only this file.
+- 10-11: merged `claude/epic-wright-h77sdu` into `main` (zoom to 400%, graze fixes below
+  now live). The earlier 10-11 push only carried layer masks and graze light.
+- 10-11 (merged from `claude/epic-wright-h77sdu`):
+  - View zoom 20–400%: stage scrolls past 100%; Ctrl/Cmd+wheel/pinch zooms about the
+    pointer; Space/middle-drag pans. Sharp zoom re-renders the visible region from the
+    full-res photo after 250 ms idle via `renderTiles` (export.js, shared with Export);
+    `renderState(outW)` gives a rescaled state COPY (never mutate live state).
+  - Graze artifacts fixed (user: "chunky", "artificial texture" at 1–3°): graze uses
+    its own smoothed relief (`GBuffer.buildGraze`, Detail in painting widths), fine
+    relief only in shading (Fine texture × tan(e)/tan 10°), own shadow reach
+    (`grazeReach`), Clean shadows (blocker bias), Softness (source size). Presets in
+    `grazePresets` (presets.js); default = Classic raking. Old saves validate to
+    neutral values (look unchanged).
+  - `tools/graze-lab.cjs` + `GBuffer.afterHeight` seam: scores the graze vs true
+    relief on synthetic paintings. Tried and dropped (negative): azimuth-spread strip
+    light, coherence-adaptive smoothing. Tests take `DIGILIGHT_PORT`.
 - 10-10 (merged `c074e30`): Graze light section replaces the per-light
   "Graze from L/R/T/B" buttons. `state.graze` `{enabled, angle, elevation, opacity}`
   (angle = where light comes from, 0° right, 90° top) drives one extra hard light in
@@ -75,8 +88,10 @@ of a painting → estimate surface relief → relight with movable virtual light
 2. Optional "match original brightness" exposure after a lighting preset
 3. Project save for the multi-photo capture workflow (currently single-photo only)
 4. Large-export memory limits / preview vs export differences at very high res
-5. User feedback on grazing light (3° default; estimated relief gets glittery below
-   that) and on layers/masks (maybe a "current result" source, mask brush hardness,
+5. User feedback on the graze presets on real photos (lab is synthetic only); the
+   1–1.5° presets still lose some real ridge shadow and read bright — a better
+   ridge-vs-grain discriminator would help.
+6. Feedback on layers/masks (maybe a "current result" source, mask brush hardness,
    showing the mask alone)
 
 ## Gotchas

@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -8,7 +8,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Shrink the view to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Enlarge the view ( + key )">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 400% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -64,9 +64,17 @@ export function initStudio(api) {
       <line class="ray" x2="0" y2="0"/><circle class="knob" r="7"/></svg>
       <div class="grazeSide"><button id="grazeVis" title="Show or hide the graze light; its settings are kept">Hidden</button><output id="grazeReadout"></output>
       <p class="note">Drag round the circle to set where the light comes from. Shift snaps to 15°; arrow keys nudge.</p></div></div>
+    <label class="selectRow">Graze preset<select id="grazePreset"><option value="">Choose a look…</option></select></label>
     <div class="row"><label for="grazeOpacity">Opacity</label><input id="grazeOpacity" type="range" min="0" max="1" step="0.01"><output data-own></output></div>
     <div class="row"><label for="grazeElevation">Angle to wall</label><input id="grazeElevation" type="range" min="${GRAZE_EL_MIN}" max="${GRAZE_EL_MAX}" step="0.5"><output data-own></output></div>
-    <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p></div>`;
+    <div class="row"><label for="grazeDetail">Detail</label><input id="grazeDetail" type="range" min="0" max="${GRAZE_DETAIL_MAX}" step="0.001"><output data-own></output></div>
+    <div class="row"><label for="grazeFine">Fine texture</label><input id="grazeFine" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeReach">Shadow length</label><input id="grazeReach" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeClean">Clean shadows</label><input id="grazeClean" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeSoft">Softness</label><input id="grazeSoft" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
+    <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
+    <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do. Softness: a bigger lamp, from a bare bulb to a strip light; softer shadow edges and calmer grain.</p></div>`;
   lights.after(grazeBox);
   for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
@@ -83,7 +91,7 @@ export function initStudio(api) {
     b.setAttribute('aria-label', b.title);
     $('photoCompass').append(b);
   }
-  const GRAZE_DEFAULT = { enabled: false, angle: 180, elevation: 3, opacity: 0.75 };
+  const GRAZE_DEFAULT = { enabled: false, angle: 180, ...grazePresets['Classic raking'] };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
@@ -111,7 +119,7 @@ export function initStudio(api) {
   const beam = document.createElementNS('http://www.w3.org/2000/svg','svg');
   beam.id='beamGuide';beam.setAttribute('viewBox','0 0 100 100');beam.setAttribute('preserveAspectRatio','none');
   beam.innerHTML='<title>Approximate beam footprint and aim</title><ellipse fill="none" stroke="white" stroke-opacity=".3" stroke-width=".3" stroke-dasharray="1 1"/><line stroke="white" stroke-opacity=".45" stroke-width=".3" stroke-dasharray="1 1"/>';
-  $('wrap').append(beam);
+  $('paper').append(beam);
   function updateBeam(){const l=state.lights[state.selected];beam.style.display=l?.enabled?'':'none';if(!l)return;const x=(l.aimX??l.x)*100,y=(1-(l.aimY??l.y))*100;const cos=.02+.965*l.cone;const radius=Math.min(180,l.z*Math.sqrt(1-cos*cos)/cos*100);const ell=beam.querySelector('ellipse');for(const [k,v] of Object.entries({cx:x,cy:y,rx:radius,ry:radius/(api.canvas.height/api.canvas.width)}))ell.setAttribute(k,v);const line=beam.querySelector('line');for(const [k,v] of Object.entries({x1:l.x*100,y1:(1-l.y)*100,x2:x,y2:y}))line.setAttribute(k,v);}
   document.addEventListener('digilight:render',updateBeam); updateBeam();
   function stamp(point, mode, radius, aspect, c = ctx, alpha = 0.22) {
@@ -188,6 +196,15 @@ export function initStudio(api) {
     grazeBox.classList.toggle('grazeOff', !g.enabled);
     $('grazeOpacity').value = g.opacity; $('grazeOpacity').nextElementSibling.textContent = `${Math.round(g.opacity * 100)}%`;
     $('grazeElevation').value = g.elevation; $('grazeElevation').nextElementSibling.textContent = `${g.elevation.toFixed(1)}°`;
+    // Detail is a fraction of the painting's width; shown in mm on this painting.
+    const mm = g.detail * state.paintingWidthCm * 10;
+    $('grazeDetail').value = g.detail; $('grazeDetail').nextElementSibling.textContent = g.detail > 0 ? `${mm.toFixed(mm < 10 ? 1 : 0)} mm` : 'all';
+    $('grazeFine').value = g.fine; $('grazeFine').nextElementSibling.textContent = `${Math.round(g.fine * 100)}%`;
+    $('grazeReach').value = g.reach; $('grazeReach').nextElementSibling.textContent = `${Math.round(g.reach * 100)}%`;
+    $('grazeClean').value = g.clean; $('grazeClean').nextElementSibling.textContent = `${Math.round(g.clean * 100)}%`;
+    $('grazeSoft').value = g.soft; $('grazeSoft').nextElementSibling.textContent = `${Math.round(g.soft * 100)}%`;
+    const match = Object.entries(grazePresets).find(([, v]) => Object.entries(v).every(([k, x]) => Math.abs(g[k] - x) < 1e-6));
+    $('grazePreset').value = match ? match[0] : '';
   }
   // Adjusting any graze control shows the effect, so the change is visible.
   function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); renderGraze(); render(); }
@@ -195,6 +212,13 @@ export function initStudio(api) {
   $('grazeVis').onclick = () => { state.graze.enabled = !state.graze.enabled; renderGraze(); render(); };
   $('grazeOpacity').oninput = e => setGraze({ opacity: +e.target.value });
   $('grazeElevation').oninput = e => setGraze({ elevation: +e.target.value });
+  $('grazeDetail').oninput = e => setGraze({ detail: +e.target.value });
+  $('grazeFine').oninput = e => setGraze({ fine: +e.target.value });
+  $('grazeReach').oninput = e => setGraze({ reach: +e.target.value });
+  $('grazeClean').oninput = e => setGraze({ clean: +e.target.value });
+  $('grazeSoft').oninput = e => setGraze({ soft: +e.target.value });
+  for (const name of Object.keys(grazePresets)) $('grazePreset').add(new Option(name, name));
+  $('grazePreset').onchange = e => { const v = grazePresets[e.target.value]; if (v) setGraze({ ...v }); };
   $('grazeDial').addEventListener('pointerdown', e => {
     const dial = $('grazeDial'); e.preventDefault(); dial.focus(); dial.setPointerCapture(e.pointerId);
     const move = ev => {
@@ -254,10 +278,11 @@ export function initStudio(api) {
     if (e.key === 'Escape') stopSweep();
     if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (e.key === '-' || e.key === '_') $('zoomOut').click(); else if (e.key === '=' || e.key === '+') $('zoomIn').click(); else if (e.key === '0') $('zoomFit').click(); }
   });
-  const zoomSteps=[1,0.85,0.7,0.55,0.4,0.3,0.2];
+  // View zoom: 100% fits the stage. Steps from any zoom (a pinch lands between them) go to the next one.
+  const zoomSteps=[4,3,2,1.5,1.25,1,0.85,0.7,0.55,0.4,0.3,0.2];
   const zoomTo=z=>api.setZoom(z);
   $('zoomOut').onclick=()=>zoomTo(zoomSteps.find(z=>z<(state.viewZoom||1)-0.01)??0.2);
-  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??1);
+  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??4);
   $('zoomFit').onclick=()=>zoomTo(1);
   $('zoomLights').onclick=()=>zoomTo('lights');
   document.addEventListener('digilight:zoom',()=>{$('zoomFit').textContent=`${Math.round((state.viewZoom||1)*100)}%`;});
@@ -315,7 +340,7 @@ export function initStudio(api) {
   $('surfacePreset').onchange=e=>{if(textures[e.target.value]){useTexture(e.target.value); sync();}};
   $('materialPreset').onchange=e=>{const v=materials[e.target.value]; if(!v)return; [state.roughness,state.specular,state.metallic]=v; sync();};
   $('photoCompass').onclick=e=>{const b=e.target.closest('button'); if(!b)return; usePhotoLight(b.dataset.dir); sync();};
-  for (const key of ['textureDepthMm','paintingWidthCm']) $(key).oninput=e=>{calibrate(); state[key]=+e.target.value; api.dirty(); syncQuick(); render();};
+  for (const key of ['textureDepthMm','paintingWidthCm']) $(key).oninput=e=>{calibrate(); state[key]=+e.target.value; api.dirty(); syncQuick(); renderGraze(); render();};
   $('resetLighting').onclick=()=>{useLighting('Gallery track'); state.exposure=0; sync();};
   function autoSetup() {
     if (state.mode !== 'single') { $('autoStatus').textContent='Auto setup is for single photographs; capture mode uses measured light directions.'; return; }
@@ -406,7 +431,8 @@ export function initStudio(api) {
     const mode=layer?(brush==='maskShow'?'show':'hide'):brush, slot=maskLayer;
     const stroke={mode,radius:+$(layer?'maskBrushSize':'brushSize').value/r.width,aspect:r.height/r.width,points:[]};
     const add=ev=>{
-      const p=[Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(ev.clientY-r.top)/r.height))];
+      // Measured per point: a zoomed-in view can scroll mid-stroke.
+      const b=api.canvas.getBoundingClientRect(),p=[Math.max(0,Math.min(1,(ev.clientX-b.left)/b.width)),Math.max(0,Math.min(1,(ev.clientY-b.top)/b.height))];
       const prev=stroke.points.at(-1)||p;const n=Math.max(1,Math.ceil(Math.hypot(p[0]-prev[0],(p[1]-prev[1])*stroke.aspect)/(stroke.radius*0.25)));
       for(let i=1;i<=n;i++){const q=[prev[0]+(p[0]-prev[0])*i/n,prev[1]+(p[1]-prev[1])*i/n];stroke.points.push(q);if(layer)stamp(q,mode,stroke.radius,stroke.aspect,lctx,MASK_ALPHA);else stamp(q,mode,stroke.radius,stroke.aspect);}
       if(layer){copyLayerChannel(slot);state.layerMaskVersion++;}else state.maskVersion++;
@@ -450,9 +476,11 @@ export function initStudio(api) {
     const layers=p.settings.layers??[];if(!Array.isArray(layers)||layers.length>MAX_LAYERS)throw new Error('Invalid layers.');
     settings.layers=layers.map(L=>{if(!blendModes.some(([k])=>k===L?.mode)||!layerSources.some(([k])=>k===L.source)||!Number.isFinite(L.opacity)||L.opacity<0||L.opacity>1)throw new Error('Invalid layer.');const layer={mode:L.mode,source:L.source,opacity:L.opacity,enabled:L.enabled!==false};if(L.mask!=null){if(typeof L.mask!=='object')throw new Error('Invalid layer mask.');layer.mask={base:L.mask.base?1:0,strokes:checkStrokes(L.mask.strokes??[],['show','hide'])};}return layer;});
     settings.strokes=checkStrokes(p.settings.strokes||[],['add','remove']);
-    const g=p.settings.graze??GRAZE_DEFAULT;
-    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1)throw new Error('Invalid graze light.');
-    settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity};
+    // Graze settings saved before Detail, Shadow length, Clean shadows or Softness
+    // existed open with those at their neutral values, so they look as they did.
+    const g=p.settings.graze??GRAZE_DEFAULT, detail=g?.detail??0, fine=g?.fine??1, reach=g?.reach??0, clean=g?.clean??0, soft=g?.soft??0;
+    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean,soft].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1||soft<0||soft>1)throw new Error('Invalid graze light.');
+    settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean,soft};
     return settings;
   }
   async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
