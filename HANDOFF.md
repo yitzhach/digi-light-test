@@ -4,9 +4,11 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-10
-- Last code change on `main`: `c074e30` (2026-10-10) — merged `claude/epic-wright-h77sdu`:
-  layer masks, Graze light effect (any-direction dial, opacity, visible/hidden)
+- Last updated: 2026-10-11
+- Last code change on `main`: `b7997a6` (2026-10-10), merged via `c074e30` —
+  layer masks, Graze light effect (any-direction dial, opacity, visible/hidden).
+  Pushed to `main` 10-11 by fast-forwarding `claude/nice-carson-xrfdd2` (`684b6dd`);
+  `node tests/browser.cjs` passes (28/28)
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -29,6 +31,8 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
 ## Done recently
+- 10-11: `claude/nice-carson-xrfdd2` (layer masks, Graze light, handoff notes) pushed to
+  `main` as a fast-forward; no code changes in this push, only this file.
 - 10-10 (merged `c074e30`): Graze light section replaces the per-light
   "Graze from L/R/T/B" buttons. `state.graze` `{enabled, angle, elevation, opacity}`
   (angle = where light comes from, 0° right, 90° top) drives one extra hard light in
