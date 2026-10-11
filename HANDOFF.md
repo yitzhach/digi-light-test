@@ -29,6 +29,27 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `python3 -m http.server 8766` then open http://localhost:8766
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
+## Real-painting test (next session starts here)
+Graze tuning so far is measured only on synthetic paintings (`tools/graze-lab.cjs`).
+To judge it on a real painting, by eye:
+1. Photo: a painted surface with visible impasto, sharp, straight-on, ~2000 px+ wide.
+   Ideally two shots: the normal photo, and one with a torch/lamp raking from the left
+   (the direction the graze defaults to). Note the painting's width (cm) and a guess
+   at impasto depth (mm).
+2. Load the normal photo. Set Painting width, Texture depth and Photo was lit (Even
+   for a normal photo) under Quick setup; leave Fine-tune alone.
+3. Open **Graze light · raking texture**, click Visible, and step through the presets
+   (Gentle raking, Classic raking, Long shadows, Soft strip light, Every detail (raw)).
+   Keep Opacity at each preset's value. Use B / Split to compare against the original.
+4. Zoom to 200–400% on a stretch with clear ridges. Check for: blocky or "chunky"
+   relief, glitter/shimmer, shadows where the paint is flat, and missing shadows at
+   ridges you can see.
+5. Compare with the raking photo: set the graze direction to match the lamp (0° right,
+   90° top, 180° left) and Angle to wall 1–3°. Shadow positions should match where the
+   lamp's shadows fall.
+6. Record: preset, Angle to wall, Opacity, direction, Texture depth, and a zoomed
+   Split screenshot of one region. Note what looks wrong and where.
+
 ## Done recently
 - 10-11: merged `claude/epic-wright-h77sdu` into `main` (zoom to 400%, graze fixes below
   now live). The earlier 10-11 push only carried layer masks and graze light.
@@ -84,7 +105,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 
 ## Next up (candidates — confirm with user)
 1. Check calibrated relief on real photos of impasto (synthetic-only so far; the
-   cloud environment's network policy blocked Wikimedia)
+   cloud environment's network policy blocked Wikimedia). See "Real-painting test" above.
 2. Optional "match original brightness" exposure after a lighting preset
 3. Project save for the multi-photo capture workflow (currently single-photo only)
 4. Large-export memory limits / preview vs export differences at very high res
