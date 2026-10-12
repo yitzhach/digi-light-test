@@ -38,8 +38,13 @@ export const photoDirections = [
   ['bl', '↙', 'bottom-left', 225], ['b', '↓', 'bottom', 270], ['br', '↘', 'bottom-right', 315],
 ];
 // Even-light share used for each case. Measured on the synthetic rigs: 0.6 is best
-// for soft even light; any share hurts a side-lit photo, so sides use none.
+// for soft even light. Those rigs score a side-lit photo best with none, but they
+// have no cast shadows: a real raking photo (lamp a few degrees off the wall, room
+// light filling in) has them, and the directional estimate alone integrates each
+// shadow into a streak along the light. Some even-light share removes the streaks
+// on real photos and costs little on the rigs, so sides use SIDE_SHARE.
 export const EVEN_SHARE = 0.6;
+export const SIDE_SHARE = 0.35;
 
 /**
  * One dial from spotlight to diffused light. Sets the three things that make the

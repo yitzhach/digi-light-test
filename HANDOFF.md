@@ -4,7 +4,7 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-11
+- Last updated: 2026-10-12
 - Last code change on `main`: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom
   to 400%, graze relief/Shadow length/Softness/presets fixes, graze lab
 - Before that: `b7997a6` (2026-10-10), via `c074e30` — layer masks, Graze light effect
@@ -51,6 +51,18 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-12 (branch `claude/laughing-mendel-u7jr3c`, not yet on `main`): first real-painting
+  tests (user photos, not in repo). Painting B: 19" wide, ~1/8" (3.2 mm) impasto, lamp
+  ~32" above the top at the right edge, ~4" off the wall (graze 78°, ~5°), plus room
+  light. With Photo was lit = Even, graze at the lamp's angle reproduces the photo's
+  stroke ridges well. Choosing the real direction (top/top-right) made it WORSE:
+  share 0 integrates every cast shadow into a streak along the light. Fix: side
+  directions now use `SIDE_SHARE` 0.35 even-light share (presets.js), not 0.
+  Synthetic cost (graze-lab, new `oil-raking` case; rigs have no cast shadows):
+  vsFull at 1.5° 0.66→0.53 raking, 0.57→0.46 one-light; same-settings corr −0.03;
+  broad ~unchanged. Painting A (1031 px, side-lit, set to Even) showed diagonal
+  streaks and a dark window read as raised. "Every detail (raw)" is too dark and
+  glittery on both; graze renders darker than the photos (room fill light).
 - 10-11: merged `claude/epic-wright-h77sdu` into `main` (zoom to 400%, graze fixes below
   now live). The earlier 10-11 push only carried layer masks and graze light.
 - 10-11 (merged from `claude/epic-wright-h77sdu`):
@@ -104,6 +116,9 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+0. From the real-painting tests: retune/remove "Every detail (raw)"; a shadow-aware
+   directional estimate (or a synthetic rig with cast shadows + fill) to replace the
+   fixed SIDE_SHARE; red ground relit brighter/oranger than the photo.
 1. Check calibrated relief on real photos of impasto (synthetic-only so far; the
    cloud environment's network policy blocked Wikimedia). See "Real-painting test" above.
 2. Optional "match original brightness" exposure after a lighting preset

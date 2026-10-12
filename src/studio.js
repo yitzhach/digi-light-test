@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG } from './presets.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -333,7 +333,7 @@ export function initStudio(api) {
     // A side-lit photo has strong baked shading to take out before relighting; an
     // evenly lit one has little, and removing more only removes painted detail.
     if (d[3]===null) { state.photoDiffuse=EVEN_SHARE; state.albedoSuppress=0.2; }
-    else { state.photoDiffuse=0; state.azimuthDeg=d[3]; state.albedoSuppress=0.5; }
+    else { state.photoDiffuse=SIDE_SHARE; state.azimuthDeg=d[3]; state.albedoSuppress=0.5; }
     api.dirty();
   }
   $('lightingPreset').onchange=e=>{if(e.target.value) {useLighting(e.target.value); sync();}};

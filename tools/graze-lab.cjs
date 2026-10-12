@@ -41,6 +41,7 @@ fs.mkdirSync(CACHE, { recursive: true });
 const CASES = [
   { name: 'plaster-even', synth: { lighting: 'diffuse', pigmentDetail: 0.35, grain: 0.35, seed: 11 }, photo: { photoDiffuse: 0.6 } },
   { name: 'oil-onelight', synth: { lighting: 'single', pigmentDetail: 0.35, grain: 0.1, seed: 7 }, photo: { photoDiffuse: 0, azimuthDeg: 141 } },
+  { name: 'oil-raking', synth: { lighting: 'raking', pigmentDetail: 0.35, grain: 0.1, seed: 7 }, photo: { photoDiffuse: 0, azimuthDeg: 167 } },
 ];
 
 (async () => {
