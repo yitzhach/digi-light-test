@@ -106,6 +106,27 @@ export const GRAZE_CLEAN_MAX = 0.1;
 // and wraps light past the terminator, which calms what grain is left at low angles
 // more than spreading several hard lights round the painting did (tools/graze-lab.cjs).
 export const GRAZE_SIZE_MAX = 0.04;
+
+// Calibrate (match a raking photo): the graze light as the real lamp, measured in cm
+// from the painting's edges: `left` across from the left edge, `above` the top edge
+// (negative is below it), `out` from the wall. A lamp a few inches off the wall is
+// not one angle: its light is several degrees steeper near it than across the
+// painting, and falls off with distance, so it is placed as a point. `fill` is the
+// room's soft light in the graze render (GRAZE_AMBIENT when not calibrated).
+export const LAMP_OUT_MIN = 0.2, FILL_MAX = 0.6;
+/** The lamp in the shading pass's units: x, y as fractions of width and height from
+ *  the bottom-left corner, z in painting widths. */
+export function lampPosition(lamp, widthCm, aspect) {
+  return [lamp.left / widthCm, 1 + lamp.above / (widthCm * aspect), lamp.out / widthCm];
+}
+/** Where the lamp's light comes from at (u, v) of the painting (fractions of width
+ *  and height from the bottom-left): direction (0° right, 90° top), angle to the
+ *  wall in degrees, and distance in painting widths. */
+export function lampAngles(lamp, widthCm, aspect, u = 0.5, v = 0.5) {
+  const [x, y, z] = lampPosition(lamp, widthCm, aspect), dx = x - u, dy = (y - v) * aspect;
+  return { angle: (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360,
+    elevation: Math.atan2(z, Math.hypot(dx, dy)) * 180 / Math.PI, dist: Math.hypot(dx, dy, z) };
+}
 export const grazeSize = (soft) => GRAZE_SIZE + Math.min(1, Math.max(0, soft)) * (GRAZE_SIZE_MAX - GRAZE_SIZE);
 
 // Graze presets: starting points for common looks. Each keeps the light's direction;

@@ -1,4 +1,5 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
+import { initCalibrate } from './calibrate.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -15,7 +16,7 @@ export function initStudio(api) {
   panel.innerHTML = `<h2>Quick setup</h2><div class="grp" id="quickSetup">
     <label class="selectRow">Paint texture<select id="surfacePreset"><option value="">Choose texture…</option></select></label>
     <div class="row"><label for="textureDepthMm">Texture depth</label><input id="textureDepthMm" type="range" min="0" max="10" step="0.05" value="1"><output data-own></output></div>
-    <div class="row"><label for="paintingWidthCm">Painting width</label><input id="paintingWidthCm" type="range" min="10" max="300" step="1" value="60"><output data-own></output></div>
+    <div class="row"><label for="paintingWidthCm">Painting width</label><input id="paintingWidthCm" type="range" min="10" max="300" step="0.1" value="60"><output data-own></output></div>
     <p class="note" id="depthNote"></p>
     <div class="photoLit"><span>Photo was lit</span><div id="photoCompass" role="group" aria-label="How the photograph was lit"></div></div>
     <p class="note" id="photoNote"></p>
@@ -113,6 +114,7 @@ export function initStudio(api) {
   const history = new History();
   let before = false, split = false, brush = '', maskLayer = -1, painting = false, restoring = false, loading = false, projectId = null;
   let sourceRevision = 0;
+  let cal = null;   // Calibrate section (calibrate.js), made once the graze section exists
   const mask = document.createElement('canvas'); mask.width = mask.height = 768;
   state.maskCanvas = mask; state.maskVersion = 0;
   const ctx = mask.getContext('2d');
@@ -205,13 +207,16 @@ export function initStudio(api) {
     $('grazeSoft').value = g.soft; $('grazeSoft').nextElementSibling.textContent = `${Math.round(g.soft * 100)}%`;
     const match = Object.entries(grazePresets).find(([, v]) => Object.entries(v).every(([k, x]) => Math.abs(g[k] - x) < 1e-6));
     $('grazePreset').value = match ? match[0] : '';
+    $('grazeReadout').textContent += g.lamp ? ' · calibrated lamp' : '';
+    cal?.sync();
   }
   // Adjusting any graze control shows the effect, so the change is visible.
-  function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); renderGraze(); render(); }
+  // Turning the dial or Angle to wall leaves a calibrated lamp (lamp: null).
+  function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); if (state.graze.lamp == null) delete state.graze.lamp; renderGraze(); render(); }
   const grazeAngle = deg => ((Math.round(deg * 2) / 2) % 360 + 360) % 360;
   $('grazeVis').onclick = () => { state.graze.enabled = !state.graze.enabled; renderGraze(); render(); };
   $('grazeOpacity').oninput = e => setGraze({ opacity: +e.target.value });
-  $('grazeElevation').oninput = e => setGraze({ elevation: +e.target.value });
+  $('grazeElevation').oninput = e => setGraze({ elevation: +e.target.value, lamp: null });
   $('grazeDetail').oninput = e => setGraze({ detail: +e.target.value });
   $('grazeFine').oninput = e => setGraze({ fine: +e.target.value });
   $('grazeReach').oninput = e => setGraze({ reach: +e.target.value });
@@ -225,7 +230,7 @@ export function initStudio(api) {
       const b = dial.getBoundingClientRect();
       let d = Math.atan2(b.top + b.height / 2 - ev.clientY, ev.clientX - b.left - b.width / 2) * 180 / Math.PI;
       if (ev.shiftKey) d = Math.round(d / 15) * 15;
-      setGraze({ angle: grazeAngle(d) });
+      setGraze({ angle: grazeAngle(d), lamp: null });
     };
     move(e); dial.onpointermove = move; dial.onpointerup = dial.onpointercancel = () => { dial.onpointermove = null; };
   });
@@ -233,7 +238,7 @@ export function initStudio(api) {
     const step = { ArrowRight: -1, ArrowDown: -1, ArrowLeft: 1, ArrowUp: 1 }[e.key];
     if (!step) return;
     e.preventDefault(); e.stopPropagation();
-    setGraze({ angle: grazeAngle(state.graze.angle + step * (e.shiftKey ? 15 : 1)) });
+    setGraze({ angle: grazeAngle(state.graze.angle + step * (e.shiftKey ? 15 : 1)), lamp: null });
   });
   $('grazeDial').addEventListener('keyup', () => setTimeout(checkpoint, 0));
   // Shown top-first like an image editor's layer list; state.layers is bottom-first.
@@ -481,6 +486,9 @@ export function initStudio(api) {
     const g=p.settings.graze??GRAZE_DEFAULT, detail=g?.detail??0, fine=g?.fine??1, reach=g?.reach??0, clean=g?.clean??0, soft=g?.soft??0;
     if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean,soft].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1||soft<0||soft>1)throw new Error('Invalid graze light.');
     settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean,soft};
+    // Calibrate: the measured lamp (cm from the painting's edges) and room light.
+    if(g.fill!=null){if(!Number.isFinite(g.fill)||g.fill<0||g.fill>FILL_MAX)throw new Error('Invalid graze light.');settings.graze.fill=g.fill;}
+    if(g.lamp!=null){const L=g.lamp;if(typeof L!=='object'||![L.left,L.above,L.out].every(Number.isFinite)||Math.abs(L.left)>2000||Math.abs(L.above)>2000||L.out<LAMP_OUT_MIN||L.out>2000)throw new Error('Invalid graze light.');settings.graze.lamp={left:L.left,above:L.above,out:L.out};}
     return settings;
   }
   async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
@@ -540,5 +548,7 @@ export function initStudio(api) {
   function checkpointSource(){if(history.index<0)history.reset(snapshot());else history.push(snapshot());historyUI();}
   document.addEventListener('digilight:source',onSource);
   syncQuick();rebuildMask();renderGraze();history.reset(snapshot());historyUI();
-  window.__studio={snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  function usePhotoAzimuth(deg, share){calibrate();state.photoDiffuse=share;state.azimuthDeg=Math.round(deg)%360;state.albedoSuppress=0.5;api.dirty();syncQuick();}
+  cal=initCalibrate({state,api,after:grazeBox,setGraze,renderGraze,syncQuick,checkpoint,usePhotoAzimuth,splitView:()=>$('splitView').click()});
+  window.__studio={calibrate:cal,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

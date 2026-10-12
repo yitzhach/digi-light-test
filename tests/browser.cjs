@@ -239,5 +239,26 @@ console.log('PASS sharp zoom overlay matches full-resolution export',JSON.string
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
 for(let i=0;i<6;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
 await page.click('#zoomFit');console.log('PASS mobile layout, also at 400%');
+{await page.locator('#calibrateSection').evaluate(e=>e.open=true);await page.selectOption('#calUnits','in');
+const num=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
+await num('calWidthN',19);await num('calAboveN',32);await num('calLeftN',19);await num('calOutN',4);
+assert.ok(Math.abs(await setting('paintingWidthCm')-48.26)<1e-6);assert.equal((await setting('graze')).lamp,undefined);
+const asp=await page.evaluate(()=>__bench.canvas.height/__bench.canvas.width);
+await page.click('#calUse');await settle();const gz=await setting('graze');
+assert.deepEqual(gz.lamp,{left:48.26,above:81.28,out:10.16});assert.equal(gz.opacity,1);assert.equal(gz.enabled,true);
+// Centre of the painting: lamp 32 in over the top edge, at the right edge, 4 in off the wall.
+const dy=(1+81.28/(48.26*asp)-0.5)*asp,dx=0.5,az=Math.atan2(dy,dx)*180/Math.PI,el=Math.atan2(10.16/48.26,Math.hypot(dx,dy))*180/Math.PI;
+assert.ok(Math.abs(gz.angle-az)<0.6&&Math.abs(gz.elevation-Math.min(20,Math.max(1,Math.round(el*2)/2)))<1e-6,JSON.stringify({gz,az,el}));
+assert.equal(await setting('azimuthDeg'),Math.round(az));assert.equal(await setting('photoDiffuse'),0.35);
+assert.match(await page.locator('#calGeometry').textContent(),/at the top, .* in the middle, .* at the bottom/);
+const lit=await pixels();await num('calOutN',8);assert.equal((await setting('graze')).lamp.out,20.32);assert.notEqual(await pixels(),lit);
+const m=await page.evaluate(()=>__studio.calibrate.measure());assert.ok([m.fine,m.broad,m.score].every(Number.isFinite),JSON.stringify(m));
+const viewAfter=await page.evaluate(()=>[__bench.state.viewMode,__bench.state.compareSplit,__bench.state.graze.opacity]);assert.deepEqual(viewAfter,[0,-1,1]);
+const fit=await page.evaluate(()=>__studio.calibrate.autoFit(8));assert.ok(fit.best.score>=fit.start.score&&fit.evals<=8,JSON.stringify(fit));
+const fitted=await setting('graze');await page.click('#undo');await settle();assert.equal((await setting('graze')).lamp.out,20.32);await page.click('#redo');await settle();assert.deepEqual(await setting('graze'),fitted);
+const saved=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:__studio.snapshot()}).graze);assert.deepEqual(saved.lamp,fitted.lamp);assert.equal(saved.fill,fitted.fill);
+await page.evaluate(()=>{const s=__studio.snapshot();s.graze.lamp={left:1,above:1,out:0};try{__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s});window.__bad=false;}catch{window.__bad=true;}});assert.equal(await page.evaluate(()=>window.__bad),true);
+await page.locator('#grazeSection').evaluate(e=>e.open=true);await page.focus('#grazeDial');await page.keyboard.press('ArrowUp');await settle();assert.equal((await setting('graze')).lamp,undefined);
+console.log('PASS calibrate: lamp geometry, match score, auto-fit, undo and saving');}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

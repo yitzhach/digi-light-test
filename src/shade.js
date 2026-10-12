@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles } from './presets.js';
 import { kelvinToLinearRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
@@ -84,6 +84,7 @@ uniform float uGrazeBias;       // height a blocker must clear before it throws 
 uniform float uGrazeReach;      // longest graze march, in whole-image UV units
 uniform float uGrazeSize;       // source radius, in painting widths (Softness)
 uniform float uGrazeFine;       // share of the finer relief put back into its shading (no shadows)
+uniform float uGrazeFill;       // soft room light under the graze light, so its shadows read as shadows
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -317,7 +318,7 @@ void main() {
     float gNoV = max(dot(gN, V), 1e-4);
     float gAo = 1.0 - uAO * clamp(-gnh.a * mask * uReliefAmount * uAOScale, 0.0, 1.0);
     // Shadows always full strength and crisp here: that is the point of grazing light.
-    vec3 g = albedo * uAmbientColor * ${GRAZE_AMBIENT.toFixed(3)} * gAo;
+    vec3 g = albedo * uAmbientColor * uGrazeFill * gAo;
     vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
     float dist = max(length(Lv), 1e-4);
     vec3 L = Lv / dist;
@@ -484,8 +485,16 @@ export class Shader {
     const g = state.graze;
     const gOn = g && g.enabled && g.opacity > 0 && state.viewMode === 0 && !state.sweeping;
     const gEl = (g?.elevation ?? 3) * Math.PI / 180, gDir = (g?.angle ?? 180) * Math.PI / 180;
-    const gz = GRAZE_DISTANCE * Math.tan(gEl), gPow = grazePower(Math.hypot(GRAZE_DISTANCE, gz), g?.elevation ?? 3);
-    gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
+    const gz = GRAZE_DISTANCE * Math.tan(gEl);
+    let gPow = grazePower(Math.hypot(GRAZE_DISTANCE, gz), g?.elevation ?? 3);
+    if (g?.lamp) {
+      // Calibrated lamp: a point at its measured place, power set so the painting's
+      // centre gets what a directional graze light at that angle would give it.
+      const c = lampAngles(g.lamp, state.paintingWidthCm, aspect);
+      gPow = grazePower(c.dist, Math.max(0.2, c.elevation));
+      gl.uniform3fv(u.uGrazePos, lampPosition(g.lamp, state.paintingWidthCm, aspect));
+    } else gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
+    gl.uniform1f(u.uGrazeFill, g?.fill ?? GRAZE_AMBIENT);
     gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
     gl.uniform1f(u.uGrazeOpacity, gOn ? g.opacity : 0);
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading

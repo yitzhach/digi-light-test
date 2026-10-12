@@ -51,6 +51,21 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-12 (branch `claude/laughing-mendel-u7jr3c`): **Calibrate · match your raking photo**
+  (`src/calibrate.js`, section under Graze light). Lamp measured from the painting's
+  edges (in/cm): `state.graze.lamp {left, above, out}` in cm makes the graze light a
+  POINT at that place (`lampPosition`/`lampAngles` in presets.js; shade.js), so its
+  angle and falloff vary across the painting; `graze.fill` = room light in the graze
+  render (default GRAZE_AMBIENT). "Light it like the photo" also sets Photo was lit to
+  the lamp's direction. Dial / Angle to wall drop the lamp. Match score: graze render vs
+  photo, both divided by a relief-off render (so a flat render scores 0 — without this
+  Auto-fit "won" by switching relief off), broad band only (fine band correlation ≈ 0
+  on real photo: the albedo keeps the fine shading). Auto-fit = hill climb over the
+  ticked settings (lamp position, distance from wall [off by default: trades with
+  depth], depth, room light), bounded near the measurements. On painting B the score
+  peaked at the measured lamp (32" above, 4" out) and fit depth 4.0 mm, room light
+  0.32 (31% → 39%). Freeing the lamp position reaches 51% but drifts (10" across, 23"
+  above, depth 6.4 mm) — one photo can't pin both down.
 - 10-12 (branch `claude/laughing-mendel-u7jr3c`, not yet on `main`): first real-painting
   tests (user photos, not in repo). Painting B: 19" wide, ~1/8" (3.2 mm) impasto, lamp
   ~32" above the top at the right edge, ~4" off the wall (graze 78°, ~5°), plus room
@@ -116,7 +131,10 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
-0. From the real-painting tests: retune/remove "Every detail (raw)"; a shadow-aware
+0. Calibrate with two tripod shots (even + raking): relief from the even one, score on
+   the raking one — makes the score a real check and frees depth vs lamp distance.
+   Also: a fine-band score needs an albedo that does not keep the photo's shading.
+0b. From the real-painting tests: retune/remove "Every detail (raw)"; a shadow-aware
    directional estimate (or a synthetic rig with cast shadows + fill) to replace the
    fixed SIDE_SHARE; red ground relit brighter/oranger than the photo.
 1. Check calibrated relief on real photos of impasto (synthetic-only so far; the

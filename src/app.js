@@ -14,7 +14,7 @@ import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './ex
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
-import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX } from './presets.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -682,7 +682,11 @@ function updateDerived(workingW, st = state) {
   st.grazeReach = st.shadowDist;
   if (st.calibrated && g && g.enabled && g.opacity > 0 && g.reach > 0) {
     const rise = physicalDepth(st) * st.reliefAmount * 1.5;
-    st.grazeReach = Math.max(st.shadowDist, g.reach * Math.min(0.3, rise / Math.tan(g.elevation * Math.PI / 180)));
+    // A calibrated lamp is lowest to the wall at the corner farthest from it.
+    const asp = imgH / Math.max(1, imgW);
+    const el = g.lamp ? Math.max(0.5, Math.min(...[[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]].map(([u, v]) =>
+      lampAngles(g.lamp, st.paintingWidthCm, asp, u, v).elevation))) : g.elevation;
+    st.grazeReach = Math.max(st.shadowDist, g.reach * Math.min(0.3, rise / Math.tan(el * Math.PI / 180)));
   }
   st.grazeReachPx = st.grazeReach * W;
 }
@@ -953,7 +957,7 @@ async function boot() {
   wirePhotometric();
   wireSpherePlacement();
   initStudio({
-    state, canvas, render, applyColor,
+    state, canvas, render, renderNow, applyColor,
     source: () => fullSource,
     dirty: () => { dirtySurface = true; },
     setZoom,
