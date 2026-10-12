@@ -5,9 +5,10 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-12
-- Last code change on `main`: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom
-  to 400%, graze relief/Shadow length/Softness/presets fixes, graze lab
-- Before that: `b7997a6` (2026-10-10), via `c074e30` — layer masks, Graze light effect
+- Last code change on `main`: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) —
+  Calibrate section (lamp model, match score, Auto-fit) and side-lit even-light share
+- Before that: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom to 400%,
+  graze fixes, graze lab
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -51,7 +52,7 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
-- 10-12 (branch `claude/laughing-mendel-u7jr3c`): **Calibrate · match your raking photo**
+- 10-12 (merged to `main`): **Calibrate · match your raking photo**
   (`src/calibrate.js`, section under Graze light). Lamp measured from the painting's
   edges (in/cm): `state.graze.lamp {left, above, out}` in cm makes the graze light a
   POINT at that place (`lampPosition`/`lampAngles` in presets.js; shade.js), so its
@@ -66,7 +67,7 @@ To judge it on a real painting, by eye:
   peaked at the measured lamp (32" above, 4" out) and fit depth 4.0 mm, room light
   0.32 (31% → 39%). Freeing the lamp position reaches 51% but drifts (10" across, 23"
   above, depth 6.4 mm) — one photo can't pin both down.
-- 10-12 (branch `claude/laughing-mendel-u7jr3c`, not yet on `main`): first real-painting
+- 10-12 (merged to `main`): first real-painting
   tests (user photos, not in repo). Painting B: 19" wide, ~1/8" (3.2 mm) impasto, lamp
   ~32" above the top at the right edge, ~4" off the wall (graze 78°, ~5°), plus room
   light. With Photo was lit = Even, graze at the lamp's angle reproduces the photo's
