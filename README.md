@@ -26,6 +26,11 @@ are artistic approximations, not automatic material identification.
 The app opens on a sample painting (`samples/painting.jpg`); add `?synth` to the URL
 to open on the synthetic one instead (the tests do).
 
+**Export for testing** (Projects) downloads one .zip for bug reports: the project,
+the photo, the full-resolution result, preview captures of the relit, original,
+split, shadows and height views (and the sharp zoom, if shown), your note, and
+`info.json` (browser, GPU, errors, a summary of the lights).
+
 With several lights, only the strongest one casts full-length shadows; each other
 light's shadows reach in proportion to its brightness (at least 15%), so fill lights
 do not lay their own long streaks across the key light's. **Shadow smoothing**

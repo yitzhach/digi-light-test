@@ -976,6 +976,8 @@ async function boot() {
     source: () => fullSource,
     dirty: () => { dirtySurface = true; },
     setZoom,
+    exportFull: () => exportImage({ mode: 'single', source: fullSource }, null, { viewMode: 0 }),
+    sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
     openSource: async image => {
       state.mode = 'single'; $('src').value = 'upload';
