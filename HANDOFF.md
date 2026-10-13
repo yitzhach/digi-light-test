@@ -4,10 +4,12 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-12
-- Last code change on `main`: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) —
-  Calibrate section (lamp model, match score, Auto-fit) and side-lit even-light share
-- Before that: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom to 400%,
+- Last updated: 2026-10-13
+- Last code change on `main`: merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
+  shadow smoothing + shorter shadows for extra lights; app opens on a sample painting
+- Before that: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate
+  section (lamp model, match score, Auto-fit) and side-lit even-light share
+- Earlier: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom to 400%,
   graze fixes, graze lab
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
@@ -52,6 +54,19 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-13 (merged to `main`): user's multi-light render showed a "motion blur" look:
+  each low light's shadow march drags one-photo height grain into a hairline streak
+  along that light, and lights from several sides cross them. Fixes: (1) per-light
+  shadow reach `lightReach` (shade.js) = strength / strongest light, min 0.15
+  (`uLightReach`); (2) main-light shadows march a smoothed relief
+  (`GBuffer.buildShadow`, generalised from buildGraze as `smoothed(key, sigma)`;
+  `uShadowRelief`), Fine-tune **Shadow smoothing** `state.shadowDetail` in painting
+  widths, default `SHADOW_DETAIL` 0.004 (presets.js); old saves validate to 0
+  (LEGACY). Export margin covers its blur. Checked by eye on the user's painting in
+  the Shadows view: crossing streaks clearly reduced. New test in browser.cjs.
+- 10-13 (merged to `main`): app opens on the user's painting `samples/painting.jpg`
+  (1932×2576, red ground + grey/black figure, heavy impasto) as an upload; `?synth`
+  keeps the old synthetic start. tests/browser.cjs and tools/graze-lab.cjs use ?synth.
 - 10-12 (merged to `main`): **Calibrate · match your raking photo**
   (`src/calibrate.js`, section under Graze light). Lamp measured from the painting's
   edges (in/cm): `state.graze.lamp {left, above, out}` in cm makes the graze light a
@@ -132,6 +147,10 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+00. User feedback on Shadow smoothing / extra-light reach on the sample painting; maybe
+   a sideways (perpendicular) shadow blur if streaks remain at low angles. Earlier
+   review of that painting also noted: waxy sheen with extra lights (specular),
+   salmon/copper colour drift on the red, dark corners from lamp falloff after Auto-fit.
 0. Calibrate with two tripod shots (even + raking): relief from the even one, score on
    the raking one — makes the score a real check and frees depth vs lamp distance.
    Also: a fine-band score needs an albedo that does not keep the photo's shading.
@@ -155,4 +174,5 @@ To judge it on a real painting, by eye:
   preview's measured `heightStats`, never re-measure.
 - No backticks inside GLSL comments: the shaders are JS template strings.
 - Must serve over HTTP (ES modules); don't open index.html directly.
-- Deploy index.html, studio.css, src/, _headers together.
+- Deploy index.html, studio.css, src/, samples/, _headers together.
+- Tests must open `/?synth`: the default start is the sample photo.
