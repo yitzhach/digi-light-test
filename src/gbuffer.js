@@ -283,7 +283,7 @@ export class GBuffer {
     }
     const mk = () => makeTarget(gl, w, h, { float: true, caps });
     this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
-    this.grazeSigma = -1;
+    this.sigmas = {};
     this.size = { w, h };
   }
 
@@ -355,8 +355,9 @@ export class GBuffer {
       gl.uniform1f(u.uMeanLuma, opts.meanLuma ?? 0.25);
     });
 
-    this.grazeSigma = -1;
+    this.sigmas = {};
     this.buildGraze(opts.grazeSigmaPx ?? 0);
+    this.buildShadow(opts.shadowSigmaPx ?? 0);
     bindTarget(gl, null);
     return T;
   }
@@ -380,15 +381,35 @@ export class GBuffer {
    * normal pass, nothing else) when only the graze Detail changes.
    */
   buildGraze(sigma) {
+    return this.smoothed('graze', sigma);
+  }
+
+  /**
+   * The main lights' shadow relief: the same low-pass, for the shadow march only.
+   * A shadow is the highest blocker along a line toward the light, so grain in a
+   * one-photo height estimate is dragged into a hairline streak along that line;
+   * several lights from different sides cross their streaks into what reads as
+   * motion blur. Shading keeps the full relief; only the shadows lose the grain.
+   */
+  buildShadow(sigma) {
+    return this.smoothed('shadow', sigma);
+  }
+
+  // T[key] = normals (height in alpha) of the height field blurred by `sigma`
+  // pixels, or the full relief when there is nothing to smooth. Reruns alone (a
+  // blur and a normal pass) only when that sigma changes.
+  smoothed(key, sigma) {
     const { gl } = this.glctx, T = this.targets;
-    if (!T || sigma === this.grazeSigma) return T;
-    this.grazeSigma = sigma;
-    if (!(sigma >= GRAZE_MIN_SIGMA)) { T.graze = T.normal; return T; }
+    this.sigmas ??= {};
+    if (!T || sigma === this.sigmas[key]) return T;
+    this.sigmas[key] = sigma;
+    if (!(sigma >= GRAZE_MIN_SIGMA)) { T[key] = T.normal; return T; }
     const { w, h } = this.size;
-    // Made on first use, so a session that never grazes carries no extra targets.
-    if (!T.grazeNormal) {
+    // Made on first use, so a session that never needs them carries no extra targets.
+    const hk = key + 'Height', nk = key + 'Normal';
+    if (!T[nk]) {
       const mk = () => makeTarget(gl, w, h, { float: true, caps: this.glctx.caps });
-      Object.assign(T, { grazeHeight: mk(), grazeNormal: mk() });
+      Object.assign(T, { [hk]: mk(), [nk]: mk() });
     }
     // A wide blur (a large export) runs in two stages whose variances add: an exact
     // one of at most 16 texels, then the rest at the blur's own stride, which can no
@@ -397,12 +418,12 @@ export class GBuffer {
     let src = T.height;
     for (const s of s2 > 0.5 ? [s1, s2] : [s1]) {
       pass(gl, this.progs.blur, T.tmp, [['uSrc', src.tex]], (u) => { gl.uniform2f(u.uStep, 1 / w, 0); gl.uniform1f(u.uSigma, s); });
-      pass(gl, this.progs.blur, T.grazeHeight, [['uSrc', T.tmp.tex]], (u) => { gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, s); });
-      src = T.grazeHeight;
+      pass(gl, this.progs.blur, T[hk], [['uSrc', T.tmp.tex]], (u) => { gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, s); });
+      src = T[hk];
     }
-    pass(gl, this.progs.normal, T.grazeNormal, [['uHeight', T.grazeHeight.tex]], (u) => this.normalUniforms(u, w, h));
+    pass(gl, this.progs.normal, T[nk], [['uHeight', T[hk].tex]], (u) => this.normalUniforms(u, w, h));
     bindTarget(gl, null);
-    T.graze = T.grazeNormal;
+    T[key] = T[nk];
     return T;
   }
 }

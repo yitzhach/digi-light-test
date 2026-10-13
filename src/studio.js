@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
 import { initCalibrate } from './calibrate.js';
 
 export function initStudio(api) {
@@ -95,9 +95,9 @@ export function initStudio(api) {
   const GRAZE_DEFAULT = { enabled: false, angle: 180, ...grazePresets['Classic raking'] };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
-  const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25,
+  const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
     physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], graze: GRAZE_DEFAULT };
-  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0 };
+  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0 };
   const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
   const DERIVED = ['heightScale', 'reliefStrength'];
@@ -183,7 +183,7 @@ export function initStudio(api) {
   function sync() {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
-    document.querySelectorAll('#creativeSliders .row').forEach(row => { row.querySelector('output').textContent = Number(row.querySelector('input').value).toFixed(2); });
+    document.querySelectorAll('#creativeSliders .row').forEach(row => { const i = row.querySelector('input'); row.querySelector('output').textContent = Number(i.value).toFixed(+i.step < 0.01 ? 3 : 2); });
     syncQuick(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
   }
   const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
@@ -299,14 +299,14 @@ export function initStudio(api) {
   document.addEventListener('click', e => { if (!e.target.closest('#undo,#redo,#exportBtn')) setTimeout(checkpoint,0); });
   const newControls = [
     ['fineRelief','Fine texture',0,2,0.05,true], ['mediumRelief','Medium relief',0,2,0.05,true], ['broadRelief','Broad relief',0,2,0.05,true],
-    ['neutralize','Neutralize light',0,1,0.02,true], ['shadowSoftness','Shadow softness',0,1,0.02,false],
+    ['neutralize','Neutralize light',0,1,0.02,true], ['shadowSoftness','Shadow softness',0,1,0.02,false], ['shadowDetail','Shadow smoothing',0,0.02,0.001,false],
     ['metallic','Metallic',0,1,0.02,false], ['highlightRolloff','Highlight rolloff',0,1,0.02,false],
     ['photoDiffuse','Even-light share',0,1,0.02,true],
   ];
   for (const [key,label,min,max,step,surface] of newControls) {
     const row = document.createElement('div'); row.className='row';
     row.innerHTML=`<label for="${key}">${label}</label><input id="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state[key]}"><output>${state[key]}</output>`;
-    row.querySelector('input').oninput=e=>{state[key]=+e.target.value; row.querySelector('output').textContent=state[key].toFixed(2); if(key==='photoDiffuse'){calibrate();syncQuick();} if(surface) api.dirty(); render();};
+    row.querySelector('input').oninput=e=>{state[key]=+e.target.value; row.querySelector('output').textContent=state[key].toFixed(step<0.01?3:2); if(key==='photoDiffuse'){calibrate();syncQuick();} if(surface) api.dirty(); render();};
     $('creativeSliders').append(row);
   }
   const warning = document.createElement('p'); warning.className='note'; warning.textContent='Neutralize light reduces local brightness variation and may alter tonal details. Start low; compare often. Even-light share blends relief read from dark recesses (1) with relief read along the photo\'s light direction (0).'; $('creativeSliders').append(warning);

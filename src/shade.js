@@ -46,6 +46,8 @@ uniform float uLightSoftness[${MAX_LIGHTS}];
 uniform float uLightFalloff[${MAX_LIGHTS}];
 uniform vec2 uLightAim[${MAX_LIGHTS}];
 uniform float uLightSize[${MAX_LIGHTS}];     // source radius, in painting widths
+uniform float uLightReach[${MAX_LIGHTS}];    // share of uShadowDist this light's shadows may run
+uniform sampler2D uShadowRelief;             // relief for the main lights' shadows: grain smoothed out
 
 uniform float uAspect;
 uniform vec2  uUVOffset;   // where this tile sits in the full image
@@ -276,7 +278,7 @@ void main() {
     if (NoLw <= 0.0) continue;
 
     float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
-    float shadow = shadowMarch(uNormal, vUV, L, penumbra, uShadow, 0.0, uShadowDist);
+    float shadow = shadowMarch(uShadowRelief, vUV, L, penumbra, uShadow, 0.0, uShadowDist * uLightReach[i]);
 
     // A bigger source spreads the highlight: widen the lobe by the source's size
     // relative to its distance (Karis' sphere-light approximation, without the
@@ -400,6 +402,7 @@ export class Shader {
       ['uMask', this.maskTex],
       ['uLayerMask', this.layerMaskTex],
       ['uGrazeNormal', (targets.graze || targets.normal).tex],
+      ['uShadowRelief', (targets.shadow || targets.normal).tex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -424,6 +427,10 @@ export class Shader {
       aim[i * 2 + 1] = l.aimY ?? l.y;
       size[i] = l.size ?? 0.03;
     });
+    // Long shadows belong to the key light. Each extra light marches a share of the
+    // reach set by its strength relative to the strongest one, so fills add light
+    // without laying their own long streaks across the key's (lightReach).
+    const reach = lightReach(lights);
 
     const u = p.uniforms;
     gl.uniform1i(u.uLightCount, lights.length);
@@ -436,6 +443,7 @@ export class Shader {
     gl.uniform1fv(u.uLightFalloff, falloff);
     gl.uniform2fv(u.uLightAim, aim);
     gl.uniform1fv(u.uLightSize, size);
+    gl.uniform1fv(u.uLightReach, reach);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
@@ -514,4 +522,18 @@ export class Shader {
 
     drawFullscreen(gl);
   }
+}
+
+/**
+ * Shadow reach per light, as a share of the full reach: 1 for the strongest enabled
+ * light (power times luminance), and its relative strength for the rest, never
+ * below MIN_REACH so a fill still shades the deepest grooves.
+ */
+export const MIN_REACH = 0.15;
+export function lightReach(lights) {
+  const out = new Float32Array(MAX_LIGHTS);
+  const w = lights.map((l) => l.enabled ? l.power * (0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]) : 0);
+  const key = Math.max(0, ...w);
+  w.forEach((v, i) => { out[i] = key > 0 ? Math.max(MIN_REACH, Math.min(1, v / key)) : 1; });
+  return out;
 }

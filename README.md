@@ -23,6 +23,13 @@ about 1 mm deep, photographed in even light. **Quick setup** is the everyday pat
 Every individual slider is still available under **Fine-tune (advanced)**. Presets
 are artistic approximations, not automatic material identification.
 
+With several lights, only the strongest one casts full-length shadows; each other
+light's shadows reach in proportion to its brightness (at least 15%), so fill lights
+do not lay their own long streaks across the key light's. **Shadow smoothing**
+(Fine-tune, in painting widths, default 0.004) keeps paint grain out of the main
+lights' shadows, which otherwise smears into streaks along each light; the shading
+keeps the full texture. Projects saved before it existed open with it at 0.
+
 Each light has type buttons (**Spot, Track, Flood, Softbox, Window**) and one
 **Diffusion** dial between them. Diffusion sets beam width, beam edge and the
 light's physical size: a small source casts crisp shadows and a tight highlight; a

@@ -676,6 +676,9 @@ function updateDerived(workingW, st = state) {
   const g = st.graze;
   st.grazeSigmaPx = st.mode === 'single' && g && g.enabled && g.opacity > 0
     ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
+  // Shadow smoothing (Fine-tune) is a feature size in painting widths too, so
+  // preview and export drop the same grain from the main lights' shadows.
+  st.shadowSigmaPx = st.mode === 'single' ? Math.max(0, st.shadowDetail ?? 0) * W / 2.355 : 0;
   // The graze light's own shadow reach: the main lights bound shadowDist, and a
   // light a degree off the wall throws shadows far longer than any of theirs. Its
   // Shadow length setting takes that share of the tallest relief over tan(elevation).
@@ -769,6 +772,7 @@ function renderNow() {
       dirtySurface = false;
     } else if (state.mode === 'single') {
       gbuf.buildGraze(state.grazeSigmaPx);   // no-op unless the graze Detail changed
+      gbuf.buildShadow(state.shadowSigmaPx); // likewise for Shadow smoothing
     }
     let drawTargets = targets;
     if (state.mode === 'photometric' && state.psShowTruth && truthTex) {

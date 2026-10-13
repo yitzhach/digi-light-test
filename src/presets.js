@@ -46,6 +46,12 @@ export const photoDirections = [
 export const EVEN_SHARE = 0.6;
 export const SIDE_SHARE = 0.35;
 
+// Shadow smoothing default, in painting widths (the blur's full width at half
+// maximum; 0.004 = 2.4 mm on a 60 cm painting). Grain finer than this no longer
+// throws shadows from the main lights (GBuffer buildShadow); the shading keeps it.
+// Saves made before it existed open at 0, so they look as they did.
+export const SHADOW_DETAIL = 0.004;
+
 /**
  * One dial from spotlight to diffused light. Sets the three things that make the
  * difference: beam width (cone), beam edge (softness) and source size, which sets
