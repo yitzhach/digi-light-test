@@ -5,8 +5,9 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-13
-- Last code change on `main`: merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
-  shadow smoothing + shorter shadows for extra lights; app opens on a sample painting
+- Last code change on `main`: second merge of `claude/image-lighting-review-h7922k`
+  (2026-10-13) — **Export for testing** zip; before that (same day) shadow smoothing,
+  shorter shadows for extra lights, app opens on a sample painting
 - Before that: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate
   section (lamp model, match score, Auto-fit) and side-lit even-light share
 - Earlier: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom to 400%,
@@ -32,7 +33,16 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `python3 -m http.server 8766` then open http://localhost:8766
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
 
-## Real-painting test (next session starts here)
+## Test bundles from the user (next session starts here)
+The user sends a `*-test-YYYYMMDDHHMM.zip` from **Export for testing** (Projects).
+Unpack it in its own scratch dir. Contents: `notes.txt` (what to look at — start
+here), `info.json` (UA, GPU, errors, light summary), `project.digilight.json`
+(import via Import project, or `#projectFile` in Playwright to reproduce exactly),
+`original.jpg`, `relit-full.png`, preview captures `view-relit/original/split/
+shadows/height.png`, `view-zoom.png` if zoomed. Look at the views, reproduce on the
+project, fix or suggest settings, measure before/after.
+
+## Real-painting test
 Graze tuning so far is measured only on synthetic paintings (`tools/graze-lab.cjs`).
 To judge it on a real painting, by eye:
 1. Photo: a painted surface with visible impasto, sharp, straight-on, ~2000 px+ wide.
@@ -54,6 +64,12 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-13 (merged to `main`): **Export for testing** button (studio.js Projects →
+  `src/testbundle.js`): prompt for a note, then a stored (uncompressed) zip written by
+  hand (`makeZip`, crc32) with the files above. Views are grabbed from the preview
+  canvas right after `renderNow` in the same task; full-res via app.js `exportFull`
+  in the studio api. Window errors are collected from module load. Test in browser.cjs
+  unzips and checks names and the note.
 - 10-13 (merged to `main`): user's multi-light render showed a "motion blur" look:
   each low light's shadow march drags one-photo height grain into a hairline streak
   along that light, and lights from several sides cross them. Fixes: (1) per-light

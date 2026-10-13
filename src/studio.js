@@ -1,5 +1,6 @@
 import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
 import { initCalibrate } from './calibrate.js';
+import { exportTestBundle } from './testbundle.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -41,7 +42,7 @@ export function initStudio(api) {
     <input id="projectName" class="full" aria-label="Project name" value="Untitled painting" maxlength="120">
     <div class="views"><button id="saveProject">Save project</button><button id="saveVariation">Save variation</button></div>
     <label class="selectRow">Saved<select id="projectList"><option value="">Choose project…</option></select></label>
-    <button id="loadProject">Open saved</button><button id="downloadProject">Download project</button><button id="importProject">Import project</button>
+    <button id="loadProject">Open saved</button><button id="downloadProject">Download project</button><button id="importProject">Import project</button><button id="testBundle" title="One .zip with the photo, settings, result and diagnostic views, to send for testing">Export for testing</button>
     <input id="projectFile" type="file" accept=".json,application/json" hidden>
     <p class="note" id="projectStatus">Projects include the photo, lighting and corrections. Local saves stay in this browser. Download a project for backup.</p></div>`;
   $('panel').insertBefore(panel, $('surfaceControls').previousElementSibling);
@@ -493,6 +494,7 @@ export function initStudio(api) {
   }
   async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
   $('loadProject').onclick=()=>busy(async()=>{const p=await storage('projects','readonly',s=>s.get($('projectList').value));if(!p)throw new Error('Choose a saved project.');await open(p);});
+  $('testBundle').onclick=()=>{const notes=prompt('What should be looked at? (e.g. "streaks top left", "too dark after Auto-fit")','');if(notes===null)return;busy(async()=>{const p=await project();const r=await exportTestBundle(api,p,notes,status);status(`Test bundle downloaded: ${r.name}. Attach it in the chat.`);});};
   $('downloadProject').onclick=()=>busy(async()=>{const p=await project();const blob=new Blob([JSON.stringify(p)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${p.name.replace(/[^a-z0-9_-]/gi,'_')}.digilight.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),4000);status('Project downloaded.');});
   $('importProject').onclick=()=>$('projectFile').click();
   $('projectFile').onchange=()=>busy(async()=>{const f=$('projectFile').files[0];if(!f)return;if(f.size>150*1024*1024)throw new Error('Project exceeds the 150 MB import limit.');await open(JSON.parse(await f.text()));$('projectFile').value='';});
