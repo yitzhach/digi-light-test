@@ -23,6 +23,9 @@ about 1 mm deep, photographed in even light. **Quick setup** is the everyday pat
 Every individual slider is still available under **Fine-tune (advanced)**. Presets
 are artistic approximations, not automatic material identification.
 
+The app opens on a sample painting (`samples/painting.jpg`); add `?synth` to the URL
+to open on the synthetic one instead (the tests do).
+
 With several lights, only the strongest one casts full-length shadows; each other
 light's shadows reach in proportion to its brightness (at least 15%), so fill lights
 do not lay their own long streaks across the key light's. **Shadow smoothing**

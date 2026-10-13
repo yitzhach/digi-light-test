@@ -903,6 +903,8 @@ function checkCapabilities(caps) {
   }
 }
 
+const SAMPLE_URL = 'samples/painting.jpg';
+
 async function boot() {
   try {
     glctx = createGL(canvas);
@@ -955,7 +957,16 @@ async function boot() {
   });
 
   rebuildTabs(); rebuildLightPanel(); rebuildViews(); rebuildHandles(); syncOutputs();
-  await setSource(await loadSynthetic());
+  // Opens on the sample painting (samples/painting.jpg), as if uploaded; ?synth
+  // opens on the synthetic one instead (the tests use it), as does a failed fetch.
+  let sample = null;
+  if (!new URLSearchParams(location.search).has('synth')) {
+    try { sample = await loadFile(await (await fetch(SAMPLE_URL)).blob()); } catch { sample = null; }
+  }
+  if (sample) {
+    $('src').value = 'upload'; $('synthOpts').style.display = 'none'; $('file').style.display = '';
+    rebuildViews(); await setSource(sample);
+  } else await setSource(await loadSynthetic());
 
   wireExport();
   wirePhotometric();
