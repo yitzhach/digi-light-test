@@ -24,7 +24,40 @@ Every individual slider is still available under **Fine-tune (advanced)**. Prese
 are artistic approximations, not automatic material identification.
 
 The app opens on a sample painting (`samples/painting.jpg`); add `?synth` to the URL
-to open on the synthetic one instead (the tests do).
+to open on the synthetic one instead (the tests do). **Or open a sample** also offers
+`DSC_8382`, a tripod shot of the same 19 in panel in even room light, cropped to the
+panel's edges, with its three lamp shots (`samples/dsc8382/`) one click away in
+Measure relief.
+
+### Measure relief · lamp photos
+An evenly lit photo hides most relief, and single-photo relief from it can be
+plausible but wrong: on the DSC_8382 panel it correlated about 0 with what a lamp
+really showed. This section (under Calibrate) measures the relief instead. Open
+the evenly lit photo as your painting, then add two or three photos from the same
+tripod, room light unchanged, each with one lamp close to the wall, moved between
+shots so it lights the painting from different sides. Crop them all exactly alike,
+to the painting's edges. For each, enter where the lamp was: above the top edge,
+from the left edge, and out from the painting's face (not the wall: subtract a
+panel's depth). Painting width and units are Calibrate's.
+
+**Measure relief** lines each shot up to the painting photo (tripods creep: up to
+2 px and a 0.3% zoom on the sample), divides it by the painting photo so the paint
+colour cancels, takes out the room light and the lamp's own pool of light, and
+reads the slopes that the remaining shading implies for a lamp at that place.
+Two lamps from different sides give both slopes; a third lets the measurement
+check itself (each shot predicted from the others). The slopes are integrated into
+a height, and since they are in real units, **Texture depth is measured** and set
+for you (the 2–98% spread of stroke-scale relief; broader paint masses are not
+included). That relief then replaces the estimate everywhere, export included.
+**Light like this** turns the graze light into that lamp; **Compare** shows the
+lamp photo in Before / Split beside the render. The photos and measurement last
+for the session; projects do not save them yet.
+
+With every lamp above the painting, faces turned down are dark in all shots and the
+relief reads about 20% shallow (synthetic tests); a lamp from below or level with
+the middle fixes that. On the DSC_8382 set: relief from two lamp shots predicts the
+third at r = 0.75–0.83 (stroke-scale detail), against about 0 for the single-photo
+estimate; renders at the measured depth show roughly 60% of the photos' contrast.
 
 **Export for testing** (Projects) downloads one .zip for bug reports: the project,
 the photo, the full-resolution result, preview captures of the relit, original,
@@ -184,6 +217,12 @@ raking: 0.86 / 0.80 and 0.85 / 0.61, unchanged (sides use the directional estima
 only). A two-lamp copy stand recovers ≈0 either way, and fine achromatic grain
 (cement, plaster) defeats both. These are synthetic numbers; real photographs add
 pigment, varnish glare and lens effects the bench does not model.
+
+**Measured relief** (lamp photos) is checked against synthetic paintings with known
+relief, rendered under point lamps with room light: with three lamps above and
+relief like the sample's, height correlates 0.91 with the truth and depth comes
+out 10–20% shallow; with lamps on four sides, depth is right. Alignment recovers a
+2 px shift to within 0.3 px, and a tiled export matches the preview.
 
 **Shadows** are checked against the same known relief: deeper texture and lower
 lights cast more shadow, a larger source softens it, and shadows land on slopes

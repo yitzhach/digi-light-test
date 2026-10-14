@@ -1,4 +1,5 @@
 import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
+import { initLampPhotos } from './lampui.js';
 import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
 
@@ -415,7 +416,9 @@ export function initStudio(api) {
   function comparison() {
     state.viewMode=before?4:0; state.compareSplit=split ? +splitRow.querySelector('input').value/100 : -1;
     $('compare').classList.toggle('on',before); $('splitView').classList.toggle('on',split); splitRow.hidden=!split;
-    $('compareLabel').textContent=split?'BEFORE ← → AFTER':before?'BEFORE · ORIGINAL':'AFTER · RELIT';
+    // A lamp photo can stand in for the painting photo (lamp photos' Compare).
+    const b=$('wrap').dataset.before; splitRow.firstElementChild.textContent=b||'BEFORE';
+    $('compareLabel').textContent=split?`${b||'BEFORE'} ← → AFTER`:before?(b||'BEFORE · ORIGINAL'):'AFTER · RELIT';
     $('wrap').classList.toggle('comparing',before||split); render();
   }
   $('compare').onclick=()=>{if(state.exporting)return; before=!before;split=false;comparison();};
@@ -552,5 +555,6 @@ export function initStudio(api) {
   syncQuick();rebuildMask();renderGraze();history.reset(snapshot());historyUI();
   function usePhotoAzimuth(deg, share){calibrate();state.photoDiffuse=share;state.azimuthDeg=Math.round(deg)%360;state.albedoSuppress=0.5;api.dirty();syncQuick();}
   cal=initCalibrate({state,api,after:grazeBox,setGraze,renderGraze,syncQuick,checkpoint,usePhotoAzimuth,splitView:()=>$('splitView').click()});
-  window.__studio={calibrate:cal,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick});
+  window.__studio={calibrate:cal,lamp,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

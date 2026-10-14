@@ -35,6 +35,15 @@ let imgW = 0, imgH = 0;
 // the preview only ever sees a downscaled copy.
 let fullSource = null, fullW = 0, fullH = 0, previewScale = 1;
 let dirtySurface = true;
+// Relief measured from lamp photos (lampphotos.js), at the preview's size: when
+// `on`, it replaces the single-photo estimate in the preview, the sharp zoom and
+// export (tiles resample their window of it). Belongs to the photo it was measured
+// against, so a new photo drops it. {tex, w, h, on, info}
+let measured = null;
+const measuredTex = () => (measured && measured.on && state.mode === 'single' ? measured.tex : null);
+// A lamp photo shown in place of the painting photo by Before / Split (lamp photos'
+// Compare), so the render can be set against what the lamp really did.
+let compareTex = null;
 
 const state = {
   reliefScale: 3, azimuthDeg: 141, integrateTaps: 8, reliefStrength: 12,
@@ -157,6 +166,51 @@ function loadFile(file) {
   });
 }
 
+/**
+ * Use a measured height map (w x h, the preview's size, rows top first), or drop it
+ * with null. Heights are in any unit: the preview measures their spread like the
+ * estimate's, and Texture depth sets what that spread is in millimetres.
+ */
+function setMeasured(height, w, h, info = {}) {
+  const { gl } = glctx;
+  if (measured) gl.deleteTexture(measured.tex);
+  measured = null;
+  if (height) {
+    const data = new Float32Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) { data[i * 4] = data[i * 4 + 1] = height[i]; data[i * 4 + 3] = 1; }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    measured = { tex, w, h, on: true, info };
+  }
+  dirtySurface = true;
+  document.dispatchEvent(new Event('digilight:measured'));
+  render();
+}
+
+/** Show `img` (a canvas the preview's size, lined up with the photo) in place of the
+ *  photo in Before / Split, or the photo again with null. Uploaded as sRGB so the
+ *  shader reads linear light, as it does from the photo's own linear copy. */
+function setCompare(img) {
+  const { gl } = glctx;
+  if (compareTex) gl.deleteTexture(compareTex);
+  compareTex = null;
+  if (img) {
+    compareTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, compareTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  render();
+}
+
 async function setSource(src, keep = false) {
   const { gl } = glctx;
   const w = src.width || src.naturalWidth;
@@ -189,6 +243,7 @@ async function setSource(src, keep = false) {
   }
   updateChromaNote();
 
+  if (!keep) { setMeasured(null); setCompare(null); currentSample = src.dataset?.sample || null; }
   if (srcTex) gl.deleteTexture(srcTex);
   srcTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, srcTex);
@@ -704,7 +759,7 @@ function updateDerived(workingW, st = state) {
  * an interrupted render can never leave the preview rescaled.
  */
 function renderState(outW) {
-  const st = { ...state };
+  const st = { ...state, measuredTex: measuredTex() };
   if (st.mode !== 'photometric') {
     const ratio = outW / imgW;
     st.reliefScale *= ratio;
@@ -766,7 +821,9 @@ function renderNow() {
         }
       } else {
         // The preview measures the height spread; export tiles reuse it.
-        targets = gbuf.build(srcTex, imgW, imgH, { ...state, measureHeight: !!state.physical });
+        const mt = measuredTex();
+        targets = gbuf.build(srcTex, imgW, imgH, { ...state, measureHeight: !!state.physical,
+          measured: mt && measured.w === imgW && measured.h === imgH ? { tex: mt, rect: [0, 0, 1, 1] } : null });
         state.heightStats = { ...gbuf.heightStats };
       }
       dirtySurface = false;
@@ -779,6 +836,9 @@ function renderNow() {
       // Swap the recovered normals for the known ones, so the two can be compared
       // in the same view without re-rendering anything else.
       drawTargets = Object.assign({}, targets, { normal: { tex: truthTex } });
+    }
+    if (compareTex && state.mode === 'single' && (state.viewMode === 4 || state.compareSplit >= 0)) {
+      drawTargets = { ...drawTargets, lin: { tex: compareTex } };
     }
     if (state.mode === 'photometric' && (state.viewMode === 4 || state.compareSplit >= 0)) {
       drawTargets = { ...drawTargets, lin: gbuf.build(srcTex, imgW, imgH, state).lin };
@@ -829,6 +889,8 @@ function scheduleSharp() {
  */
 function sharpPlan() {
   if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource || (state.viewZoom || 1) <= 1) return null;
+  // A lamp photo in Before / Split exists only at the preview's size.
+  if (compareTex && (state.viewMode === 4 || state.compareSplit >= 0)) return null;
   const c = canvas.getBoundingClientRect(), v = viewBox();
   if (!c.width || !c.height) return null;
   // About one output pixel per screen pixel, never more than the photo has.
@@ -903,7 +965,15 @@ function checkCapabilities(caps) {
   }
 }
 
-const SAMPLE_URL = 'samples/painting.jpg';
+// Sample photos, opened as if uploaded. dsc8382 is the user's tripod set: the evenly
+// lit shot, with its three lamp shots offered in Measure relief · lamp photos.
+const SAMPLES = { painting: 'samples/painting.jpg', dsc8382: 'samples/dsc8382/DSC_8382.jpg' };
+let currentSample = null;   // which sample is open, if any
+async function loadSample(id) {
+  const img = await loadFile(await (await fetch(SAMPLES[id])).blob());
+  img.dataset.sample = id;
+  return img;
+}
 
 async function boot() {
   try {
@@ -948,6 +1018,17 @@ async function boot() {
     if (v === 'synth') await setSource(await loadSynthetic());
     else if (v === 'psynth') await setSource(await loadSyntheticCapture());
   });
+  $('samplePick').addEventListener('change', async (e) => {
+    const id = e.target.value; e.target.value = '';
+    if (!SAMPLES[id]) return;
+    try {
+      const img = await loadSample(id);
+      state.mode = 'single'; $('src').value = 'upload';
+      $('synthOpts').style.display = 'none'; $('psOpts').style.display = 'none'; $('psFiles').style.display = 'none';
+      $('file').style.display = ''; $('surfaceControls').style.opacity = 1;
+      rebuildViews(); await setSource(img);
+    } catch (err) { fail(err); }
+  });
   $('synthLight').addEventListener('change', async () => setSource(await loadSynthetic()));
   $('pigment').addEventListener('input', async () => setSource(await loadSynthetic()));
   $('file').addEventListener('change', async (e) => {
@@ -961,7 +1042,7 @@ async function boot() {
   // opens on the synthetic one instead (the tests use it), as does a failed fetch.
   let sample = null;
   if (!new URLSearchParams(location.search).has('synth')) {
-    try { sample = await loadFile(await (await fetch(SAMPLE_URL)).blob()); } catch { sample = null; }
+    try { sample = await loadSample('painting'); } catch { sample = null; }
   }
   if (sample) {
     $('src').value = 'upload'; $('synthOpts').style.display = 'none'; $('file').style.display = '';
@@ -976,6 +1057,15 @@ async function boot() {
     source: () => fullSource,
     dirty: () => { dirtySurface = true; },
     setZoom,
+    // Measured relief: set(height, w, h, info) / set(null), use(on), info.
+    measured: {
+      set: setMeasured,
+      use: (on) => { if (measured && measured.on !== !!on) { measured.on = !!on; dirtySurface = true; document.dispatchEvent(new Event('digilight:measured')); render(); } },
+      get: () => measured && { on: measured.on, w: measured.w, h: measured.h, info: measured.info },
+      compare: setCompare,
+      comparing: () => !!compareTex,
+    },
+    sample: () => currentSample,
     exportFull: () => exportImage({ mode: 'single', source: fullSource }, null, { viewMode: 0 }),
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
