@@ -4,12 +4,13 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-14 (branch `claude/compassionate-bardeen-wsnho5`: measured relief
-  saved in projects/test bundles; not merged to `main` yet)
-- Last code change on `main`: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
+- Last updated: 2026-10-14
+- Last code change on `main`: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
+  **measured relief saved in projects and test bundles** (`src/reliefsave.js`)
+- Before that: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
   **Measure relief · lamp photos** (relief measured from 2–3 lamp shots + the even
   shot) and the **DSC_8382** sample with its lamp shots
-- Before that: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
+- Earlier: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
   Export for testing zip, shadow smoothing, sample painting on open
 - Earlier: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate section
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
@@ -65,7 +66,7 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
-- 10-14 (branch `claude/compassionate-bardeen-wsnho5`, not yet on `main`): user test
+- 10-14 (merged to `main`): user test
   bundle `Untitled_painting-test-2026-10-140440` (DSC_8382, one light from 126° high
   up + graze 3° from 61.5°, note "incorrect shadow direction to light source"; later:
   same with the standard light alone). Reproduced to 0.44/255. Findings: (1) light and
@@ -205,9 +206,9 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
-00. Merge the branch (measured relief in projects) after the user's OK; ask them to
-   redo their DSC_8382 scene with Measure relief (Add the sample's lamp photos →
-   Measure relief) and raw graze settings. Then: a crop / "painting edges" tool, so
+00. User to redo their DSC_8382 scene on the live site with Measure relief (Add the
+   sample's lamp photos → Measure relief) and raw graze settings, and send a new
+   test bundle (it now carries the measured relief). Then: a crop / "painting edges" tool, so
    raw tripod shots (with wall) can be used as they are.
 0a. One-photo estimate on even-lit photos is ~uncorrelated with real relief on the
    user's panels; low lights emboss its grain. Ideas: warn in the UI when an even
