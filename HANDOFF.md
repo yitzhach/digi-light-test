@@ -145,6 +145,12 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): read the user's PDF (Fontana et al., conoscopic holography on
+  Leonardo/Perugino panels) → `docs/conoscopic-paper-improvements.md`: reference feature
+  sizes (weave 85–130 µm, retouch 60–90 µm, tool grooves 0.6–1.5 mm apart / ≤30 µm deep)
+  and 11 ranked ideas (profile probe with P-V/RMS, calibrated colour height map,
+  relief-only raking view, period readout, mm/px hint, finer depth slider, synthetic
+  cases, colour-vs-relief mismatch on measured relief only). Docs only, no code.
 - 10-14 (pushed to `main`): **Batch preview · compare looks** (`src/batch.js`, section after
   Projects; user's idea after the test rounds). Looks = steps of one setting (SWEEPS:
   depth, graze fill, graze lift, all-lights lift, graze elevation, graze opacity,
@@ -344,6 +350,8 @@ To judge it on a real painting, by eye:
 ## Next up (candidates — confirm with user)
 -1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;
    if it holds, make Measure relief set depth ≈ 1.5× the spread.
+0d. Ideas from `docs/conoscopic-paper-improvements.md` (ask the user which first;
+   profile probe + relief-only view are the cheapest and most useful).
 0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
