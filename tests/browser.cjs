@@ -315,6 +315,24 @@ await page.locator('#lampUse').uncheck();await settle();const pj2=await roundTri
 await page.locator('#lampUse').check();await settle();
 const bad=await page.evaluate(async(pj)=>{pj.relief.lo=NaN;try{await __studio.validate(pj);const {validRelief}=await import('/src/reliefsave.js');validRelief(pj.relief);return false;}catch{return true;}},pj);assert.equal(bad,true);
 console.log('PASS measured relief saved in projects, on and off');}
+// Fit depth to photos (texscore.js, RL-Sq style): the score is 0 on flat grey and close to 0
+// on a smooth pool of light, about the same at two resolutions of one painting; the fit
+// brackets render / photo contrast = 1, keeps every other setting and is one undo step.
+{const u=await page.evaluate(async()=>{const {textureScore}=await import('/src/texscore.js');
+  const mk=(W,H,f)=>{const d=new Uint8ClampedArray(W*H*4);for(let y=0;y<H;y++)for(let x=0;x<W;x++){const v=Math.round(255*f(x/W,y/H)),o=(y*W+x)*4;d[o]=d[o+1]=d[o+2]=v;d[o+3]=255;}return d;};
+  // strokes 20 mm apart on a 300 mm wide painting, under a lamp brighter on the right
+  const strokes=W=>{const H=W*2/3;return textureScore(mk(W,H,(x,y)=>(0.3+0.4*x)*(1+0.2*Math.sin(2*Math.PI*x*300/20)*Math.sin(2*Math.PI*y*200/20))),W,H,300/W).score;};
+  return {flat:textureScore(mk(300,200,()=>0.5),300,200,1).score,pool:textureScore(mk(300,200,(x,y)=>0.2+0.6*x*(1-0.5*y)),300,200,1).score,s300:strokes(300),s600:strokes(600)};});
+assert.equal(u.flat,0);assert.ok(u.pool<0.01,'pool of light '+JSON.stringify(u));assert.ok(u.s300>0.01&&Math.abs(u.s600/u.s300-1)<0.15,'resolution '+JSON.stringify(u));
+const f=await page.evaluate(async()=>{const before=__studio.snapshot(),hi=__studio.history.index;const r=await __studio.lamp.fitDepth();
+  return {depth:r.depth,reached:r.reached,samples:r.samples,lamps:r.lamps.map(l=>l.depth),photo:r.photo,before:JSON.stringify(before),after:JSON.stringify(__studio.snapshot()),hi,hi2:__studio.history.index};});
+assert.equal(f.reached,'yes',JSON.stringify(f.samples));assert.equal(await setting('textureDepthMm'),f.depth);assert.equal(f.hi2,f.hi+1);
+const t=[...f.samples].sort((a,b)=>a[0]-b[0]);assert.ok(t.at(-1)[1]>t[0][1],'contrast rises with depth '+JSON.stringify(t));
+const lo=t.filter(s=>s[0]<=f.depth).at(-1),up=t.find(s=>s[0]>=f.depth);assert.ok(lo[1]<1&&up[1]>=1&&up[0]/lo[0]<1.1,'bracket '+JSON.stringify([lo,up]));
+const strip=j=>{const o=JSON.parse(j);delete o.textureDepthMm;delete o.physical;return JSON.stringify(o);};assert.equal(strip(f.after),strip(f.before));
+assert.match(await page.locator('#lampFitResult').textContent(),/^Texture depth [\d.]+ mm: the renders match .*Each lamp alone: 1: [\d.]+ mm · 2: [\d.]+ mm · 3: [\d.]+ mm/);
+await page.click('#undo');await settle();assert.equal(await setting('textureDepthMm'),JSON.parse(f.before).textureDepthMm);await page.click('#redo');await settle();assert.equal(await setting('textureDepthMm'),f.depth);
+console.log('PASS texture contrast score and Fit depth to photos',JSON.stringify({...u,depth:f.depth,lamps:f.lamps.map(d=>+d.toFixed(2)),photo:f.photo.map(p=>+p.toFixed(4)),tries:f.samples.length}));}
 await page.locator('#file').setInputFiles({name:'other.png',mimeType:'image/png',buffer:buf(png.shots[1])});await page.waitForFunction(()=>document.querySelector('#lampUse').disabled);
 assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('.lampRow').count(),3);
 console.log('PASS lamp photos: measured relief matches the truth',JSON.stringify({corr:+r.corr.toFixed(3),depth:+r.depth.toFixed(2),trueMm:+r.trueMm.toFixed(2),check:r.check.map(c=>+c.toFixed(2)),exportDiff:+par.toFixed(3)}));}
@@ -343,7 +361,7 @@ console.log('PASS DSC_8382 sample with its lamp photos');}
  console.log('PASS shadow lift: no-op at 0, strongest near the light, negative deepens, saved with the light and graze');}
 // Batch preview: steps of one setting render as WebP previews; the live settings and undo
 // history come back unchanged; zoom stays put across looks; picked looks export full size.
-{await page.getByText('Batch preview · compare looks').click();await page.selectOption('#batchKey','exp');await page.fill('#batchFrom','-1');await page.fill('#batchTo','1');await page.selectOption('#batchCount','3');
+{await page.getByText('Batch preview · compare looks').click();await settle();await page.selectOption('#batchKey','exp');await page.fill('#batchFrom','-1');await page.fill('#batchTo','1');await page.selectOption('#batchCount','3');
 const before=await page.evaluate(()=>JSON.stringify(__studio.snapshot())),hi=await page.evaluate(()=>__studio.history.index);
 await page.click('#batchRun');await page.waitForFunction(()=>!document.querySelector('#batchViewer').hidden,null,{timeout:120000});
 const items=await page.evaluate(()=>__batch.batch.items.map(i=>({name:i.name,type:i.blob.type,size:i.blob.size,exp:i.settings.exposure})));

@@ -1,0 +1,74 @@
+{
+ "base": {
+  "sample": "dsc8382"
+ },
+ "lampPhotos": true,
+ "measure": true,
+ "fitDepth": {
+  "fill": 0.25,
+  "relief": "onephoto"
+ },
+ "common": {
+  "relief": "onephoto",
+  "graze": {
+   "opacity": 1,
+   "fill": 0.25
+  }
+ },
+ "variants": [
+  {
+   "name": "Lamp 1, measured depth",
+   "lightLike": 0
+  },
+  {
+   "name": "Lamp 1, fitted depth",
+   "lightLike": 0,
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 1, 8 mm",
+   "lightLike": 0,
+   "state": {
+    "textureDepthMm": 8
+   }
+  },
+  {
+   "name": "Lamp 2, measured depth",
+   "lightLike": 1
+  },
+  {
+   "name": "Lamp 2, fitted depth",
+   "lightLike": 1,
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 2, 8 mm",
+   "lightLike": 1,
+   "state": {
+    "textureDepthMm": 8
+   }
+  },
+  {
+   "name": "Lamp 3, measured depth",
+   "lightLike": 2
+  },
+  {
+   "name": "Lamp 3, fitted depth",
+   "lightLike": 2,
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 3, 8 mm",
+   "lightLike": 2,
+   "state": {
+    "textureDepthMm": 8
+   }
+  }
+ ]
+}

@@ -592,7 +592,7 @@ export function initStudio(api) {
   syncQuick();rebuildMask();renderGraze();history.reset(snapshot());historyUI();
   function usePhotoAzimuth(deg, share){calibrate();state.photoDiffuse=share;state.azimuthDeg=Math.round(deg)%360;state.albedoSuppress=0.5;api.dirty();syncQuick();}
   cal=initCalibrate({state,api,after:grazeBox,setGraze,renderGraze,syncQuick,checkpoint,usePhotoAzimuth,splitView:()=>$('splitView').click()});
-  const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick});
+  const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick,snapshot,restore,setBatching:v=>{batching=v;}});
   // Batch preview: rate several looks, export the chosen ones (batch.js).
   initBatch({state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
     userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT,

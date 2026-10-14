@@ -6,11 +6,12 @@
 // the single-photo estimate with relief measured from them (lampphotos.js). The
 // measurement is saved in projects (reliefsave.js); the photos are not.
 
-import { measureRelief } from './lampphotos.js';
+import { measureRelief, align } from './lampphotos.js';
+import { textureScore, fitDepth as fitDepthTo, BIG_MM } from './texscore.js';
 
 const CM = { in: 2.54, cm: 1 };
 
-export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }) {
+export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, snapshot, restore, setBatching }) {
   const $ = (id) => document.getElementById(id);
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'lampSection';
   box.innerHTML = `<summary>Measure relief · lamp photos</summary><div class="grp">
@@ -20,6 +21,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
     <div class="calScore"><button id="lampMeasure" disabled>Measure relief</button><output id="lampStatus"></output></div>
     <label class="lampUse"><input type="checkbox" id="lampUse" disabled> Use measured relief</label>
     <p class="note" id="lampResult"></p>
+    <div class="calScore"><button id="lampFit" disabled title="Render each lamp photo's light at several depths and keep the one whose stroke contrast matches the photos">Fit depth to photos</button><output id="lampFitStatus"></output></div>
+    <p class="note" id="lampFitResult">Fit depth sets Texture depth so the render under each lamp has as much stroke contrast as the lamp photo: brightness over a ${BIG_MM} mm blur of itself, then its spread (the RL-Sq score from raking-light roughness work). It works with measured or one-photo relief. Set the graze light's Room light first: more room light means less contrast, so a deeper fit.</p>
   </div>`;
   after.after(box);
 
@@ -63,6 +66,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
       host.append(el);
     });
     $('lampMeasure').disabled = busy || !rows.length;
+    $('lampFit').disabled = busy || !rows.length || !api.source();
     $('lampSample').hidden = api.sample() !== 'dsc8382' || rows.some((r) => r.name.startsWith('DSC_83'));
     const m = api.measured.get();
     $('lampUse').disabled = !m; $('lampUse').checked = !!m?.on;
@@ -158,9 +162,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
     cal.useLamp(rows[i].lamp, raw);
   }
 
-  // Before / Split show the lamp photo, lined up as the measurement found it.
-  function compare(i) {
-    const r = rows[i], w = api.canvas.width, h = api.canvas.height;
+  // The lamp photo at the preview's size, lined up as the measurement found it.
+  function lined(r, w = api.canvas.width, h = api.canvas.height) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d');
     if (r.map) {
@@ -171,6 +174,11 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
       x.setTransform(ia, id, ib, ie, -(ia * cx + ib * cy), -(id * cx + ie * cy));
     }
     x.drawImage(r.img, 0, 0, w, h);
+    return c;
+  }
+  // Before / Split show the lamp photo, lined up.
+  function compare(i) {
+    const c = lined(rows[i]);
     comparing = i; api.measured.compare(c);
     $('wrap').dataset.before = `LAMP ${i + 1}`;
     lightLike(i);
@@ -183,6 +191,81 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
     renderRows();
   }
 
+  // ---------------------------------------------------------------- Fit depth
+  // Texture depth from the contrast match (texscore.js): each lamp's photo is scored
+  // once; for a trial depth the graze light becomes each lamp in turn (as Light like
+  // this), the render is scored, and the mean log ratio render / photo is driven to 0.
+  // The settings come back afterwards except Texture depth, in one undo step.
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  function renderPixels() {
+    const keep = { viewMode: state.viewMode, compareSplit: state.compareSplit, layers: state.layers };
+    Object.assign(state, { viewMode: 0, compareSplit: -1, layers: [] });
+    try { api.renderNow(); return pixels(api.canvas, api.canvas.width, api.canvas.height); } finally { Object.assign(state, keep); }
+  }
+  /** Score of the current render and of lamp photo i, both on the preview. */
+  const mmPerPx = () => W() * 10 / api.canvas.width;
+  function scorePhoto(i) {
+    const w = api.canvas.width, h = api.canvas.height, r = rows[i];
+    if (!r.map) r.map = align(pixels(api.source(), w, h), pixels(r.img, w, h), w, h).map;
+    return textureScore(pixels(lined(r, w, h), w, h), w, h, mmPerPx()).score;
+  }
+  let fitStop = false;
+  async function fitDepth({ lamps, lo = 0.25, hi = 10 } = {}) {
+    if (busy || !rows.length || !api.source()) return null;
+    const use = (lamps ?? rows.map((_, i) => i)).filter((i) => rows[i]);
+    busy = true; fitStop = false; renderRows();
+    const snap = snapshot(), d0 = state.textureDepthMm, w = api.canvas.width, h = api.canvas.height;
+    const per = use.map(() => []);
+    let res, photo;
+    setBatching(true);
+    try {
+      $('lampFitStatus').textContent = 'Scoring the lamp photos…'; await frame();
+      photo = use.map((i) => scorePhoto(i));
+      let tries = 0;
+      res = await fitDepthTo(async (d) => {
+        state.physical = 1; state.textureDepthMm = d; api.dirty();
+        let lg = 0;
+        for (const [k, i] of use.entries()) {
+          lightLike(i);
+          const sc = textureScore(renderPixels(), w, h, mmPerPx()).score, ratio = sc / Math.max(1e-6, photo[k]);
+          per[k].push([d, ratio, sc]); lg += Math.log(Math.max(1e-6, ratio));
+        }
+        tries++; $('lampFitStatus').textContent = `Try ${tries}: ${d.toFixed(2)} mm → ${Math.round(Math.exp(lg / use.length) * 100)}% of the photos' contrast`;
+        await frame();
+        return Math.exp(lg / use.length);
+      }, { lo, hi, stop: () => fitStop });
+    } finally {
+      restore(snap); setBatching(false); busy = false; api.dirty();
+    }
+    // Each lamp's own crossing, read off its samples (straight lines on log depth).
+    const cross = (s) => {
+      const t = [...s].sort((a, b) => a[0] - b[0]);
+      for (let j = 1; j < t.length; j++) if (t[j - 1][1] < 1 && t[j][1] >= 1) {
+        const f = (1 - t[j - 1][1]) / (t[j][1] - t[j - 1][1]);
+        return Math.exp(Math.log(t[j - 1][0]) + f * (Math.log(t[j][0]) - Math.log(t[j - 1][0])));
+      }
+      return null;
+    };
+    const depth = Math.min(10, Math.max(0.05, +res.depth.toFixed(2)));
+    const out = { ...res, depth, from: d0, photo, lamps: use.map((i, k) => ({ lamp: i + 1, photo: photo[k], depth: cross(per[k]), samples: per[k] })), stopped: fitStop };
+    if (!fitStop) {
+      state.physical = 1; state.textureDepthMm = depth;
+      api.dirty(); syncQuick(); cal.sync(); api.render(); checkpoint();
+    } else api.render();
+    const m = api.measured.get(), spread = m?.on && m.info?.depthMm;
+    $('lampFitStatus').textContent = fitStop ? 'Stopped.' : 'Done.';
+    $('lampFitResult').innerHTML = fitStop ? '' :
+      (res.reached === 'yes' ? `<b>Texture depth ${depth.toFixed(2)} mm</b>: the renders match the lamp photos' stroke contrast` :
+        res.reached === 'low' ? `<b>Texture depth ${depth.toFixed(2)} mm</b> (the shallowest tried): even that has more stroke contrast than the photos (${Math.round(res.ratio * 100)}%)` :
+          `<b>Texture depth ${depth.toFixed(2)} mm</b> (the deepest tried): even that has only ${Math.round(res.ratio * 100)}% of the photos' stroke contrast; lower Room light or check the lamp positions`) +
+      ` (${m?.on ? 'measured' : 'one-photo'} relief${spread ? `, measured spread ${spread.toFixed(2)} mm` : ''}; was ${d0.toFixed(2)} mm). ` +
+      `Each lamp alone: ${out.lamps.map((l) => `${l.lamp}: ${l.depth ? l.depth.toFixed(2) + ' mm' : '–'}`).join(' · ')}. ` +
+      `Photo contrast: ${photo.map((p) => (p * 100).toFixed(1) + '%').join(', ')}. Undo goes back.`;
+    renderRows();
+    return out;
+  }
+  $('lampFit').onclick = () => fitDepth();
+
   document.addEventListener('digilight:units', renderRows);
   document.addEventListener('digilight:source', renderRows);
   document.addEventListener('digilight:measured', () => {
@@ -192,5 +275,5 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
     renderRows();
   });
   renderRows();
-  return { rows, addFiles, measure, compare, stopCompare, lightLike };
+  return { rows, addFiles, measure, compare, stopCompare, lightLike, fitDepth, scorePhoto, stopFit: () => { fitStop = true; } };
 }

@@ -12,6 +12,10 @@
 //   { "base": { "sample": "dsc8382" } | { "project": "path/to/project.digilight.json" },
 //     "lampPhotos": true,        // dsc8382 only: add the sample's lamp shots
 //     "measure": true,           // run Measure relief (needs lampPhotos)
+//     "fitDepth": { "lamps": [0, 1, 2], "fill": 0.25, "relief": "measured" },  // Fit depth to
+//                                // photos (needs lampPhotos); fill = graze room light and relief
+//                                // = measured | onephoto during the fit; a variant's
+//                                // "state": { "textureDepthMm": "fit" } uses the fitted depth
 //     "common": { "state": {}, "graze": {}, "lights": [{}] },   // applied to every variant
 //     "variants": [ { "name": "lift +50%", "relief": "measured" | "onephoto",
 //                     "lightLike": 0, "state": {}, "graze": {}, "lights": [{ "lift": 0.5 }] } ] }
@@ -19,7 +23,9 @@
 // lamp photo lined up to the painting, when measured), DIR/sheet.png (numbered contact
 // sheet) and DIR/results.json (settings and, where a variant uses Light like this,
 // metrics against that lamp photo: shadow depth p10/p50, local p10 of y over its 51 px
-// box mean, and log-luma RMS after a median gain match; photo values alongside).
+// box mean, log-luma RMS after a median gain match, and the RL-Sq style texture
+// contrast score of src/texscore.js, render / photo as textureMatch; photo values
+// alongside).
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
@@ -72,12 +78,26 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
   }
   save('original.png', await page.evaluate(() => { const s = __bench.state, v = s.viewMode; s.viewMode = 4; __bench.render(); const u = __bench.canvas.toDataURL('image/png'); s.viewMode = v; __bench.render(); return u; }));
   const base = await page.evaluate(() => JSON.stringify(__studio.snapshot()));
+  // After the base, which keeps its own depth: variants ask for the fit with "fit".
+  let fit = null;
+  if (SPEC.fitDepth) {
+    const f = SPEC.fitDepth === true ? {} : SPEC.fitDepth;
+    fit = await page.evaluate(async (f) => {
+      const s = __bench.state, keep = s.graze.fill, use = document.querySelector('#lampUse');
+      if (f.fill != null) s.graze.fill = f.fill;
+      if (f.relief && use && !use.disabled && use.checked !== (f.relief === 'measured')) use.click();
+      const r = await __studio.lamp.fitDepth({ lamps: f.lamps });
+      s.graze.fill = keep;
+      return r && { relief: __bench.measured()?.on ? 'measured' : 'one-photo', depth: r.depth, reached: r.reached, ratio: r.ratio, from: r.from, fill: f.fill ?? keep, samples: r.samples, lamps: r.lamps };
+    }, f);
+    console.log('fit depth', JSON.stringify({ relief: fit.relief, depth: fit.depth, reached: fit.reached, fill: fit.fill, lamps: fit.lamps.map((l) => [l.lamp, l.depth && +l.depth.toFixed(2), +l.photo.toFixed(4)]) }));
+  }
 
   // ---- variants
   const results = [];
   for (const [k, v] of SPEC.variants.entries()) {
     const num = String(k + 1).padStart(2, '0'), name = v.name || `variant ${k + 1}`;
-    const out = await page.evaluate(async ({ base, v, common }) => {
+    const out = await page.evaluate(async ({ base, v, common, fitDepth }) => {
       __studio.restore(JSON.parse(base));
       const use = document.querySelector('#lampUse');
       if (use && !use.disabled) { const on = (v.relief ?? common.relief ?? 'measured') === 'measured'; if (use.checked !== on) use.click(); }
@@ -85,6 +105,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
       const s = __bench.state;
       for (const p of [common, v]) {
         Object.assign(s, p.state || {});
+        if (s.textureDepthMm === 'fit') { s.textureDepthMm = fitDepth; s.physical = 1; }
         if (p.graze) Object.assign(s.graze, p.graze);
         (p.lights || []).forEach((l, i) => { if (l && s.lights[i]) Object.assign(s.lights[i], l); });
       }
@@ -93,7 +114,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       __bench.render();
       return { url: __bench.canvas.toDataURL('image/png'), settings: { graze: s.graze, lights: s.lights.map(({ rgb, ...l }) => l), exposure: s.exposure, ambient: s.ambient, textureDepthMm: s.textureDepthMm }, measuredOn: !!__bench.measured()?.on };
-    }, { base, v, common: SPEC.common || {} });
+    }, { base, v, common: SPEC.common || {}, fitDepth: fit?.depth });
     const file = `${num}-${slug(name)}.png`;
     save(file, out.url);
     results.push({ num: k + 1, name, file, relief: out.measuredOn ? 'measured' : 'one-photo', lightLike: v.lightLike ?? null, settings: out.settings });
@@ -104,6 +125,12 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
   const imgs = Object.fromEntries(['original.png', ...results.map((r) => r.file), ...fs.readdirSync(OUT).filter((f) => /^lamp-\d+\.png$/.test(f))]
     .map((f) => [f, 'data:image/png;base64,' + fs.readFileSync(path.join(OUT, f)).toString('base64')]));
   const done = await page.evaluate(async ({ imgs, results }) => {
+    const { textureScore } = await import('/src/texscore.js');
+    const tex = (img) => {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      return textureScore(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, __bench.state.paintingWidthCm * 10 / c.width).score;
+    };
     const load = (u) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = u; });
     const lumaOf = (img) => {
       const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
@@ -125,13 +152,14 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
     };
     const stats = (L) => { const b = boxMean(L, 25), loc = L.y.map((v, i) => v / Math.max(b[i], 1e-3)); return { depth: pct(L.y, 10) / pct(L.y, 50), local: pct(loc, 10), median: pct(L.y, 50) }; };
     const cache = {};
-    const photo = async (f) => (cache[f] ||= (() => { const L = lumaOf(f.img); return { L, s: stats(L) }; })());
+    const photo = async (f) => (cache[f] ||= (() => { const L = lumaOf(f.img); return { L, s: stats(L), tex: tex(f.img) }; })());
     for (const r of results) {
       if (r.lightLike == null || !imgs[`lamp-${r.lightLike + 1}.png`]) continue;
       const P = await photo({ img: await load(imgs[`lamp-${r.lightLike + 1}.png`]), toString: () => `lamp-${r.lightLike + 1}` });
-      const R = lumaOf(await load(imgs[r.file])), sr = stats(R), g = P.s.median / Math.max(sr.median, 1e-4);
+      const rimg = await load(imgs[r.file]), R = lumaOf(rimg), sr = stats(R), g = P.s.median / Math.max(sr.median, 1e-4), rt = tex(rimg);
       let e = 0; for (let i = 0; i < R.y.length; i++) { const t = Math.log(Math.max(R.y[i] * g, 1e-3)) - Math.log(Math.max(P.L.y[i], 1e-3)); e += t * t; }
-      r.vsLampPhoto = { depth: +sr.depth.toFixed(3), photoDepth: +P.s.depth.toFixed(3), local: +sr.local.toFixed(3), photoLocal: +P.s.local.toFixed(3), logRMS: +Math.sqrt(e / R.y.length).toFixed(3) };
+      r.vsLampPhoto = { depth: +sr.depth.toFixed(3), photoDepth: +P.s.depth.toFixed(3), local: +sr.local.toFixed(3), photoLocal: +P.s.local.toFixed(3), logRMS: +Math.sqrt(e / R.y.length).toFixed(3),
+        texture: +rt.toFixed(4), photoTexture: +P.tex.toFixed(4), textureMatch: +(rt / P.tex).toFixed(3) };
     }
     // Contact sheet: original (and lamp photos) first, then the numbered variants.
     const tiles = [['original.png', 'Original'], ...Object.keys(imgs).filter((f) => f.startsWith('lamp-')).sort().map((f) => [f, f.replace('.png', '').replace('lamp-', 'Lamp photo ')]),
@@ -146,7 +174,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
     return { results, sheet: sheet.toDataURL('image/png') };
   }, { imgs, results });
   save('sheet.png', done.sheet);
-  fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ spec: SPEC, measured, results: done.results, errors }, null, 1));
+  fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ spec: SPEC, measured, fit, results: done.results, errors }, null, 1));
   for (const r of done.results) if (r.vsLampPhoto) console.log(`${String(r.num).padStart(2, '0')} vs lamp ${r.lightLike + 1}:`, JSON.stringify(r.vsLampPhoto));
   if (errors.length) console.log('errors', errors);
   console.log('wrote', OUT);
