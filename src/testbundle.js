@@ -63,6 +63,13 @@ function lightSummary(s) {
   return `${on.length} light(s) on\n${lines.join('\n')}`;
 }
 
+// Which relief the views were drawn from: the one-photo estimate or a measurement.
+function reliefSummary(api) {
+  const m = api.measured?.get?.();
+  if (!m) return 'one-photo estimate';
+  return `measured from lamp photos${m.info?.depthMm != null ? `, ${m.info.depthMm.toFixed(2)} mm` : ''}, ${m.on ? 'in use' : 'switched off (one-photo estimate in use)'}`;
+}
+
 /** Builds and downloads the bundle. project: the portable project record. */
 export async function exportTestBundle(api, project, notes, onStatus = () => {}) {
   const s = api.state, files = [];
@@ -91,7 +98,7 @@ export async function exportTestBundle(api, project, notes, onStatus = () => {})
   add('info.json', text(JSON.stringify({
     exported: new Date().toISOString(), url: location.href, userAgent: navigator.userAgent, gpu,
     screen: [screen.width, screen.height, devicePixelRatio], preview: [api.canvas.width, api.canvas.height],
-    viewZoom: s.viewZoom, errors: errors.slice(-50), lights: lightSummary(s),
+    viewZoom: s.viewZoom, errors: errors.slice(-50), lights: lightSummary(s), relief: reliefSummary(api),
   }, null, 2)));
   const name = `${(project.name || 'painting').replace(/[^a-z0-9_-]/gi, '_')}-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '')}.zip`;
   const url = URL.createObjectURL(makeZip(files)), a = document.createElement('a');

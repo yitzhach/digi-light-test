@@ -5,10 +5,12 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
+- Last code change on `main`: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
+  **measured relief saved in projects and test bundles** (`src/reliefsave.js`)
+- Before that: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
   **Measure relief · lamp photos** (relief measured from 2–3 lamp shots + the even
   shot) and the **DSC_8382** sample with its lamp shots
-- Before that: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
+- Earlier: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
   Export for testing zip, shadow smoothing, sample painting on open
 - Earlier: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate section
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
@@ -64,6 +66,24 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (merged to `main`): user test
+  bundle `Untitled_painting-test-2026-10-140440` (DSC_8382, one light from 126° high
+  up + graze 3° from 61.5°, note "incorrect shadow direction to light source"; later:
+  same with the standard light alone). Reproduced to 0.44/255. Findings: (1) light and
+  shadow geometry is right (synthetic bumps via `afterHeight`: main and graze shade
+  and cast away from the lamp); (2) the bundle used the ONE-PHOTO estimate (measured
+  relief is not saved, so it was never in play). Scored against the aligned lamp
+  photos (graze = each lamp, stroke band of log(render/even) vs log(photo/even)):
+  one-photo r = +0.01 (EVEN_SHARE 0.6) / +0.00 (share 1), fine contrast 1.5–1.7× the
+  real photos'; measured r = 0.80, contrast 0.64–0.88. The "motion blur" is that
+  grain embossed by a low light. Dropping the directional share for even photos did
+  not help, so presets are unchanged. Fix shipped: projects save measured relief
+  (`src/reliefsave.js`: 16-bit PNG in `project.relief` {format 'height16png', w, h,
+  lo, hi, on, depthMm, check, image}; resampled on open if the preview size differs;
+  dropped if the shape differs), so test bundles carry it too; bundle `info.json`
+  has `relief` (which relief the views used). `__bench.measured()` test hook. Note:
+  graze Detail smoothing (e.g. 0.01) also blurs measured relief; with measured
+  relief use raw graze settings (Light like this does).
 - 10-14 (merged to `main`): user sent a tripod set of the 19 in red panel (2.5 in
   deep): DSC_8382 even room light, DSC_8379/80/81 one spot lamp ~9 in above the top,
   6.5/5.75/6 in from the paint, centre / ~2.8 in left of the left edge / ~3.4 in
@@ -186,9 +206,13 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
-00. User feedback on Measure relief with DSC_8382 on the live site. Then: a crop /
-   "painting edges" tool, so raw tripod shots (with wall) can be used as they are;
-   save measured relief (or the lamp photos) in projects and test bundles.
+00. User to redo their DSC_8382 scene on the live site with Measure relief (Add the
+   sample's lamp photos → Measure relief) and raw graze settings, and send a new
+   test bundle (it now carries the measured relief). Then: a crop / "painting edges" tool, so
+   raw tripod shots (with wall) can be used as they are.
+0a. One-photo estimate on even-lit photos is ~uncorrelated with real relief on the
+   user's panels; low lights emboss its grain. Ideas: warn in the UI when an even
+   photo is lit low with no measured relief; lower default fine contrast there.
 0. Contrast: renders at the measured depth show ~60% of the lamp photos' stroke
    contrast (losses in integration, normal pass, all-lamps-above). Calibrate a gain
    against the lamp photos, or fix the losses; the user says the thickest paint is
@@ -216,7 +240,8 @@ To judge it on a real painting, by eye:
 - Must serve over HTTP (ES modules); don't open index.html directly.
 - Deploy index.html, studio.css, src/, samples/, _headers together.
 - Tests must open `/?synth`: the default start is the sample photo.
-- Measured relief lives in app.js `measured` (preview-sized RGBA16F texture), not in
-  state/history/projects; a new photo (setSource without keep) drops it. Lamp
+- Measured relief lives in app.js `measured` (preview-sized RGBA16F texture + the
+  Float32 heights), not in state/history; projects save it as `relief` (reliefsave.js);
+  a new photo (setSource without keep) drops it. Lamp
   photos must be cropped exactly like the painting photo (same shape) and lamp
   "out" is from the painted face.

@@ -2,6 +2,7 @@ import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE,
 import { initLampPhotos } from './lampui.js';
 import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
+import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -463,7 +464,11 @@ export function initStudio(api) {
     if(state.mode!=='single')throw new Error('Project saving currently supports single photographs. Export capture results as PNG.');
     const source=api.source();const c=document.createElement('canvas');c.width=source.naturalWidth||source.width;c.height=source.naturalHeight||source.height;c.getContext('2d').drawImage(source,0,0);
     const image=await new Promise((resolve,reject)=>c.toBlob(b=>{if(!b)return reject(new Error('Image too large to save.'));const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(b);},'image/png'));
-    return {format:'digilight',version:1,id:projectId||crypto.randomUUID(),name:$('projectName').value.trim()||'Untitled painting',updated:Date.now(),image,settings:snapshot()};
+    const p={format:'digilight',version:1,id:projectId||crypto.randomUUID(),name:$('projectName').value.trim()||'Untitled painting',updated:Date.now(),image,settings:snapshot()};
+    // Relief measured from lamp photos goes with the project (the photos do not).
+    const m=api.measured.get(),height=api.measured.height();
+    if(m&&height)p.relief=encodeRelief({height,w:m.w,h:m.h,on:m.on,depthMm:m.info?.depthMm,check:m.info?.check});
+    return p;
   }
   // Queue storage operations rather than dropping one that arrives while another runs.
   let queue=Promise.resolve();
@@ -495,7 +500,10 @@ export function initStudio(api) {
     if(g.lamp!=null){const L=g.lamp;if(typeof L!=='object'||![L.left,L.above,L.out].every(Number.isFinite)||Math.abs(L.left)>2000||Math.abs(L.above)>2000||L.out<LAMP_OUT_MIN||L.out>2000)throw new Error('Invalid graze light.');settings.graze.lamp={left:L.left,above:L.above,out:L.out};}
     return settings;
   }
-  async function open(p){stopSweep();const settings=validate(p);const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
+  async function open(p){stopSweep();const settings=validate(p);const relief=p.relief!=null?validRelief(p.relief):null;const im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=()=>rej(new Error('Project image could not be opened.'));im.src=p.image;});await api.openSource(im);Object.assign(state,settings);
+    // Measured relief, at the preview's size now; a map whose shape is not the photo's is left out.
+    if(relief&&Math.abs(relief.h/relief.w-api.canvas.height/api.canvas.width)<0.01){const m=await decodeRelief(relief,api.canvas.width,api.canvas.height);api.measured.set(m.height,m.w,m.h,{...m.info,on:m.on});}
+    projectId=p.id||null;$('projectName').value=String(p.name||'Untitled painting').slice(0,120);before=false;split=false;comparison();sync();history.reset(snapshot());historyUI();status('Project opened.');}
   $('loadProject').onclick=()=>busy(async()=>{const p=await storage('projects','readonly',s=>s.get($('projectList').value));if(!p)throw new Error('Choose a saved project.');await open(p);});
   $('testBundle').onclick=()=>{const notes=prompt('What should be looked at? (e.g. "streaks top left", "too dark after Auto-fit")','');if(notes===null)return;busy(async()=>{const p=await project();const r=await exportTestBundle(api,p,notes,status);status(`Test bundle downloaded: ${r.name}. Attach it in the chat.`);});};
   $('downloadProject').onclick=()=>busy(async()=>{const p=await project();const blob=new Blob([JSON.stringify(p)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${p.name.replace(/[^a-z0-9_-]/gi,'_')}.digilight.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),4000);status('Project downloaded.');});

@@ -285,7 +285,7 @@ assert.equal(await page.locator('#lampMeasure').isDisabled(),true);assert.equal(
 await page.locator('#lampFile').setInputFiles(png.shots.map((b,i)=>({name:`lamp${i+1}.png`,mimeType:'image/png',buffer:buf(b)})));
 await page.waitForFunction(()=>document.querySelectorAll('.lampRow').length===3);
 for(let i=0;i<3;i++)for(const k of ['above','left','out']){const el=page.locator('.lampRow').nth(i).locator(`input[data-k=${k}]`);await el.fill(String(lamps[i][k]));await el.dispatchEvent('change');}
-const r=await page.evaluate(async()=>{const {boxBlur,DRIFT_SIGMA}=await import('/src/lampphotos.js');const res=await __studio.lamp.measure();const W=res.w,H=res.h,t=__lampTruth,d=boxBlur(t,W,H,DRIFT_SIGMA*W);
+const r=await page.evaluate(async()=>{const {boxBlur,DRIFT_SIGMA}=await import('/src/lampphotos.js');const res=await __studio.lamp.measure();window.__lampRes=res;const W=res.w,H=res.h,t=__lampTruth,d=boxBlur(t,W,H,DRIFT_SIGMA*W);
   let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;const tv=[];for(let y=10;y<H-10;y++)for(let x=10;x<W-10;x++){const i=y*W+x,a=t[i]-d[i],b=res.height[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;n++;tv.push(a);}
   tv.sort((a,b)=>a-b);const corr=(sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2));
   const trueMm=(tv[Math.floor(tv.length*0.98)]-tv[Math.floor(tv.length*0.02)])*__bench.state.paintingWidthCm*10/W;
@@ -302,6 +302,19 @@ const par=await page.evaluate(async()=>{const s=__bench.state;s.maxTile=200;cons
   const W=__bench.canvas.width,H=__bench.canvas.height,a=document.createElement('canvas');a.width=W;a.height=H;const ax=a.getContext('2d');ax.drawImage(__bench.canvas,0,0);const b=document.createElement('canvas');b.width=W;b.height=H;const bx=b.getContext('2d');bx.drawImage(c,0,0);
   const da=ax.getImageData(0,0,W,H).data,db=bx.getImageData(0,0,W,H).data;let d=0;for(let i=0;i<da.length;i+=4)d+=Math.abs(da[i]-db[i]);return d/(W*H);});
 assert.ok(par<1,'tiled export with measured relief matches the preview '+par);
+// Saved with the project: the measured relief comes back from a downloaded project, on or off as it was.
+const grab=()=>page.evaluate(()=>{__bench.render();const c=document.createElement('canvas');c.width=__bench.canvas.width;c.height=__bench.canvas.height;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);return Array.from(x.getImageData(0,0,c.width,c.height).data.filter((_,i)=>i%4===0));});
+const roundTrip=async(file)=>{const dl=page.waitForEvent('download');await page.click('#downloadProject');await (await dl).saveAs(outputDir+'/'+file);await page.evaluate(()=>{document.querySelector('#projectStatus').textContent='';});
+  await page.locator('#projectFile').setInputFiles(outputDir+'/'+file);await page.waitForFunction(()=>document.querySelector('#projectStatus').textContent==='Project opened.');await settle();return JSON.parse(require('fs').readFileSync(outputDir+'/'+file,'utf8'));};
+{const pre=await grab(),pj=await roundTrip('measured.json');assert.equal(pj.relief.format,'height16png');assert.equal(pj.relief.on,true);
+const m=await page.evaluate(()=>{const m=__bench.measured(),t=__lampRes.height;let e=0,lo=Infinity,hi=-Infinity;for(let i=0;i<t.length;i++){e=Math.max(e,Math.abs(m.height[i]-t[i]));lo=Math.min(lo,t[i]);hi=Math.max(hi,t[i]);}return {on:m.on,w:m.w,h:m.h,err:e/(hi-lo),depth:m.info.depthMm};});
+assert.ok(m.on&&m.w===W&&m.h===H&&m.err<2e-5&&Math.abs(m.depth-r.depth)<1e-9,'reloaded relief '+JSON.stringify(m));
+assert.equal(await page.locator('#lampUse').isChecked(),true);assert.match(await page.locator('#lampResult').textContent(),/^Measured relief from the project, [\d.]+ mm deep\.$/);
+const post=await grab();let d=0;for(let i=0;i<pre.length;i++)d+=Math.abs(pre[i]-post[i]);assert.ok(d/pre.length<0.5,'render after reopening '+d/pre.length);
+await page.locator('#lampUse').uncheck();await settle();const pj2=await roundTrip('measured-off.json');assert.equal(pj2.relief.on,false);assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('#lampUse').isDisabled(),false);
+await page.locator('#lampUse').check();await settle();
+const bad=await page.evaluate(async(pj)=>{pj.relief.lo=NaN;try{await __studio.validate(pj);const {validRelief}=await import('/src/reliefsave.js');validRelief(pj.relief);return false;}catch{return true;}},pj);assert.equal(bad,true);
+console.log('PASS measured relief saved in projects, on and off');}
 await page.locator('#file').setInputFiles({name:'other.png',mimeType:'image/png',buffer:buf(png.shots[1])});await page.waitForFunction(()=>document.querySelector('#lampUse').disabled);
 assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('.lampRow').count(),3);
 console.log('PASS lamp photos: measured relief matches the truth',JSON.stringify({corr:+r.corr.toFixed(3),depth:+r.depth.toFixed(2),trueMm:+r.trueMm.toFixed(2),check:r.check.map(c=>+c.toFixed(2)),exportDiff:+par.toFixed(3)}));}
