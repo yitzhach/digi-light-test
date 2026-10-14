@@ -65,6 +65,12 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   artifacts (round 1 KosdnNmiC9zoeM23RFZXrf, round 2 VDxrYW7MHAhdHfpsis5pEq) keep stars
   in their db collection `ratings` (docs rNN-MM {round, render, stars, why}); read with
   ArtifactData list.
+- In-app batch by the user (10-14, phone, Batch preview · Texture depth sweep, 6 looks,
+  default range 0.6×–2× of 4 mm = 2.4/3.5/4.6/5.8/6.9/8.0 mm; red panel with the figure;
+  relief type and lights not known): **06 = 8 mm was best (★3)**, the deepest look in the
+  sweep, so the best value may be above 8 mm. Same direction as round 2: the app needs
+  well over the real paint depth (thickest ~4.8 mm) to look right. Next: sweep 7–10 mm
+  and ask what keeps it at 3★.
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
