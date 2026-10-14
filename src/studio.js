@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, LOOK_NEUTRAL, ROOM_NEUTRAL_K, STROKE_SIZE_MIN, STROKE_SIZE_MAX } from './presets.js';
 import { initLampPhotos } from './lampui.js';
 import { initProbe } from './probe.js';
 import { strokeDirection, nearerSide } from './photocheck.js';
@@ -31,7 +31,7 @@ export function initStudio(api) {
     <label class="selectRow">Finish<select id="materialPreset"><option value="">Choose finish…</option></select></label>
     <div class="views"><button id="autoSetup">Auto setup</button><button id="resetLighting">Reset lighting</button></div>
     <p class="note" id="autoStatus">A restrained starting look. Pick the paint texture and how the photo was lit.</p>
-    </div><h2>My reusable presets</h2><div class="grp">
+    </div><h2>Colour & strokes</h2><div class="grp" id="lookControls"></div><h2>My reusable presets</h2><div class="grp">
     <input id="presetName" class="full" aria-label="Preset name" placeholder="Preset name" maxlength="120">
     <div class="views"><button id="savePreset">Save current preset</button><button id="downloadPreset">Download current</button></div>
     <label class="selectRow">My presets<select id="userPresetList"><option value="">Choose saved preset…</option></select></label>
@@ -106,9 +106,9 @@ export function initStudio(api) {
   const GRAZE_DEFAULT = { enabled: false, angle: 180, ...grazePresets['Classic raking'] };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
-  const defaults = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
+  const defaults = { ...LOOK_NEUTRAL, fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
     physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], graze: GRAZE_DEFAULT };
-  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0 };
+  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
   const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
   const DERIVED = ['heightScale', 'reliefStrength'];
@@ -195,7 +195,7 @@ export function initStudio(api) {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { const i = row.querySelector('input'); row.querySelector('output').textContent = Number(i.value).toFixed(+i.step < 0.01 ? 3 : 2); });
-    syncQuick(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
+    syncQuick(); syncLook(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
   }
   const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
   function renderGraze() {
@@ -392,6 +392,27 @@ export function initStudio(api) {
     row.querySelector('input').oninput=e=>{state[key]=+e.target.value; row.querySelector('output').textContent=state[key].toFixed(step<0.01?3:2); if(key==='photoDiffuse'){calibrate();syncQuick();} if(surface) api.dirty(); render();};
     $('creativeSliders').append(row);
   }
+  // Colour & strokes: a camera's white balance and vibrance, the room light's colour,
+  // and Stroke definition from the relief's curvature. All four at their neutral
+  // values leave the render exactly as it was (presets.js LOOK_NEUTRAL).
+  const signedPct=v=>`${v>0?'+':''}${Math.round(v*100)}%`;
+  const lookControls = [
+    ['neutralWB','Keep greys neutral',0,1,0.05,v=>`${Math.round(v*100)}%`,'0: the lights tint everything, as on a daylight camera. 100%: the camera is white-balanced to the lights, so grey paint stays grey while warm and cool lights still differ from each other.'],
+    ['vibrance','Vibrance',-1,1,0.05,signedPct,'More (or less) colour in coloured paint; greys and whites keep their tint.'],
+    ['roomKelvin','Room light colour',1800,10000,50,v=>v===ROOM_NEUTRAL_K?'White':`${v} K`,`Colour of the soft room light under the lamps. ${ROOM_NEUTRAL_K} K is plain white; lower is warmer, higher cooler.`],
+    ['strokeDef','Stroke definition',0,1,0.05,v=>`${Math.round(v*100)}%`,'Darkens the creases between brush strokes and lifts their crests, from the relief. Only light changes: no detail is added.'],
+    ['strokeSize','Stroke size',STROKE_SIZE_MIN,STROKE_SIZE_MAX,0.001,v=>`${(v*state.paintingWidthCm*10).toFixed(1)} mm`,'Width of the strokes Stroke definition works on, on the painting.'],
+  ];
+  for (const [key,label,min,max,step,fmt,title] of lookControls) {
+    const row = document.createElement('div'); row.className='row'; row.title=title;
+    row.innerHTML=`<label for="${key}">${label}</label><input id="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state[key]}"><output data-own></output>`;
+    row.querySelector('input').oninput=e=>{state[key]=+e.target.value; syncLook(); render();};
+    $('lookControls').append(row);
+  }
+  {const n=document.createElement('p');n.className='note';n.textContent='Keep greys neutral with a little Vibrance keeps white paint white under warm light while the colours stay rich. Hover a slider for what it does.';$('lookControls').append(n);}
+  function syncLook(){for(const [key,,,,,fmt] of lookControls){const i=$(key);if(!i)continue;i.closest('.row').querySelector('output').textContent=fmt(+i.value);}}
+  syncLook();
+  $('paintingWidthCm').addEventListener('input',syncLook);   // Stroke size reads in mm
   const warning = document.createElement('p'); warning.className='note'; warning.textContent='Neutralize light reduces local brightness variation and may alter tonal details. Start low; compare often. Even-light share blends relief read from dark recesses (1) with relief read along the photo\'s light direction (0).'; $('creativeSliders').append(warning);
   for (const [id,label] of Object.entries({chromaReject:'Protect color edges', reliefStrength:'Texture strength',reliefScale:'Texture size',shadow:'Shadow depth',ao:'Contact shadow',specular:'Highlight strength',heightScale:'Relief depth',albedoSuppress:'Reduce baked detail'})) $(id).closest('.row').querySelector('label').textContent=label;
   const advanced = document.createElement('details'); advanced.innerHTML='<summary>Advanced surface recovery</summary>';
@@ -406,7 +427,7 @@ export function initStudio(api) {
   function makeLight(v) {
     const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
   }
-  function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; for (const k of ['shadow','shadowSoftness']) if (k in scene) state[k]=scene[k]; refresh(); }
+  function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; for (const k of ['shadow','shadowSoftness',...Object.keys(LOOK_NEUTRAL)]) if (k in scene) state[k]=scene[k]; refresh(); }
   // Any calibrated control switches a legacy project over to calibrated relief.
   function calibrate() { state.physical = 1; }
   function useTexture(name) {
@@ -564,7 +585,7 @@ export function initStudio(api) {
     const settings={};
     for(const k of keys)if(!['lights','strokes','layers','graze'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
-    for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
+    for(const [k,,min,max] of [...newControls,...lookControls])if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2],['lift',-1,1]]){const v=l[k]??({lift:0,softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));

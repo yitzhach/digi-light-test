@@ -25,6 +25,11 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     ['elev', 'Graze angle to wall', 1, 20, 0.5, (s) => s.graze.elevation, (s, v) => { s.graze.enabled = true; s.graze.elevation = v; delete s.graze.lamp; }, (v) => `${fmtNum(v, 1)}°`],
     ['gop', 'Graze opacity', 0, 1, 0.05, (s) => s.graze.opacity, (s, v) => { s.graze.enabled = true; s.graze.opacity = v; }, (v) => `${Math.round(v * 100)}%`],
     ['exp', 'Exposure', -3, 3, 0.05, (s) => s.exposure, (s, v) => { s.exposure = v; }, (v) => `${v > 0 ? '+' : ''}${fmtNum(v, 2)} stops`],
+    ['wb', 'Keep greys neutral', 0, 1, 0.05, (s) => s.neutralWB ?? 0, (s, v) => { s.neutralWB = v; }, (v) => `${Math.round(v * 100)}%`],
+    ['vib', 'Vibrance', -1, 1, 0.05, (s) => s.vibrance ?? 0, (s, v) => { s.vibrance = v; }, pct],
+    ['room', 'Room light colour', 1800, 10000, 50, (s) => s.roomKelvin ?? 6500, (s, v) => { s.roomKelvin = Math.round(v / 50) * 50; }, (v) => `${Math.round(v / 50) * 50} K`],
+    ['sdef', 'Stroke definition', 0, 1, 0.05, (s) => s.strokeDef ?? 0, (s, v) => { s.strokeDef = v; }, (v) => `${Math.round(v * 100)}%`],
+    ['ssize', 'Stroke size', 0.002, 0.04, 0.001, (s) => s.strokeSize ?? 0.01, (s, v) => { s.strokeSize = v; }, (v) => `${fmtNum(v * 100, 1)}% of width`],
   ];
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'batchSection';
   box.innerHTML = `<summary>Batch preview · compare looks</summary><div class="grp">

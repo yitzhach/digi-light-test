@@ -75,7 +75,7 @@ encode WebP) and opens them in a full-screen viewer: swipe or Prev / Next, pinch
 double-tap or wheel to zoom (the zoom and spot stay put across looks), hold for the
 original photo, 1–5 stars (4 and up are ticked for export). Looks come from steps of
 one setting (texture depth, graze room light, shadow lift, graze angle or opacity,
-exposure), the lighting or graze presets, or your saved presets, each applied on top
+exposure, the Colour & strokes settings), the lighting or graze presets, or your saved presets, each applied on top
 of the current settings; the current look can be #1. **Export picked** renders the
 ticked looks at full resolution in the Export format (one file, or a .zip for
 several); **Download previews** saves the previews with `ratings.json`; **Use this
@@ -120,6 +120,22 @@ look variants (patches on one base scene) to PNGs plus a labelled contact sheet,
 scores any variant lit like a lamp photo against that photo.
 The **Grazing side light** preset makes one of your own lights a grazing light;
 Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
+
+**Colour & strokes** (under Quick setup) holds four controls that are off by default
+and leave the render exactly as before. **Keep greys neutral** white-balances the
+camera toward the lights' mix (0 = a daylight camera, where a warm lamp turns white
+paint beige; 100% = grey paint stays grey, while a warm key over a cool room light
+still keeps warm faces and cool shadows). **Vibrance** adds or takes colour from coloured
+paint and leaves greys, whites and darks alone. **Room light colour** sets the Kelvin of
+the soft room light (6500 K = the plain white it always was). **Stroke definition**
+darkens the creases between brush strokes and lifts their crests, from the relief's
+curvature at **Stroke size** (a band from a quarter of that size up to it, so the
+finest grain is left alone); it changes only light, never colour, and adds no detail.
+The **Gallery spot, upper right** lighting preset uses all of them: one warm spot off
+the upper right, greys 70%, vibrance 35%, strokes 50%. It came from an AI-relit image of
+the red panel: the AI redrew the paint's fine texture, which DigiLight will not do, but
+its grey-stays-grey colour and defined strokes are reproduced here from the photo and
+its relief alone (photo detail kept: 91% at 3–9 px, 99% at 9–27 px on a 1000 px image).
 
 **Shadow lift** (on each light, and in Graze light) starts in the middle (off).
 Right of centre brightens the dark tones the light falls on, left of centre deepens
@@ -272,7 +288,7 @@ restoration; quick setup, photo lighting and depth undo; light types, angle and
 mirror; light dots over compare/brush; reopening a photo keeps edits; grazing
 preset and view zoom; zoom to 400% (steps, keys, Ctrl+wheel about the pointer,
 scrolling, Space and middle-button panning, pinned dots, light drags and brush strokes
-while zoomed in); sharp zoom detail; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; mobile layout;
+while zoomed in); sharp zoom detail; graze light effect; blend layers and layer masks; sweep light; legacy project import; shadow physics; colour & strokes (no-op when neutral, greys neutral, vibrance spares greys, room light colour, stroke definition exports as previewed, saved and validated); mobile layout;
 photometric rendering and synthetic truth restoration. No browser or WebGL errors were reported.
 At the 240x300 test resolution, PNG export matched preview pixels exactly.
 Forced multi-tile export including a correction mask averaged 0.0021 byte levels

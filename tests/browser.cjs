@@ -463,6 +463,42 @@ await page.click('#bvPrev');await page.click('#bvApply');assert.equal(await sett
 const L=await setting('lights'),n=L.at(-1);
 const src=L.find(l=>l.kelvin===2700&&l!==n);assert.ok(src&&n.kelvin===2700&&n.power===3.3&&n.z===0.21&&n.lift===0.4&&(n.x!==src.x||n.y!==src.y),JSON.stringify(n));await page.click('#undo');await settle();}
 console.log('PASS batch preview: WebP looks, sharp previews, notes and Save ratings JSON, settings and history restored, zoom kept, picked export saved as a project, use this look; + Light starts from the selected light');}
+// Colour & strokes: neutral values change nothing; Keep greys neutral takes a warm light's
+// tint off grey paint; Vibrance saturates the red half and leaves the grey half; Room light
+// colour tints the room light; Stroke definition carves the relief and exports as previewed;
+// the settings save, and saves made before them open at the neutral values.
+{const fx=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=200;c.height=240;const x=c.getContext('2d');for(let y=0;y<240;y++)for(let a=0;a<200;a++){const t=Math.sin(a*.45)*Math.cos(y*.31)+.6*Math.sin((a+y)*.13),v=140+45*t;x.fillStyle=a<100?`rgb(${v},${v},${v})`:`rgb(${v},${v*.45},${v*.35})`;x.fillRect(a,y,1,1);}return c.toDataURL().split(',')[1];});
+await page.locator('#file').setInputFiles({name:'look.png',mimeType:'image/png',buffer:Buffer.from(fx,'base64')});await page.waitForFunction(()=>__bench.canvas.width===200);await settle();
+const stats=()=>page.evaluate(()=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);const d=x.getImageData(0,0,c.width,c.height).data,w=c.width,h=c.height;
+  const half=(a0,a1)=>{const m=[0,0,0];let n=0,sat=0;const Y=[];for(let y=20;y<h-20;y++)for(let a=a0;a<a1;a++){const i=(y*w+a)*4,r=d[i],gg=d[i+1],b=d[i+2];m[0]+=r;m[1]+=gg;m[2]+=b;n++;const mx=Math.max(r,gg,b);sat+=mx?(mx-Math.min(r,gg,b))/mx:0;Y.push(.2126*r+.7152*gg+.0722*b);}
+    const mean=Y.reduce((s,v)=>s+v,0)/Y.length,sd=Math.sqrt(Y.reduce((s,v)=>s+(v-mean)**2,0)/Y.length);return {rgb:m.map(v=>v/n),sat:sat/n,y:mean,sd};};
+  return {grey:half(15,85),red:half(115,185)};});
+await page.evaluate(()=>{const s=__bench.state;s.graze.enabled=false;s.lights.forEach((l,i)=>{l.enabled=i===0;});Object.assign(s.lights[0],{x:.5,y:1.1,z:.6,power:4,cone:0,lift:0,kelvin:3000,useKelvin:true});__bench.applyColor(s.lights[0]);s.ambient=.1;s.textureDepthMm=2;});
+const base=await pixels(),s0=await stats();
+const saved=await page.evaluate(()=>{const s=__bench.state,o={};for(const k of ['neutralWB','vibrance','roomKelvin','strokeDef','strokeSize']){o[k]=s[k];delete s[k];}return o;});
+assert.equal(await pixels(),base,'neutral colour & strokes render as without them');await page.evaluate(o=>Object.assign(__bench.state,o),saved);
+await slider('neutralWB',1);const s1=await stats();const cast=s=>Math.log(s.grey.rgb[0]/s.grey.rgb[2]);
+assert.ok(cast(s0)>.25&&Math.abs(cast(s1))<.35*cast(s0)&&s1.red.rgb[0]/s1.red.rgb[2]>1.8,'keep greys neutral '+JSON.stringify([s0.grey.rgb,s1.grey.rgb,s1.red.rgb]));
+await slider('vibrance',.6);const s2=await stats();assert.ok(s2.red.sat>s1.red.sat+.04&&Math.abs(s2.grey.sat-s1.grey.sat)<.02,'vibrance '+JSON.stringify([s1.red.sat,s2.red.sat,s1.grey.sat,s2.grey.sat]));
+await slider('vibrance',0);await slider('neutralWB',0);await page.evaluate(()=>{__bench.state.ambient=.6;});const r0=await stats();await slider('roomKelvin',2500);const r1=await stats();
+assert.ok(cast(r1)>cast(r0)+.1,'room light colour '+JSON.stringify([r0.grey.rgb,r1.grey.rgb]));await slider('roomKelvin',6500);await page.evaluate(()=>{__bench.state.ambient=.1;});
+await slider('strokeDef',1);const k1=await stats();const spread=await setting('strokeSpread');
+assert.ok(spread>0&&k1.grey.sd>s0.grey.sd*1.05&&Math.abs(k1.grey.y-s0.grey.y)<.08*s0.grey.y,'stroke definition '+JSON.stringify({spread,sd:[s0.grey.sd,k1.grey.sd],y:[s0.grey.y,k1.grey.y]}));
+await slider('strokeSize',.02);const k2=await stats();assert.notEqual(k2.grey.sd,k1.grey.sd);assert.ok(await setting('strokeSpread')!==spread,'stroke band measured again at the new size');
+const ex=await page.evaluate(async()=>{__bench.render();const full=await __bench.exportFullRes();const c=document.createElement('canvas');c.width=full.width;c.height=full.height;const x=c.getContext('2d');x.drawImage(full,0,0);const a=x.getImageData(0,0,c.width,c.height).data;__bench.render();x.drawImage(__bench.canvas,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height).data;let s=0;for(let i=0;i<a.length;i++)s+=Math.abs(a[i]-d[i]);return {mean:s/a.length,w:full.width};});
+assert.ok(ex.w===200&&ex.mean<1,'stroke definition exports as previewed '+JSON.stringify(ex));
+const tiledEx=await page.evaluate(async()=>{__bench.render();const c=document.createElement('canvas');c.width=200;c.height=240;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,200,240).data;__bench.state.maxTile=110;try{const t=await __bench.exportFullRes();const b=t.getContext('2d').getImageData(0,0,200,240).data;let s=0;for(let i=0;i<a.length;i++)s+=Math.abs(a[i]-b[i]);return s/a.length;}finally{delete __bench.state.maxTile;}});
+assert.ok(tiledEx<1,'stroke definition across export tiles '+tiledEx);
+await page.click('#undo');await settle();assert.equal(await setting('strokeSize'),.01);
+const v=await page.evaluate(()=>{const snap=__studio.snapshot(),old={...snap};for(const k of ['neutralWB','vibrance','roomKelvin','strokeDef','strokeSize'])delete old[k];
+  const mk=s=>({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:s});let bad='';try{__studio.validate(mk({...snap,vibrance:2}));}catch(e){bad=e.message;}
+  return {now:__studio.validate(mk(snap)),old:__studio.validate(mk(old)),bad};});
+assert.equal(v.now.strokeDef,1);assert.deepEqual([v.old.neutralWB,v.old.vibrance,v.old.roomKelvin,v.old.strokeDef,v.old.strokeSize],[0,0,6500,0,.01]);assert.match(v.bad,/vibrance/);
+await page.selectOption('#lightingPreset','Gallery spot, upper right');await settle();
+const g=await page.evaluate(()=>{const s=__bench.state;return {wb:s.neutralWB,vib:s.vibrance,sd:s.strokeDef,x:s.lights[0].x,n:s.lights.length,out:document.querySelector('#neutralWB').closest('.row').querySelector('output').textContent};});
+assert.ok(g.wb>0&&g.vib>0&&g.sd>0&&g.x>1&&g.n===1&&g.out===`${Math.round(g.wb*100)}%`,JSON.stringify(g));
+await page.evaluate(()=>Object.assign(__bench.state,{neutralWB:0,vibrance:0,roomKelvin:6500,strokeDef:0,strokeSize:.01}));await page.evaluate(()=>document.dispatchEvent(new Event('digilight:settings')));await settle();
+console.log('PASS colour & strokes: no-op when neutral, greys neutral, vibrance spares greys, room light colour, stroke definition exports as previewed, saved and validated, Gallery spot preset',JSON.stringify({cast:[+cast(s0).toFixed(2),+cast(s1).toFixed(2)],sat:[+s1.red.sat.toFixed(3),+s2.red.sat.toFixed(3)],sd:[+s0.grey.sd.toFixed(1),+k1.grey.sd.toFixed(1)],export:+ex.mean.toFixed(3),tiled:+tiledEx.toFixed(3)}));}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));

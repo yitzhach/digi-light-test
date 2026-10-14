@@ -29,8 +29,8 @@ export function requiredMargin(state) {
   }
   const blur = Math.ceil(12 * state.reliefScale);
   const integrate = Math.ceil(state.integrateTaps);
-  // The graze and shadow smoothed reliefs read 3 sigma beyond the heights it blurs.
-  const graze = Math.ceil(3 * Math.max(state.grazeSigmaPx || 0, state.shadowSigmaPx || 0));
+  // The graze, shadow and stroke smoothed reliefs read 3 sigma beyond the heights they blur.
+  const graze = Math.ceil(3 * Math.max(state.grazeSigmaPx || 0, state.shadowSigmaPx || 0, state.strokeSigmaPx || 0));
   return blur + integrate + graze + shadow + 4;
 }
 

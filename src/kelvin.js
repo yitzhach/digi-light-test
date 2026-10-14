@@ -63,6 +63,19 @@ export function kelvinToLinearRGB(kelvin) {
   return [r, g, b];
 }
 
+/**
+ * Room (ambient) light tint: the Kelvin tint relative to `neutralK`'s, so the
+ * neutral setting is exactly the plain white the room light always had, warmer
+ * below it and cooler above. Luminance stays 1, as for the lights.
+ */
+export function roomLightRGB(kelvin, neutralK) {
+  if (!Number.isFinite(kelvin) || kelvin === neutralK) return [1, 1, 1];
+  const t = kelvinToLinearRGB(kelvin), n = kelvinToLinearRGB(neutralK);
+  const c = t.map((v, i) => v / n[i]);
+  const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  return c.map((v) => v / lum);
+}
+
 /** Linear sRGB -> #rrggbb, for painting swatches and light handles in the DOM. */
 export function linearRGBToHex(rgb) {
   const enc = (c) => {

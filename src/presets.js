@@ -52,6 +52,22 @@ export const SIDE_SHARE = 0.35;
 // Saves made before it existed open at 0, so they look as they did.
 export const SHADOW_DETAIL = 0.004;
 
+// Colour & strokes (shade.js). At their neutral values (0, 0, ROOM_NEUTRAL_K, 0) a
+// render is exactly what it was before they existed; saves made earlier open there.
+// Keep greys neutral: 0 = a daylight camera, the lights tint everything; 1 = the
+// camera white-balanced to the lights' mix, so grey paint renders grey.
+// Vibrance: saturation for coloured paint, near-greys left alone (-1..1).
+// Room light colour: Kelvin of the room (ambient) light; ROOM_NEUTRAL_K is plain white.
+// Stroke definition: darkens creases and lifts crests at brush-stroke scale, from the
+// relief's curvature; Stroke size is that scale in painting widths (the smoothing's
+// full width at half maximum, like Shadow smoothing). STROKE_STOPS: how many stops
+// a crease at the band's 2% edge loses at 100% (crests rise half as much). The band
+// stops at STROKE_FINE of Stroke size below: finer than that a one-photo relief is
+// mostly grain, and darkening it reads as grit, not as strokes.
+export const ROOM_NEUTRAL_K = 6500;
+export const STROKE_SIZE = 0.01, STROKE_SIZE_MIN = 0.002, STROKE_SIZE_MAX = 0.04, STROKE_STOPS = 3, STROKE_FINE = 0.25;
+export const LOOK_NEUTRAL = { neutralWB: 0, vibrance: 0, roomKelvin: ROOM_NEUTRAL_K, strokeDef: 0, strokeSize: STROKE_SIZE };
+
 /**
  * One dial from spotlight to diffused light. Sets the three things that make the
  * difference: beam width (cone), beam edge (softness) and source size, which sets
@@ -180,6 +196,11 @@ export const lighting = {
   'Grazing side light':  { ambient: 0.06, shadow: 1, shadowSoftness: 0.03, lights: [L(0.5 - GRAZE_DISTANCE, 0.5, grazeZ, grazePower(Math.hypot(GRAZE_DISTANCE, grazeZ), GRAZE_DEG), 5000, 0, 0.3, 0.005)] },
   'Sunset side':         { ambient: 0.22, lights: [L(-0.2, 0.55, 0.25, 3, 2400, 0, 0.25, 0.02)] },
   'Dramatic chiaroscuro':{ ambient: 0.03, lights: [L(-0.1, 1.1, 0.4, 4, 3800, 0.6, 0.3, 0.015)] },
+  // One warm spot off the upper right with a white room light under it, the camera
+  // mostly balanced to it (greys stay grey), richer colour and defined strokes.
+  // Matched to an AI-relit image of the red panel (10-14); see HANDOFF.
+  'Gallery spot, upper right': { ambient: 0.12, neutralWB: 0.7, vibrance: 0.35, roomKelvin: ROOM_NEUTRAL_K, strokeDef: 0.5, strokeSize: STROKE_SIZE,
+    lights: [L(1.22, 0.75, 0.45, 4, 4300, 0, 0.5, 0.02)] },
 };
 
 export class History {

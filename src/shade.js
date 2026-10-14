@@ -13,8 +13,8 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles } from './presets.js';
-import { kelvinToLinearRGB } from './kelvin.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS } from './presets.js';
+import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
 // Linear grey the Relief view and Grey surface give the paint under the graze light.
@@ -94,6 +94,15 @@ uniform float uGrazeFill;       // soft room light under the graze light, so its
 uniform float uGrazeLift;       // Shadow lift under the graze light
 uniform float uGrazeLiftFall;   // its falloff with distance: 2 for a calibrated lamp, 0 (even) otherwise
 uniform float uGrazeGrey;       // 1 = the graze light falls on an even grey instead of the paint's colour
+
+// Colour & strokes. Neutral values (divisors of 1, 0, 0) leave the render untouched.
+uniform vec3  uWhiteBalance;    // main lights: the camera's white balance, divided out in linear light
+uniform vec3  uGrazeWhiteBalance;
+uniform float uVibrance;        // saturation for coloured paint; near-greys left alone
+uniform sampler2D uStrokeRelief; // the relief smoothed to Stroke size: rgb normal, a height
+uniform sampler2D uStrokeFine;   // and to STROKE_FINE of it, the band's fine edge
+uniform float uStrokeDef;       // Stroke definition, 0..1
+uniform float uStrokeGain;      // 1 / the 2-98% spread of that band
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -243,6 +252,35 @@ vec3 liftShadows(vec3 c, float s) {
   return clamp(c * (yl / y), 0.0, 1.0);
 }
 
+// Vibrance, on display (sRGB) values: pushes colour away from its own grey (luma)
+// by 1 + v w, where w rises from 0 for near-greys (chroma, max - min, under 0.04)
+// to 1 by 0.16, so grey and white paint keep the slight tint the light gives them,
+// and dark passages are not read as colour, while coloured paint gains or loses
+// saturation. The push stops where a channel would clip, so hues never shift.
+// Below 0 it desaturates.
+vec3 vibrance(vec3 c, float v) {
+  if (v == 0.0) return c;
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float k = 1.0 + v * smoothstep(0.04, 0.16, mx - mn);
+  if (k > 1.0) k = min(k, min(y / max(y - mn, 1e-4), (1.0 - y) / max(mx - y, 1e-4)));
+  return clamp(vec3(y) + (c - vec3(y)) * k, 0.0, 1.0);
+}
+
+// Stroke definition: the relief smoothed a little (STROKE_FINE of Stroke size, so the
+// grain is left alone) minus the relief smoothed to Stroke size is a band-pass,
+// negative in a crease and positive on a crest at brush-stroke scale. In units of
+// its own 2-98% spread (uStrokeGain) it reads the same on any painting and depth;
+// a crease at the band's edge loses ${STROKE_STOPS} stops at 100%, a crest gains half that.
+// Light into a crease is cut by its walls and a crest catches what passes over them;
+// a multiplier on all the light, so it never touches the paint's colour.
+float strokeShade(float mask) {
+  if (uStrokeDef <= 0.0) return 1.0;
+  float c = (texture(uStrokeFine, vUV).a - texture(uStrokeRelief, vUV).a) * mask * uReliefAmount * uStrokeGain;
+  c = clamp(c, -1.0, 1.0);
+  return exp2(uStrokeDef * ${STROKE_STOPS.toFixed(1)} * (c < 0.0 ? c : 0.5 * c));
+}
+
 // How much of a light's pool reaches this point: 1 on the part of the painting
 // nearest the light, falling off with its distance falloff (and the beam, via spot).
 float poolShare(vec3 lp, float dist, float falloff) {
@@ -356,6 +394,8 @@ void main() {
   float ao = 1.0 - uAO * clamp(-height * uAOScale, 0.0, 1.0);
   acc += albedo * uAmbientColor * uAmbient * ao;
 
+  float strokes = strokeShade(mask);
+  acc *= strokes / uWhiteBalance;
   acc *= exp2(uExposure);
   vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
   vec3 relit = liftShadows(clamp(linearToSrgb(mapped), 0.0, 1.0), lift);
@@ -389,6 +429,7 @@ void main() {
       float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
       g += brdf(gN, V, L, gNoV, NoLw, gAlb, gF0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
+    g *= strokes / uGrazeWhiteBalance;
     g *= exp2(uExposure);
     vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
     vec3 gs = liftShadows(clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeLift * poolShare(uGrazePos, dist, uGrazeLiftFall));
@@ -396,6 +437,7 @@ void main() {
     gs = mix(gs, vec3(dot(gs, vec3(0.2126, 0.7152, 0.0722))), uGrazeGrey);
     relit = mix(relit, gs, uGrazeOpacity);
   }
+  relit = vibrance(relit, uVibrance);
   vec3 col = relit;
   vec4 lmask = texture(uLayerMask, gUV);
   if (uLayerCount > 0) {
@@ -463,6 +505,8 @@ export class Shader {
       ['uLayerMask', this.layerMaskTex],
       ['uGrazeNormal', (targets.graze || targets.normal).tex],
       ['uShadowRelief', (targets.shadow || targets.normal).tex],
+      ['uStrokeRelief', (targets.stroke || targets.normal).tex],
+      ['uStrokeFine', (targets.strokeFine || targets.normal).tex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -527,7 +571,8 @@ export class Shader {
     gl.uniform1f(u.uHeightView, state.calibrated ? 1.0 : 8.0);
     gl.uniform1i(u.uHeightColour, state.heightColour ? 1 : 0);
     gl.uniform1f(u.uAmbient, state.ambient);
-    gl.uniform3fv(u.uAmbientColor, new Float32Array(state.ambientColor));
+    const room = state.roomKelvin != null ? roomLightRGB(state.roomKelvin, ROOM_NEUTRAL_K) : state.ambientColor;
+    gl.uniform3fv(u.uAmbientColor, new Float32Array(room));
     gl.uniform1f(u.uRoughness, state.roughness);
     gl.uniform1f(u.uSpecular, state.specular);
     gl.uniform1f(u.uReliefAmount, state.reliefAmount);
@@ -561,13 +606,15 @@ export class Shader {
     const gEl = (g?.elevation ?? 3) * Math.PI / 180, gDir = (g?.angle ?? 180) * Math.PI / 180;
     const gz = GRAZE_DISTANCE * Math.tan(gEl);
     let gPow = grazePower(Math.hypot(GRAZE_DISTANCE, gz), g?.elevation ?? 3);
+    let gPos = [0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz];
     if (g?.lamp) {
       // Calibrated lamp: a point at its measured place, power set so the painting's
       // centre gets what a directional graze light at that angle would give it.
       const c = lampAngles(g.lamp, state.paintingWidthCm, aspect);
       gPow = grazePower(c.dist, Math.max(0.2, c.elevation));
-      gl.uniform3fv(u.uGrazePos, lampPosition(g.lamp, state.paintingWidthCm, aspect));
-    } else gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
+      gPos = lampPosition(g.lamp, state.paintingWidthCm, aspect);
+    }
+    gl.uniform3fv(u.uGrazePos, gPos);
     gl.uniform1f(u.uGrazeFill, g?.fill ?? GRAZE_AMBIENT);
     gl.uniform1f(u.uGrazeLift, g?.lift ?? 0);
     // The plain graze light stands for a distant one, so its lift is even; a calibrated lamp's fades.
@@ -584,6 +631,22 @@ export class Shader {
     gl.uniform1f(u.uGrazeReach, state.grazeReach ?? state.shadowDist);
     gl.uniform1f(u.uGrazeSize, grazeSize(g?.soft ?? 0));
     gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
+
+    // Keep greys neutral: each path's camera is balanced toward the mix of light that
+    // path puts on the painting, so mixed lights still differ (a warm key over a cool
+    // room light keeps warm faces and cool shadows) while their average turns grey.
+    const wb = Math.min(1, Math.max(0, state.neutralWB ?? 0));
+    const balance = (white) => white.map((v) => 1 + wb * (v - 1));
+    const amb = room.map((v) => v * state.ambient);
+    gl.uniform3fv(u.uWhiteBalance, balance(sceneWhite(lights, aspect, amb)));
+    const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: gPow, enabled: true, cone: 0, falloff: 2 };
+    gl.uniform3fv(u.uGrazeWhiteBalance, balance(sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)))));
+    gl.uniform1f(u.uVibrance, Math.min(1, Math.max(-1, state.vibrance ?? 0)));
+    // Stroke definition needs its smoothed relief (GBuffer buildStroke) and the
+    // spread of the band it leaves (app.js measures it on the preview; export tiles reuse it).
+    const strokeOn = state.viewMode === 0 || state.viewMode === 7;
+    gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) : 0);
+    gl.uniform1f(u.uStrokeGain, state.strokeSpread > 0 ? 1 / state.strokeSpread : 0);
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, reliefView ? 0 : layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
@@ -592,6 +655,37 @@ export class Shader {
 
     drawFullscreen(gl);
   }
+}
+
+/**
+ * The colour of the light a camera sees on the painting: each enabled light's
+ * colour times what it delivers to a flat diffuse surface (power, falloff, beam,
+ * cosine; the same terms as the shader), averaged over a 3 x 3 grid of points, plus
+ * the room light `ambient` (already its colour times strength). Luminance 1, each
+ * channel at least 0.2 so a candle-coloured mix cannot blow up a near-empty channel.
+ */
+const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+export function sceneWhite(lights, aspect, ambient) {
+  const sum = [...ambient];
+  for (const l of lights) {
+    if (!l.enabled) continue;
+    const cone = Math.min(1, Math.max(0, l.cone ?? 0));
+    const cosOuter = 0.02 + (0.985 - 0.02) * cone, cosInner = cosOuter + 0.001 + (1 - cosOuter - 0.001) * (l.softness ?? 0.5);
+    let ax = (l.aimX ?? l.x) - l.x, ay = ((l.aimY ?? l.y) - l.y) * aspect, az = -l.z;
+    const an = Math.hypot(ax, ay, az) || 1; ax /= an; ay /= an; az /= an;
+    let w = 0;
+    for (const u of [1 / 6, 0.5, 5 / 6]) for (const v of [1 / 6, 0.5, 5 / 6]) {
+      const lx = l.x - u, ly = (l.y - v) * aspect, lz = l.z, d = Math.max(Math.hypot(lx, ly, lz), 1e-4);
+      const spot = cone < 0.01 ? 1 : smooth(cosOuter, cosInner, -(lx * ax + ly * ay + lz * az) / d);
+      w += l.power * Math.pow(0.5 / d, l.falloff ?? 2) * spot * Math.max(0, lz / d) / Math.PI / 9;
+    }
+    for (let c = 0; c < 3; c++) sum[c] += l.rgb[c] * w;
+  }
+  const lum = 0.2126 * sum[0] + 0.7152 * sum[1] + 0.0722 * sum[2];
+  if (!(lum > 1e-6)) return [1, 1, 1];
+  const n = sum.map((v) => Math.max(0.2, v / lum));
+  const l2 = 0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2];
+  return n.map((v) => v / l2);
 }
 
 /**

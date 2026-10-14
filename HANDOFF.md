@@ -95,7 +95,9 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-14) Measure relief fits Texture depth to the lamp photos
+- Last code change on `main`: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,
+  Room light colour, Stroke definition + Stroke size; lighting preset "Gallery spot, upper right"
+- Before that: (2026-10-14) Measure relief fits Texture depth to the lamp photos
 - Before that: (2026-10-14) Light like this sets room light 0.25
 - Before that: (2026-10-14) merge of `feature/metrology`: texture contrast score + Fit depth to photos,
   Relief view / Relief only / Colour over relief, Profile · height map (ISO roughness, colour map),
@@ -130,6 +132,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
+  (+ `roomLightRGB`: room light tint relative to 6500 K = white)
 - `lampphotos.js` (maths) + `lampui.js` (section) — relief measured from lamp photos
 - `photocheck.js` — clipping check, stroke direction (structure tensor)
 - `probe.js` — Profile · height map section: line profile, ISO roughness, colour height map scale bar
@@ -173,6 +176,42 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`; user: "incorporate this as you see fit"): the user showed an AI-relit
+  image of the red panel (`samples/painting.jpg`) they found very realistic. Measured vs the
+  photo (aligned, 1000 px): same frame, but the AI REDREW all texture under ~2–3% of the width
+  (photo detail kept 0.08 / 0.50 / 0.69 at <3 / 3–9 / 9–27 px; a DigiLight render keeps
+  0.58 / 0.92 / 0.99) and graded colour per material: greys barely warmed (red÷blue cast 1.19
+  vs photo) while reds saturated (r/g/b shares 0.57/0.26/0.16 → 0.71/0.20/0.09); stroke-scale
+  contrast 1.33× the photo's; one light pool from ~25° (right, a little up). The AI's own
+  "how I did it" text (Lambert, normals, shadow march, AO) describes what shade.js already does.
+  Built the faithful parts, new **Colour & strokes** section (studio.js `lookControls`, under
+  Quick setup), all neutral by default (`LOOK_NEUTRAL` in presets.js; also in LEGACY, so older
+  saves open unchanged; test checks neutral = keys absent, pixel-identical):
+  **Keep greys neutral** `neutralWB` 0–1: divides each path's light by the camera white balance
+  `mix(1, sceneWhite(...), n)` (shade.js `sceneWhite`: lights' colour × power, falloff, beam,
+  cosine over a 3×3 grid + room light; graze path has its own); **Vibrance** `vibrance` −1..1 on
+  sRGB, weight smoothstep(0.04, 0.16, max−min) so greys/darks keep their tint, clip-safe;
+  **Room light colour** `roomKelvin` (6500 = the old plain white; `roomLightRGB`), also tints graze
+  fill; **Stroke definition** `strokeDef` 0–1 + **Stroke size** `strokeSize` (painting widths,
+  default 0.01): band-pass of the relief, smoothed at STROKE_FINE (¼) of the size minus smoothed
+  at the size (GBuffer `buildStroke` → T.strokeFine / T.stroke, built only while on), in units
+  of its own 2–98% spread (`measureBand`, measured on the preview into `state.strokeSpread`;
+  export tiles reuse it; exportImage brings the preview up to date first), creases −3 stops at
+  the band edge at 100% (`STROKE_STOPS`), crests +half; multiplies all light (main + graze), so
+  colour is untouched. Export margin covers its blur. First version (height minus smoothed, no
+  fine edge) darkened grain = "gritty"; the band-pass fixed it. Batch sweeps for all five. New
+  lighting preset **Gallery spot, upper right** (light 1.22/0.75/0.45, 4300 K, power 4, room
+  0.12, greys 70%, vibrance 35%, strokes 50%); `useLighting` now also applies LOOK keys a scene
+  names. Scores vs the AI image (`tools/batches/colour-strokes.json`, painting sample):
+  preset grey cast 1.10 (AI 1.19), reds 0.69/0.21/0.10 (AI 0.71/0.20/0.09), stroke contrast
+  1.11 (AI 1.33), photo detail kept 0.91 / 0.99. Strokes 100% → 1.27 (kept 0.85); 100% at 2% size
+  → 1.33 (kept 0.81 / 0.90) but looks lumpy; 50% looked best. On DSC_8382 measured relief vs lamp
+  3 photo (graze opacity 1, room 0.25): strokes 0 / 50 / 100% → texture match 0.82 / **0.99** /
+  1.27, local 0.672 / 0.620 / 0.529 (photo 0.538), logRMS 0.299 / 0.344 / 0.436 — 50% closes the
+  old "60% contrast" gap in texture terms, but pixel match drops (it darkens creases from all
+  sides; real lamp shadows fall one way). Checked item E of the prompt: Fine/Medium/Broad relief
+  sliders do work but move the render 1–2/255 — calibrated heights are rescaled to their own
+  2–98% spread, so the bands change only the relief's shape. Not changed.
 - 10-14 (pushed to `main`; user: "do what creates the best final image"): **Measure relief now
   fits Texture depth** to the lamp photos' stroke contrast right after measuring
   (`lamp.measure({fit})`, default on; runs `fitDepth({fill: LAMP_ROOM, auto: true})`, which
@@ -499,6 +538,11 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+-3. Colour & strokes (10-14): ask the user how "Gallery spot, upper right" and the new section
+   look on their own photos (phone too). Ideas: make Stroke definition directional (weight
+   creases by the key light's direction, so it follows real lamp shadows and keeps logRMS);
+   a "Match lamp photo" default of strokes ~50% with measured relief; vibrance in the swipe
+   test rounds.
 -2. User's in-app depth sweeps: 8 mm best (★3) at screen size; ask them to redo it with
    Sharp previews (looks differ) and Save ratings, and to sweep 7–10 mm.
 -1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;

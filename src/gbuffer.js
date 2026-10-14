@@ -53,6 +53,7 @@
 // come from one physically sized height field instead of two unrelated gains.
 
 import { program, makeTarget, bindTarget, bindTextures, drawFullscreen } from './gl.js';
+import { STROKE_FINE } from './presets.js';
 
 const HEAD = `#version 300 es
 precision highp float;
@@ -256,22 +257,29 @@ export class GBuffer {
     this.heightStats = { dir: 1, cav: 1 };
   }
 
+  // RGBA of `tex` at the scattered N x N sample grid (the same points every call).
+  samplePoints(tex) {
+    const { gl, caps } = this.glctx;
+    const N = 128;
+    if (!this.sampleTarget) this.sampleTarget = makeTarget(gl, N, N, { float: true, linear: false, caps });
+    bindTarget(gl, this.sampleTarget);
+    gl.useProgram(this.progs.sample.program);
+    bindTextures(gl, this.progs.sample, [['uHeight', tex]]);
+    gl.uniform2f(this.progs.sample.uniforms.uSize, N, N);
+    drawFullscreen(gl);
+    const px = new Float32Array(N * N * 4);
+    gl.readPixels(0, 0, N, N, gl.RGBA, gl.FLOAT, px);
+    return px;
+  }
+
   /**
    * Robust spread (2nd–98th percentile) of both height estimates. Read back from
    * a 128x128 scattered sample, which is plenty for two percentiles and keeps the
    * readback small enough to run on every surface rebuild.
    */
   measureHeight(heightTex) {
-    const { gl, caps } = this.glctx;
     const N = 128;
-    if (!this.sampleTarget) this.sampleTarget = makeTarget(gl, N, N, { float: true, linear: false, caps });
-    bindTarget(gl, this.sampleTarget);
-    gl.useProgram(this.progs.sample.program);
-    bindTextures(gl, this.progs.sample, [['uHeight', heightTex]]);
-    gl.uniform2f(this.progs.sample.uniforms.uSize, N, N);
-    drawFullscreen(gl);
-    const px = new Float32Array(N * N * 4);
-    gl.readPixels(0, 0, N, N, gl.RGBA, gl.FLOAT, px);
+    const px = this.samplePoints(heightTex);
     const spread = (ch) => {
       const v = new Float32Array(N * N);
       for (let i = 0; i < N * N; i++) v[i] = px[i * 4 + ch];
@@ -378,6 +386,7 @@ export class GBuffer {
     this.sigmas = {};
     this.buildGraze(opts.grazeSigmaPx ?? 0);
     this.buildShadow(opts.shadowSigmaPx ?? 0);
+    this.buildStroke(opts.strokeSigmaPx ?? 0);
     bindTarget(gl, null);
     return T;
   }
@@ -413,6 +422,32 @@ export class GBuffer {
    */
   buildShadow(sigma) {
     return this.smoothed('shadow', sigma);
+  }
+
+  /**
+   * Stroke definition's view of the relief: the same low-pass at Stroke size and at
+   * STROKE_FINE of it. The shader takes the one minus the other, a band-pass that is
+   * negative in a crease and positive on a crest at brush-stroke scale, without the
+   * grain below it. Built only while the effect is on (sigma 0 otherwise).
+   */
+  buildStroke(sigma) {
+    this.smoothed('strokeFine', sigma * STROKE_FINE);
+    return this.smoothed('stroke', sigma);
+  }
+
+  /**
+   * The 2-98% spread of (T[fine] height - T[coarse] height) on the scattered sample
+   * grid, so Stroke definition is in units of its own band whatever the painting
+   * and depth. Both are the normal pass's heights (alpha), sampled at the same points.
+   */
+  measureBand(fine, coarse) {
+    const T = this.targets;
+    if (!T || !T[fine] || !T[coarse] || T[coarse] === T.normal) return 0;
+    const a = this.samplePoints(T[fine].tex), b = this.samplePoints(T[coarse].tex);
+    const v = new Float32Array(a.length / 4);
+    for (let i = 0; i < v.length; i++) v[i] = a[i * 4 + 3] - b[i * 4 + 3];
+    v.sort();
+    return v[Math.floor(v.length * 0.98)] - v[Math.floor(v.length * 0.02)];
   }
 
   // T[key] = normals (height in alpha) of the height field blurred by `sigma`

@@ -14,7 +14,7 @@ import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './ex
 import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
-import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles } from './presets.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles, LOOK_NEUTRAL } from './presets.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -35,6 +35,7 @@ let imgW = 0, imgH = 0;
 // the preview only ever sees a downscaled copy.
 let fullSource = null, fullW = 0, fullH = 0, previewScale = 1;
 let dirtySurface = true;
+let strokeMeasuredAt = NaN;   // Stroke size blur (px) the band spread was last measured at
 // Relief measured from lamp photos (lampphotos.js), at the preview's size: when
 // `on`, it replaces the single-photo estimate in the preview, the sharp zoom and
 // export (tiles resample their window of it). Belongs to the photo it was measured
@@ -80,6 +81,9 @@ const state = {
   textureDepthMm: 1,
   photoDiffuse: 0.6,
   heightStats: { dir: 1, cav: 1 },
+  // Colour & strokes (presets.js LOOK_NEUTRAL; studio.js has the controls).
+  ...LOOK_NEUTRAL,
+  strokeSpread: 0,   // measured: 2-98% spread of the Stroke size band
 };
 
 /** Texture depth as a fraction of the painting's width — the unit heights use. */
@@ -832,6 +836,8 @@ function updateDerived(workingW, st = state) {
   // Shadow smoothing (Fine-tune) is a feature size in painting widths too, so
   // preview and export drop the same grain from the main lights' shadows.
   st.shadowSigmaPx = st.mode === 'single' ? Math.max(0, st.shadowDetail ?? 0) * W / 2.355 : 0;
+  // Stroke size likewise; no smoothed relief at all while Stroke definition is off.
+  st.strokeSigmaPx = st.mode === 'single' && st.strokeDef > 0 ? Math.max(0, st.strokeSize ?? 0) * W / 2.355 : 0;
   // The graze light's own shadow reach: the main lights bound shadowDist, and a
   // light a degree off the wall throws shadows far longer than any of theirs. Its
   // Shadow length setting takes that share of the tallest relief over tan(elevation).
@@ -923,11 +929,19 @@ function renderNow() {
         targets = gbuf.build(srcTex, imgW, imgH, { ...state, measureHeight: !!state.physical,
           measured: mt && measured.w === imgW && measured.h === imgH ? { tex: mt, rect: [0, 0, 1, 1] } : null });
         state.heightStats = { ...gbuf.heightStats };
+        strokeMeasuredAt = NaN;
       }
       dirtySurface = false;
     } else if (state.mode === 'single') {
       gbuf.buildGraze(state.grazeSigmaPx);   // no-op unless the graze Detail changed
       gbuf.buildShadow(state.shadowSigmaPx); // likewise for Shadow smoothing
+      gbuf.buildStroke(state.strokeSigmaPx); // and for Stroke size
+    }
+    // Stroke definition works in units of its band's spread: measured on the preview
+    // whenever that band was rebuilt; export tiles reuse it, like heightStats.
+    if (state.mode === 'single' && gbuf.sigmas?.stroke !== strokeMeasuredAt) {
+      state.strokeSpread = gbuf.measureBand('strokeFine', 'stroke');
+      strokeMeasuredAt = gbuf.sigmas?.stroke;
     }
     let drawTargets = targets;
     if (state.mode === 'photometric' && state.psShowTruth && truthTex) {
@@ -1328,6 +1342,12 @@ function wireExport() {
  */
 async function exportImage(job, onProgress, extra) {
   const src = job.mode === 'photometric' ? job.sources[0] : job.source;
+  // The tiles reuse what the preview measured (height spread, Stroke size band), so
+  // bring the preview up to date first if a setting changed since its last frame.
+  if (srcTex && state.mode === 'single') {
+    updateDerived(imgW);
+    if (dirtySurface || state.strokeSigmaPx !== strokeMeasuredAt) renderNow();
+  }
   const st = Object.assign(renderState(job.width || src.width || src.naturalWidth), extra);
   state.exporting = true;
   cancelSharp();
