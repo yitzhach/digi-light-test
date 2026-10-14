@@ -50,8 +50,13 @@ a height, and since they are in real units, **Texture depth is measured** and se
 for you (the 2–98% spread of stroke-scale relief; broader paint masses are not
 included). That relief then replaces the estimate everywhere, export included.
 **Light like this** turns the graze light into that lamp; **Compare** shows the
-lamp photo in Before / Split beside the render. The photos and measurement last
-for the session; projects do not save them yet.
+lamp photo in Before / Split beside the render. Saved and downloaded projects (and
+Export for testing bundles) keep the measured relief, switched on or off as it was;
+the lamp photos themselves last for the session only.
+
+Measure relief whenever you can. On the DSC_8382 panel, relief guessed from the evenly
+lit photo alone matches the real lamp photos at r ≈ 0.0 (its shading lands in the
+wrong places with any light, main or graze), the measured relief at r ≈ 0.8.
 
 With every lamp above the painting, faces turned down are dark in all shots and the
 relief reads about 20% shallow (synthetic tests); a lamp from below or level with

@@ -3,8 +3,8 @@
 // The painting photo is the evenly lit shot; the user adds two or three shots from
 // the same tripod with one lamp near the wall, says where the lamp was for each
 // (from the painting's edges, in Calibrate's units), and Measure relief replaces
-// the single-photo estimate with relief measured from them (lampphotos.js). Kept
-// for this session only: the photos are not saved in projects or undo.
+// the single-photo estimate with relief measured from them (lampphotos.js). The
+// measurement is saved in projects (reliefsave.js); the photos are not.
 
 import { measureRelief } from './lampphotos.js';
 
@@ -14,7 +14,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
   const $ = (id) => document.getElementById(id);
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'lampSection';
   box.innerHTML = `<summary>Measure relief · lamp photos</summary><div class="grp">
-    <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. The photos and the measurement last for this session; projects do not save them yet.</p>
+    <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. Saved projects keep the measured relief, not the photos.</p>
     <div id="lampRows"></div>
     <div class="calScore"><button id="lampAdd">Add lamp photos…</button><input type="file" id="lampFile" accept="image/*" multiple hidden><button id="lampSample" hidden>Add the sample's lamp photos</button></div>
     <div class="calScore"><button id="lampMeasure" disabled>Measure relief</button><output id="lampStatus"></output></div>
@@ -188,6 +188,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick }
   document.addEventListener('digilight:measured', () => {
     const m = api.measured.get();
     if (!m) { $('lampResult').textContent = ''; if (comparing >= 0) { comparing = -1; delete $('wrap').dataset.before; } }
+    else if (!$('lampResult').textContent && m.info?.depthMm != null) $('lampResult').textContent = `Measured relief from the project, ${m.info.depthMm.toFixed(2)} mm deep.${rows.length ? '' : ' Add the lamp photos again to compare or re-measure.'}`;
     renderRows();
   });
   renderRows();

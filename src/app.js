@@ -38,7 +38,8 @@ let dirtySurface = true;
 // Relief measured from lamp photos (lampphotos.js), at the preview's size: when
 // `on`, it replaces the single-photo estimate in the preview, the sharp zoom and
 // export (tiles resample their window of it). Belongs to the photo it was measured
-// against, so a new photo drops it. {tex, w, h, on, info}
+// against, so a new photo drops it. {tex, height, w, h, on, info}; `height` is kept
+// so projects can save it.
 let measured = null;
 const measuredTex = () => (measured && measured.on && state.mode === 'single' ? measured.tex : null);
 // A lamp photo shown in place of the painting photo by Before / Split (lamp photos'
@@ -168,8 +169,9 @@ function loadFile(file) {
 
 /**
  * Use a measured height map (w x h, the preview's size, rows top first), or drop it
- * with null. Heights are in any unit: the preview measures their spread like the
- * estimate's, and Texture depth sets what that spread is in millimetres.
+ * with null; info.on false loads it switched off. Heights are in any unit: the
+ * preview measures their spread like the estimate's, and Texture depth sets what
+ * that spread is in millimetres.
  */
 function setMeasured(height, w, h, info = {}) {
   const { gl } = glctx;
@@ -185,7 +187,8 @@ function setMeasured(height, w, h, info = {}) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    measured = { tex, w, h, on: true, info };
+    const { on = true, ...rest } = info;
+    measured = { tex, height: Float32Array.from(height), w, h, on, info: rest };
   }
   dirtySurface = true;
   document.dispatchEvent(new Event('digilight:measured'));
@@ -1062,6 +1065,7 @@ async function boot() {
       set: setMeasured,
       use: (on) => { if (measured && measured.on !== !!on) { measured.on = !!on; dirtySurface = true; document.dispatchEvent(new Event('digilight:measured')); render(); } },
       get: () => measured && { on: measured.on, w: measured.w, h: measured.h, info: measured.info },
+      height: () => measured && measured.height,
       compare: setCompare,
       comparing: () => !!compareTex,
     },
@@ -1089,6 +1093,7 @@ async function boot() {
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     // --- diagnostics used by the test harness
     shots: () => shots,
+    measured: () => measured && { on: measured.on, w: measured.w, h: measured.h, height: measured.height, info: measured.info },
     gbuf, glctx,
     dirty: () => { dirtySurface = true; },
     measureFit: () => photo.measureResidual(imgW, imgH, residualExclusion()),
