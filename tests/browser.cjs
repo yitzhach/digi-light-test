@@ -336,10 +336,11 @@ console.log('PASS DSC_8382 sample with its lamp photos');}
  await page.evaluate(()=>{__bench.state.lights[0].lift=0;});assert.equal(await pixels(),base,'lift 0 is a no-op');
  await page.evaluate(()=>{__bench.state.lights[0].lift=1;});const l1=await lum();
  assert.ok(l1.near-l0.near>2*(l1.far-l0.far)&&l1.near>l0.near+5,'lift strongest near the light '+JSON.stringify([l0,l1]));
+ await page.evaluate(()=>{__bench.state.lights[0].lift=-1;});const ld=await lum();assert.ok(ld.near<l0.near-2&&ld.far<=l0.far+0.5,'negative lift deepens the darks '+JSON.stringify([l0,ld]));
  await page.evaluate(s=>{const [L,G]=JSON.parse(s);__bench.state.lights.forEach((l,i)=>Object.assign(l,L[i]));Object.assign(__bench.state.graze,G);},saved);await page.evaluate(()=>{__bench.state.lights[0].lift=.4;__bench.state.graze.lift=.3;});
- const v=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:__studio.snapshot()}));assert.equal(v.lights[0].lift,.4);assert.equal(v.graze.lift,.3);
+ await page.evaluate(()=>{__bench.state.lights[0].lift=-.4;});const v=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:__studio.snapshot()}));assert.equal(v.lights[0].lift,-.4);assert.equal(v.graze.lift,.3);
  await page.evaluate(()=>{__bench.state.lights[0].lift=0;__bench.state.graze.lift=0;});await settle();
- console.log('PASS shadow lift: no-op at 0, strongest near the light, saved with the light and graze');}
+ console.log('PASS shadow lift: no-op at 0, strongest near the light, negative deepens, saved with the light and graze');}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));

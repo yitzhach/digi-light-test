@@ -213,12 +213,14 @@ vec3 linearToSrgb(vec3 c) {
 // leaves white at white, and stays monotonic for s up to 1 (its slope bottoms out
 // at 0.07). Scaling the colour by the luma ratio keeps its hue and saturation.
 // At 100%: 0.07 -> 0.29, 0.15 -> 0.43, 0.3 -> 0.47, 0.5 -> 0.54, 0.7 -> 0.70.
+// Below 0 it deepens them instead: y - 0.8 |s| y (1 - y)^4 (slope stays >= 0.2).
+// At -100%: 0.07 -> 0.04, 0.15 -> 0.09, 0.3 -> 0.24, 0.5 -> 0.48.
 vec3 liftShadows(vec3 c, float s) {
-  if (s <= 0.0) return c;
+  if (s == 0.0) return c;
   float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
   if (y <= 1e-4) return c;
   float k = 1.0 - y, k3 = k * k * k;
-  float yl = y + 5.0 * min(s, 1.0) * y * k3 * k3;
+  float yl = s > 0.0 ? y + 5.0 * min(s, 1.0) * y * k3 * k3 : y - 0.8 * min(-s, 1.0) * y * k3 * k;
   return clamp(c * (yl / y), 0.0, 1.0);
 }
 

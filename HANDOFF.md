@@ -5,7 +5,9 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) **Shadow lift** slider (each light + Graze light)
+- Last code change on `main`: (2026-10-14) Shadow lift is two-way: −100..+100%, centre = off
+  (left deepens darks: y − 0.8|s| y (1−y)^4)
+- Before that: **Shadow lift** slider (each light + Graze light)
 - Before that: zoom up to 1000%; phone pinch zoom + Full screen view
 - Before that: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
   measured relief saved in projects and test bundles (`src/reliefsave.js`)
@@ -68,6 +70,19 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): Shadow lift vs the real DSC_8382 lamp photos. Method
+  (scratch script, not in repo): sample + its lamp shots, Measure relief, for each lamp
+  Light like this, graze opacity 1, render at lift −1..+1; compare with the aligned
+  lamp photo on luma, borders cut: shadow depth = p10/p50 (gain-free), local = p10 of
+  y / 51 px box mean (cancels the beam pool), logRMS after median gain match. Means over
+  3 lamps (render − photo): measured relief, lift 0: depth −0.11, local +0.03, logRMS
+  0.341; lift +0.5: −0.09 / +0.09 / 0.323; +1: −0.07 / +0.14 / 0.323. Graze room fill
+  (Light like this leaves 0.06; measurement says room is 12–21% of each shot) at 0.25,
+  lift 0: −0.01 / +0.11 / 0.279 — better than any lift. One-photo estimate: shadows far
+  too deep (depth 0.13 vs photo 0.50, local 0.18 vs 0.62, logRMS 1.08); lift +1 → 0.17 /
+  0.26 / 0.89, helps but nowhere near. Conclusion: recesses are right with measured
+  relief (the global darks lack room light); lift is for the one-photo estimate.
+  Candidate: Light like this should set graze fill from the measured room share.
 - 10-14 (pushed to `main`): user bundle `Untitled_painting-test-2026-10-141331` (iPhone,
   one light from 135° at 22°, graze 1° from 119.5° at opacity 0.75, one-photo relief,
   empty note; their message: upper-left light barely changes the dark recesses vs
@@ -231,6 +246,9 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
+   room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
+   One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
 00. User to redo their DSC_8382 scene on the live site with Measure relief (Add the
    sample's lamp photos → Measure relief) and raw graze settings, and send a new
    test bundle (it now carries the measured relief). Then: a crop / "painting edges" tool, so

@@ -104,14 +104,18 @@ paintings with known relief.
 The **Grazing side light** preset makes one of your own lights a grazing light;
 Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
 
-**Shadow lift** (on each light, and in Graze light) brightens the dark tones the
-light falls on: black paint and recesses that read dark in the photo, which a relight
+**Shadow lift** (on each light, and in Graze light) starts in the middle (off).
+Right of centre brightens the dark tones the light falls on, left of centre deepens
+them. Lifting helps with black paint and recesses that read dark in the photo, which a relight
 alone keeps dark because it multiplies the photo's own colour. It is a tone curve on
 the displayed colour (strongest around 15% grey, white untouched, hue kept), scaled by
 how much of the light's pool reaches each point: full on the part of the painting
 nearest the light, fading with its distance falloff and beam edge. The plain graze
 light lifts evenly (it stands for a distant light); a calibrated lamp's lift fades.
-0% (the default) leaves the render exactly as before.
+Off (the default) leaves the render exactly as before. Against the DSC_8382 lamp
+photos it helps the one-photo estimate (its shadows run far too deep) but with
+measured relief the recesses are already right; there, raise Calibrate's room light
+instead (about 0.25 matched the photos' shadow depth).
 
 **View zoom.** The toolbar **− / 100% / +** zooms the view from 20% to 1000% (steps … 4, 6, 8, 10×)
 (keys - = 0); 100% fits the painting to the stage and the percentage button returns there.
