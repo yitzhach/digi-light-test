@@ -12,7 +12,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 400% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="fullView" title="Show only the painting, filling the screen; pinch or Ctrl/Cmd + wheel still zooms ( F key, Esc to leave )">⛶ Full screen</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 1000% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="fullView" title="Show only the painting, filling the screen; pinch or Ctrl/Cmd + wheel still zooms ( F key, Esc to leave )">⛶ Full screen</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -288,10 +288,10 @@ export function initStudio(api) {
     if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (e.key === '-' || e.key === '_') $('zoomOut').click(); else if (e.key === '=' || e.key === '+') $('zoomIn').click(); else if (e.key === '0') $('zoomFit').click(); }
   });
   // View zoom: 100% fits the stage. Steps from any zoom (a pinch lands between them) go to the next one.
-  const zoomSteps=[4,3,2,1.5,1.25,1,0.85,0.7,0.55,0.4,0.3,0.2];
+  const zoomSteps=[10,8,6,4,3,2,1.5,1.25,1,0.85,0.7,0.55,0.4,0.3,0.2];
   const zoomTo=z=>api.setZoom(z);
   $('zoomOut').onclick=()=>zoomTo(zoomSteps.find(z=>z<(state.viewZoom||1)-0.01)??0.2);
-  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??4);
+  $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??10);
   $('zoomFit').onclick=()=>zoomTo(1);
   $('zoomLights').onclick=()=>zoomTo('lights');
   document.addEventListener('digilight:zoom',()=>{const t=`${Math.round((state.viewZoom||1)*100)}%`;$('zoomFit').textContent=t;$('fullFit').textContent=t;});

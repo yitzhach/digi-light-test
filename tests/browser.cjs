@@ -45,10 +45,10 @@ console.log('PASS grazing preset, view zoom and off-painting dots');
 {const view=()=>page.evaluate(()=>{const s=document.querySelector('#scroller'),c=__bench.canvas.getBoundingClientRect(),r=s.getBoundingClientRect();return {z:__bench.state.viewZoom,sl:s.scrollLeft,st:s.scrollTop,c:{x:c.left,y:c.top,w:c.width,h:c.height},v:{x:r.left+s.clientLeft,y:r.top+s.clientTop,w:s.clientWidth,h:s.clientHeight}};});
 const at=(v,p)=>[(p[0]-v.c.x)/v.c.w,(p[1]-v.c.y)/v.c.h],near=(a,b,px,v)=>Math.hypot((a[0]-b[0])*v.c.w,(a[1]-b[1])*v.c.h)<px;
 const hist=await page.evaluate(()=>__studio.history.index),fit=await view(),steps=[];
-for(let i=0;i<6;i++){await page.click('#zoomIn');steps.push(await setting('viewZoom'));}
-assert.deepEqual(steps,[1.25,1.5,2,3,4,4]);assert.equal(await page.locator('#zoomFit').textContent(),'400%');
-let v=await view();assert.ok(Math.abs(v.c.w/fit.c.w-4)<.01&&v.sl>0&&v.st>0,JSON.stringify(v));assert.ok(near(at(v,[v.v.x+v.v.w/2,v.v.y+v.v.h/2]),[.5,.5],1,v),'buttons zoom about the centre');
-await page.keyboard.press('-');assert.equal(await setting('viewZoom'),3);await page.keyboard.press('=');assert.equal(await setting('viewZoom'),4);
+for(let i=0;i<9;i++){await page.click('#zoomIn');steps.push(await setting('viewZoom'));}
+assert.deepEqual(steps,[1.25,1.5,2,3,4,6,8,10,10]);assert.equal(await page.locator('#zoomFit').textContent(),'1000%');
+let v=await view();assert.ok(Math.abs(v.c.w/fit.c.w-10)<.01&&v.sl>0&&v.st>0,JSON.stringify(v));{const q=at(v,[v.v.x+v.v.w/2,v.v.y+v.v.h/2]);assert.ok(near(q,[.5,.5],4,v),'buttons zoom about the centre '+JSON.stringify([q,v.c]));}
+await page.keyboard.press('-');assert.equal(await setting('viewZoom'),8);await page.keyboard.press('=');assert.equal(await setting('viewZoom'),10);
 await page.keyboard.press('0');assert.equal(await setting('viewZoom'),1);assert.deepEqual((await view()).c,fit.c);
 await page.click('#zoomIn');await page.click('#zoomIn');v=await view();const P=[v.v.x+v.v.w*.3,v.v.y+v.v.h*.4],u0=at(v,P);
 await page.mouse.move(...P);await page.keyboard.down('Control');await page.mouse.wheel(0,-100);await page.mouse.wheel(0,-100);await page.keyboard.up('Control');await settle();
@@ -79,7 +79,7 @@ await page.mouse.move(...B0);await page.mouse.down();await page.mouse.move(...B1
 const s=(await setting('strokes')).at(-1);assert.equal((await setting('strokes')).length,n0+1);assert.ok(near(s.points[0],at(v,B0),.5,v)&&near(s.points.at(-1),at(v,B1),.5,v),'zoomed stroke '+JSON.stringify([s.points[0],at(v,B0)]));
 assert.ok(Math.abs(s.radius-(await page.locator('#brushSize').inputValue())/v.c.w)<1e-9);await page.click('#undo');await page.click('#brushOff');await settle();assert.equal((await setting('strokes')).length,n0);
 await page.click('#zoomLights');assert.ok(await setting('viewZoom')<=1);await page.click('#zoomFit');assert.deepEqual((await view()).c,fit.c);assert.equal(await page.evaluate(()=>__studio.history.index),hist);}
-console.log('PASS zoom to 400%: steps, keys, Ctrl+wheel about the pointer, scrolling, Space/middle-drag pan, pinned dots, light drag and brush while zoomed');
+console.log('PASS zoom to 1000%: steps, keys, Ctrl+wheel about the pointer, scrolling, Space/middle-drag pan, pinned dots, light drag and brush while zoomed');
 {await page.getByText('Graze light · raking texture',{exact:true}).click();const plain=await pixels();assert.equal((await setting('graze')).enabled,false);
 await page.click('#grazeVis');await settle();assert.equal((await setting('graze')).enabled,true);const fromLeft=await pixels();assert.notEqual(fromLeft,plain);
 const dial=await page.locator('#grazeDial').boundingBox();await page.mouse.move(dial.x+dial.width*.95,dial.y+dial.height/2);await page.mouse.down();await page.mouse.up();await settle();
@@ -237,8 +237,8 @@ await page.waitForFunction(()=>__bench.sharp());await slider('fineRelief',1.1);a
 await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
-for(let i=0;i<6;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),4);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
-await page.click('#zoomFit');console.log('PASS mobile layout, also at 400%');
+for(let i=0;i<9;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),10);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
+await page.click('#zoomFit');console.log('PASS mobile layout, also at 1000%');
 {await page.locator('#calibrateSection').evaluate(e=>e.open=true);await page.selectOption('#calUnits','in');
 const num=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
 await num('calWidthN',19);await num('calAboveN',32);await num('calLeftN',19);await num('calOutN',4);

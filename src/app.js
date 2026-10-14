@@ -325,10 +325,10 @@ function viewBox() {
   return { left, top, right: left + scroller.clientWidth, bottom: top + scroller.clientHeight };
 }
 
-const ZOOM_MIN = 0.2, ZOOM_MAX = 4;
+const ZOOM_MIN = 0.2, ZOOM_MAX = 10;
 
 /**
- * View zoom, 20% to 400% of the size that fits the stage. Below fit it brings lights
+ * View zoom, 20% to 1000% of the size that fits the stage. Below fit it brings lights
  * placed beyond the painting into view; above it the stage scrolls. The painting
  * point under `at` (client x, y; default the middle of the view) stays where it is.
  * 'lights' picks the largest zoom, up to fit, that shows every dot.

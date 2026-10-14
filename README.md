@@ -104,9 +104,9 @@ paintings with known relief.
 The **Grazing side light** preset makes one of your own lights a grazing light;
 Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
 
-**View zoom.** The toolbar **− / 100% / +** zooms the view from 20% to 400%
+**View zoom.** The toolbar **− / 100% / +** zooms the view from 20% to 1000% (steps … 4, 6, 8, 10×)
 (keys - = 0); 100% fits the painting to the stage and the percentage button returns there.
-Ctrl/Cmd + mouse wheel, or a trackpad pinch, zooms smoothly about the pointer.
+Ctrl/Cmd + mouse wheel, or a trackpad pinch, zooms smoothly about the pointer; on a phone, pinch with two fingers. **⛶ Full screen** shows only the painting.
 Zoomed out, lights standing well beyond the painting come into view (**Show all
 lights** picks the zoom that shows every dot). Zoomed in, the stage scrolls
 (scrollbars, wheel, two-finger swipe, a finger on a touch screen) and you can pan

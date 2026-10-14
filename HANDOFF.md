@@ -5,7 +5,8 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) **phone pinch zoom + Full screen view**
+- Last code change on `main`: (2026-10-14) **zoom up to 1000%** (steps 6×, 8×, 10×), after
+  phone pinch zoom + Full screen view
 - Before that: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
   measured relief saved in projects and test bundles (`src/reliefsave.js`)
 - Earlier: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
@@ -67,6 +68,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): view zoom max 400% → 1000% (`ZOOM_MAX` 10, steps add 6/8/10).
+  Sharp zoom still caps at the photo's own pixels, so past native size it just magnifies.
 - 10-14 (pushed to `main`): user asked for iPhone pinch zoom and a full-screen toggle.
   Touch (`wireTouchGestures`, app.js): two fingers pinch-zoom about their midpoint and
   pan; one finger pans when zoomed unless a dot/brush/sphere placer claimed it.
