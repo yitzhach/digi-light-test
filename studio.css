@@ -44,9 +44,16 @@ input[type=range]:disabled { opacity:.35; }
 .zoomGroup { display:inline-flex; gap:2px; }
 .zoomGroup button { min-width:30px; }
 .handle.pinned { border-style:dashed; }
-/* Zoomed in, a finger drag on the painting scrolls it, unless a brush or the sphere placer wants it */
-#scroller.zoomed #gl { touch-action:pan-x pan-y; }
-#wrap.brushing #gl, #wrap.placing #gl { touch-action:none; }
+/* Touch is handled in app.js (pinch zoom, one-finger pan when zoomed), so the browser
+   must not pan or zoom the page from anywhere in the frame */
+#wrap, #wrap * { touch-action:none; }
+/* Full screen view: the stage alone fills the screen */
+#fullBar { display:none; }
+body.fullView { display:block; }
+body.fullView #studioToolbar, body.fullView #panel, body.fullView #hint { display:none!important; }
+body.fullView #stage { position:fixed; inset:0; z-index:20; background:var(--bg); }
+body.fullView #fullBar { display:flex; gap:6px; position:absolute; z-index:6; top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right)); }
+#fullBar button { background:#14161ae0; padding:8px 12px; font-size:14px; }
 /* Hand tool: Space held over the painting, or a middle-button drag */
 #stage.panReady #wrap, #stage.panReady #wrap * { cursor:grab!important; }
 #stage.panning #wrap, #stage.panning #wrap * { cursor:grabbing!important; }

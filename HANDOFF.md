@@ -5,9 +5,10 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
-  **measured relief saved in projects and test bundles** (`src/reliefsave.js`)
-- Before that: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
+- Last code change on `main`: (2026-10-14) **phone pinch zoom + Full screen view**
+- Before that: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
+  measured relief saved in projects and test bundles (`src/reliefsave.js`)
+- Earlier: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
   **Measure relief · lamp photos** (relief measured from 2–3 lamp shots + the even
   shot) and the **DSC_8382** sample with its lamp shots
 - Earlier: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
@@ -66,6 +67,16 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): user asked for iPhone pinch zoom and a full-screen toggle.
+  Touch (`wireTouchGestures`, app.js): two fingers pinch-zoom about their midpoint and
+  pan; one finger pans when zoomed unless a dot/brush/sphere placer claimed it.
+  `#wrap` is now `touch-action:none` everywhere (native pan grabbed the pinch on iOS).
+  A second finger sends the first's handler a `pointercancel` flagged `digilightPinch`:
+  light drags snap back, brush strokes are dropped. **⛶ Full screen** toolbar button
+  (F key; Esc / ✕ Exit / browser leaving fullscreen exits): `body.fullView` CSS layout
+  (iPhone Safari has no element fullscreen) + requestFullscreen where allowed; floating
+  `#fullBar` with fit (zoom %) and Exit. Phone test in browser.cjs (CDP touch). Not yet
+  tried on a real iPhone — ask the user how it feels.
 - 10-14 (merged to `main`): user test
   bundle `Untitled_painting-test-2026-10-140440` (DSC_8382, one light from 126° high
   up + graze 3° from 61.5°, note "incorrect shadow direction to light source"; later:

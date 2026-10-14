@@ -12,7 +12,7 @@ export function initStudio(api) {
   toolbar.innerHTML = `<strong>DigiLight <small>Creative studio</small></strong>
     <button id="undo" title="Undo · Ctrl/Cmd Z">↶ Undo</button><button id="redo" title="Redo · Ctrl/Cmd Shift Z">↷ Redo</button>
     <button id="compare">Before / After</button><button id="splitView">Split view</button>
-    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 400% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
+    <button id="showHandles" class="on" title="Show or hide the light dots you drag to move each light">Light dots: on</button><span class="zoomGroup" role="group" aria-label="View size"><button id="zoomOut" title="Zoom out, down to 20%, to see lights beyond the painting ( − key )">−</button><button id="zoomFit" title="Fit the painting to the view ( 0 key )">100%</button><button id="zoomIn" title="Zoom in, up to 400% ( + key ). Ctrl/Cmd + wheel or pinch zooms at the pointer; Space-drag or middle-drag pans">+</button><button id="zoomLights" title="Zoom out just enough to show every light dot">Show all lights</button></span><button id="fullView" title="Show only the painting, filling the screen; pinch or Ctrl/Cmd + wheel still zooms ( F key, Esc to leave )">⛶ Full screen</button><button id="sweepLight" title="Orbit a low raking light round the painting to inspect its texture">Sweep light</button><span id="compareLabel">AFTER · RELIT</span>`;
   document.body.prepend(toolbar);
   const panel = document.createElement('div');
   panel.id = 'creative';
@@ -283,7 +283,8 @@ export function initStudio(api) {
     if (e.target.matches('input:not([type=range]),textarea,select') || state.exporting) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); }
     if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) $('compare').click();
-    if (e.key === 'Escape') stopSweep();
+    if (e.key === 'Escape') { stopSweep(); setFullView(false); }
+    if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) setFullView(!document.body.classList.contains('fullView'));
     if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (e.key === '-' || e.key === '_') $('zoomOut').click(); else if (e.key === '=' || e.key === '+') $('zoomIn').click(); else if (e.key === '0') $('zoomFit').click(); }
   });
   // View zoom: 100% fits the stage. Steps from any zoom (a pinch lands between them) go to the next one.
@@ -293,7 +294,27 @@ export function initStudio(api) {
   $('zoomIn').onclick=()=>zoomTo([...zoomSteps].reverse().find(z=>z>(state.viewZoom||1)+0.01)??4);
   $('zoomFit').onclick=()=>zoomTo(1);
   $('zoomLights').onclick=()=>zoomTo('lights');
-  document.addEventListener('digilight:zoom',()=>{$('zoomFit').textContent=`${Math.round((state.viewZoom||1)*100)}%`;});
+  document.addEventListener('digilight:zoom',()=>{const t=`${Math.round((state.viewZoom||1)*100)}%`;$('zoomFit').textContent=t;$('fullFit').textContent=t;});
+  // Full screen view: only the painting, with a small bar to fit and leave. iPhone Safari
+  // has no element fullscreen, so the view is a page layout first; where the browser
+  // allows it the page also goes truly fullscreen, and leaving that (Esc, swipe) leaves the view.
+  const fullBar=document.createElement('div');fullBar.id='fullBar';
+  fullBar.innerHTML='<button id="fullFit" title="Fit the painting to the screen">100%</button><button id="fullExit" title="Leave full screen ( Esc )">✕ Exit</button>';
+  $('stage').append(fullBar);
+  function setFullView(on){
+    if(document.body.classList.contains('fullView')===on)return;
+    document.body.classList.toggle('fullView',on);$('fullView').classList.toggle('on',on);
+    const d=document,el=d.documentElement;
+    if(on){const req=el.requestFullscreen||el.webkitRequestFullscreen;try{const p=req?.call(el);p?.catch?.(()=>{});}catch{}}
+    else if(d.fullscreenElement||d.webkitFullscreenElement){try{const p=(d.exitFullscreen||d.webkitExitFullscreen).call(d);p?.catch?.(()=>{});}catch{}}
+    // The stage changes size; keep the zoom and re-fit to it.
+    requestAnimationFrame(()=>api.setZoom(state.viewZoom||1));
+  }
+  const fsChange=()=>{if(!(document.fullscreenElement||document.webkitFullscreenElement))setFullView(false);};
+  document.addEventListener('fullscreenchange',fsChange);document.addEventListener('webkitfullscreenchange',fsChange);
+  $('fullView').onclick=()=>setFullView(!document.body.classList.contains('fullView'));
+  $('fullExit').onclick=()=>setFullView(false);
+  $('fullFit').onclick=()=>zoomTo(1);
   document.addEventListener('digilight:settings',()=>sync());
   // Capture one final snapshot per gesture; input events only redraw.
   document.addEventListener('change', () => setTimeout(checkpoint,0));
@@ -452,7 +473,10 @@ export function initStudio(api) {
     else state.strokes.push(stroke);
     // One stroke is one undo step, even if a deferred checkpoint fires mid-stroke.
     painting=true;add(e);
-    const end=()=>{api.canvas.removeEventListener('pointermove',add);api.canvas.removeEventListener('pointerup',end);api.canvas.removeEventListener('pointercancel',end);painting=false;checkpoint();};
+    const end=ev=>{
+      // A second finger turned this into a pinch: drop the stroke it had begun.
+      if(ev?.digilightPinch){if(layer){layer.mask.strokes.splice(layer.mask.strokes.indexOf(stroke),1);drawLayerMask(slot);state.layerMaskVersion++;render();}else{state.strokes.splice(state.strokes.indexOf(stroke),1);rebuildMask();}}
+      api.canvas.removeEventListener('pointermove',add);api.canvas.removeEventListener('pointerup',end);api.canvas.removeEventListener('pointercancel',end);painting=false;checkpoint();};
     api.canvas.addEventListener('pointermove',add);api.canvas.addEventListener('pointerup',end);api.canvas.addEventListener('pointercancel',end);
   });
   let dbPromise;

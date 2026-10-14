@@ -409,6 +409,64 @@ function wireZoomGestures() {
   }, true);
   // Keep the middle button from starting the browser's autoscroll.
   wrap.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  wireTouchGestures(stage);
+}
+
+/**
+ * Touch (phone, tablet): two fingers pinch-zoom about their midpoint and pan as they
+ * move; one finger pans once zoomed in, unless a dot, brush or the sphere placer took
+ * it. The whole frame is touch-action none (CSS), so the browser never zooms the page
+ * or grabs the pan mid-pinch. A second finger cancels what the first one started:
+ * its handler gets a pointercancel flagged `digilightPinch`, so it can undo it.
+ */
+function wireTouchGestures(stage) {
+  const touches = new Map();   // pointerId -> {x, y, target}
+  let pinch = null, pan = null;
+  const pair = () => { const [a, b] = [...touches.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || !wrap.contains(e.target)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY, target: e.target });
+    if (touches.size !== 2) return;
+    e.preventDefault(); e.stopPropagation();
+    pan = null;
+    for (const [id, t] of touches) {
+      if (id === e.pointerId) continue;
+      const c = new PointerEvent('pointercancel', { pointerId: id, pointerType: 'touch', bubbles: true });
+      c.digilightPinch = true;
+      t.target.dispatchEvent(c);
+    }
+    pinch = pair();
+    stage.classList.add('panning');
+  }, true);
+  // Bubble phase: only a touch nothing else claimed (no preventDefault) pans the view.
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || e.defaultPrevented || pinch || state.placingSphere || (state.viewZoom || 1) <= 1) return;
+    pan = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  });
+  const move = (e) => {
+    const t = touches.get(e.pointerId);
+    if (!t) return;
+    t.x = e.clientX; t.y = e.clientY;
+    if (pinch && touches.size >= 2) {
+      const p = pair();
+      if (pinch.d > 0 && p.d > 0) setZoom((state.viewZoom || 1) * p.d / pinch.d, [p.x, p.y]);
+      scroller.scrollLeft -= p.x - pinch.x; scroller.scrollTop -= p.y - pinch.y;
+      pinch = p;
+    } else if (pan && pan.id === e.pointerId) {
+      scroller.scrollLeft -= e.clientX - pan.x; scroller.scrollTop -= e.clientY - pan.y;
+      pan.x = e.clientX; pan.y = e.clientY;
+    }
+  };
+  const end = (e) => {
+    if (e.digilightPinch || !touches.delete(e.pointerId)) return;
+    if (pan && pan.id === e.pointerId) pan = null;
+    if (pinch && touches.size < 2) { pinch = null; stage.classList.remove('panning'); }
+  };
+  window.addEventListener('pointermove', move, { passive: true });
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  // iOS Safari also sends its own gesture events; stop them zooming the page over the stage.
+  for (const g of ['gesturestart', 'gesturechange']) stage.addEventListener(g, (e) => e.preventDefault());
 }
 
 // ---------------------------------------------------------------- lights UI
@@ -643,7 +701,7 @@ function rebuildHandles() {
       wrap.querySelectorAll('.handle').forEach((h, j) => h.classList.toggle('sel', i === j));
       const el = d;
       el.setPointerCapture(e.pointerId);
-      const startY = e.clientY, startZ = l.z, startCone = l.cone;
+      const startY = e.clientY, startZ = l.z, startCone = l.cone, startX0 = l.x, startY0 = l.y;
       const move = (ev) => {
         const r = canvas.getBoundingClientRect();
         if (ev.shiftKey) l.z = Math.min(2.5, Math.max(LIGHT_Z_MIN, startZ + (startY - ev.clientY) / 180));
@@ -655,7 +713,11 @@ function rebuildHandles() {
         placeHandle(el, l);
         render();
       };
-      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); rebuildLightPanel(); rebuildHandles(); };
+      const up = (ev) => {
+        // A second finger turned this into a pinch: put the light back where it was.
+        if (ev?.digilightPinch) { l.x = startX0; l.y = startY0; l.z = startZ; l.cone = startCone; render(); }
+        el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); rebuildLightPanel(); rebuildHandles();
+      };
       el.addEventListener('pointermove', move);
       el.addEventListener('pointerup', up);
       el.addEventListener('pointercancel', up);

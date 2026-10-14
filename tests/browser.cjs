@@ -72,7 +72,7 @@ await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=600;});a
 assert.ok((await hs.getAttribute('class')).includes('pinned')&&Math.abs(hb.y+hb.height/2-v.v.y-14)<1.5&&Math.abs(hb.x+hb.width/2-Q[0])<1.5,'dot pins to the visible edge while scrolled '+JSON.stringify(hb));
 await page.evaluate(()=>{document.querySelector('#scroller').scrollTop-=600;});await settle();hb=await hs.boundingBox();assert.ok(Math.hypot(hb.x+hb.width/2-Q[0],hb.y+hb.height/2-Q[1])<1.5&&!(await hs.getAttribute('class')).includes('pinned'));
 await page.click('#undo');await settle();assert.equal(JSON.stringify(await setting('lights')),lights);
-const touch=()=>page.evaluate(()=>getComputedStyle(__bench.canvas).touchAction);assert.equal(await touch(),'pan-x pan-y');
+const touch=()=>page.evaluate(()=>getComputedStyle(__bench.canvas).touchAction);assert.equal(await touch(),'none');
 await page.click('#brushRemove');assert.equal(await touch(),'none');v=await view();const B0=[v.v.x+v.v.w*.4,v.v.y+v.v.h*.55],B1=[B0[0]+80,B0[1]+20],n0=(await setting('strokes')).length;
 assert.ok(await page.evaluate(p=>document.elementFromPoint(...p)===__bench.canvas,B0));
 await page.mouse.move(...B0);await page.mouse.down();await page.mouse.move(...B1,{steps:4});await page.mouse.up();await settle();
@@ -328,5 +328,23 @@ assert.ok(Math.abs(rows[1].lamp.left+2.8*2.54)<1e-9&&Math.abs(rows[1].lamp.out-5
 assert.equal(await page.locator('#lampSample').isHidden(),true);await page.evaluate(()=>{__studio.lamp.rows.length=0;});
 console.log('PASS DSC_8382 sample with its lamp photos');}
 {page.once('dialog',d=>d.accept('streaks top left'));const [dl]=await Promise.all([page.waitForEvent('download'),page.click('#testBundle')]);const zp=outputDir+'/bundle.zip';await dl.saveAs(zp);const buf=require('fs').readFileSync(zp);const names=[];for(let o=0;o+30<buf.length&&buf.readUInt32LE(o)===0x04034b50;){const n=buf.readUInt16LE(o+26),sz=buf.readUInt32LE(o+18);names.push(buf.toString('utf8',o+30,o+30+n));if(names.at(-1)==='notes.txt')assert.equal(buf.toString('utf8',o+30+n,o+30+n+sz),'streaks top left');o+=30+n+sz;}for(const f of ['project.digilight.json','notes.txt','view-relit.png','view-original.png','view-split.png','view-shadows.png','view-height.png','original.jpg','relit-full.png','info.json'])assert.ok(names.includes(f),f);await page.waitForFunction(()=>document.querySelector('#projectStatus').textContent.startsWith('Test bundle downloaded'));console.log('PASS export for testing bundle');}
+// Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
+// starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
+{const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));
+await m.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);
+const cdp=await ctx.newCDPSession(m),touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts.map(([x,y],id)=>({x,y,id}))});
+const z=()=>m.evaluate(()=>__bench.state.viewZoom),sc=()=>m.evaluate(()=>{const s=document.querySelector('#scroller');return [s.scrollLeft,s.scrollTop];});
+const pinch=async(c,d0,d1)=>{await touch('touchStart',[[c[0]-d0/2,c[1]]]);await touch('touchMove',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);await touch('touchStart',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);for(let i=1;i<=8;i++){const d=d0+(d1-d0)*i/8;await touch('touchMove',[[c[0]-d/2,c[1]],[c[0]+d/2,c[1]]]);}await touch('touchEnd',[]);};
+let b=await m.locator('#gl').boundingBox();const c=[b.x+b.width/2,b.y+b.height/2];
+await pinch(c,60,180);let zz=await z();assert.ok(Math.abs(zz-3)<.15,'pinch zoom '+zz);
+const s0=await sc();await touch('touchStart',[[c[0],c[1]]]);for(let i=1;i<=6;i++)await touch('touchMove',[[c[0]-10*i,c[1]-8*i]]);await touch('touchEnd',[]);const s1=await sc();assert.ok(s1[0]-s0[0]>50&&s1[1]-s0[1]>40,'one-finger pan '+JSON.stringify([s0,s1]));
+await pinch(c,200,40);assert.ok(await z()<1.2,'pinch out '+await z());await m.click('#zoomFit');
+await m.getByText('Local texture correction',{exact:true}).click();await m.click('#brushAdd');const n0=(await m.evaluate(()=>__bench.state.strokes.length));b=await m.locator('#gl').boundingBox();
+await pinch([b.x+b.width/2,b.y+b.height/2],60,120);assert.equal(await m.evaluate(()=>__bench.state.strokes.length),n0,'a pinch drops the stroke its first finger began');await m.click('#brushOff');
+await m.click('#fullView');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isHidden()&&await m.locator('#panel').isHidden()&&await m.locator('#fullExit').isVisible());
+const st=await m.locator('#stage').boundingBox();assert.ok(st.width>=389&&st.height>=843,'stage fills the screen '+JSON.stringify(st));
+b=await m.locator('#gl').boundingBox();await pinch([b.x+b.width/2,b.y+b.height/2],60,150);assert.ok(await z()>2,'pinch in full screen '+await z());
+await m.click('#fullFit');assert.equal(await z(),1);await m.click('#fullExit');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isVisible()&&await m.locator('#fullExit').isHidden());
+await ctx.close();console.log('PASS phone pinch zoom, one-finger pan, pinch cancels stroke, full screen view');}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
