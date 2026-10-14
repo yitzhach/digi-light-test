@@ -179,6 +179,17 @@ void main() {
   outColor = texture(uHeight, uv);
 }`;
 
+// Measured relief (lamp photos, lampphotos.js) in place of the estimate: the part
+// of the measured height map this target covers (the whole of it in the preview, a
+// tile's window in an export), bilinearly resampled into both estimate channels.
+const MEASURED_FS = `${HEAD}
+uniform sampler2D uSrc;
+uniform vec4 uRect;   // u0, v0, u1, v1 of the measured map this target covers
+void main() {
+  float h = texture(uSrc, mix(uRect.xy, uRect.zw, vUV)).r;
+  outColor = vec4(h, h, 0.0, 1.0);
+}`;
+
 // Normals by central difference on the height field. Sobel would be smoother but
 // central difference keeps single-bristle detail that Sobel averages away, and
 // bristle detail is the entire point of this exercise.
@@ -235,6 +246,7 @@ export class GBuffer {
       normal: program(gl, NORMAL_FS, 'normal'),
       sample: program(gl, SAMPLE_FS, 'sample'),
       albedo: program(gl, ALBEDO_FS, 'albedo'),
+      measured: program(gl, MEASURED_FS, 'measured'),
     };
     this.targets = null;
     this.size = { w: 0, h: 0 };
@@ -333,6 +345,14 @@ export class GBuffer {
       gl.uniform2f(u.uAzimuth, Math.cos(az), Math.sin(az));
       gl.uniform1f(u.uTaps, integrateTaps);
     });
+
+    // Measured relief replaces the estimate: {tex, rect} (rect in the measured map's
+    // UV, v up). Everything downstream (spread, normals, shadows) is built from it.
+    if (opts.measured) {
+      run(this.progs.measured, T.height, [['uSrc', opts.measured.tex]], (u) => {
+        gl.uniform4f(u.uRect, ...opts.measured.rect);
+      });
+    }
 
     // Test seam: lets a harness replace the estimated heights (e.g. with a synthetic
     // painting's known relief) so everything downstream is built from them.

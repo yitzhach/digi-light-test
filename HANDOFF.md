@@ -4,14 +4,13 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-13
-- Last code change on `main`: second merge of `claude/image-lighting-review-h7922k`
-  (2026-10-13) — **Export for testing** zip; before that (same day) shadow smoothing,
-  shorter shadows for extra lights, app opens on a sample painting
-- Before that: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate
-  section (lamp model, match score, Auto-fit) and side-lit even-light share
-- Earlier: merge of `claude/epic-wright-h77sdu` (2026-10-11) — view zoom to 400%,
-  graze fixes, graze lab
+- Last updated: 2026-10-14
+- Last code change on `main`: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
+  **Measure relief · lamp photos** (relief measured from 2–3 lamp shots + the even
+  shot) and the **DSC_8382** sample with its lamp shots
+- Before that: second merge of `claude/image-lighting-review-h7922k` (2026-10-13) —
+  Export for testing zip, shadow smoothing, sample painting on open
+- Earlier: merge of `claude/laughing-mendel-u7jr3c` (2026-10-12) — Calibrate section
 - Deploy: automatic via Cloudflare Workers Builds on push to `main` (`wrangler.jsonc`); manual Pages upload no longer needed
 - Live: digi-light-test.bobdylan2000.workers.dev (Workers static assets)
 
@@ -25,6 +24,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
+- `lampphotos.js` (maths) + `lampui.js` (section) — relief measured from lamp photos
 - `photometric.js`, `register.js`, `sphere.js` — multi-photo capture path (demo section)
 - `synth.js` — synthetic painting with known relief (tests); `measure.js` — image stats
 - `tests/browser.cjs` — Playwright regression (see README "Validation")
@@ -64,6 +64,29 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (merged to `main`): user sent a tripod set of the 19 in red panel (2.5 in
+  deep): DSC_8382 even room light, DSC_8379/80/81 one spot lamp ~9 in above the top,
+  6.5/5.75/6 in from the paint, centre / ~2.8 in left of the left edge / ~3.4 in
+  right of the right edge (left-right read off the panel's wall shadows; the user
+  gave only height and distance off the wall). Findings: (1) one-photo relief from
+  the even shot correlates ~0 with the lamp shots (stroke band) — the impasto does
+  not show in even light; (2) shots drift up to 2 px and 0.3% zoom; (3) the spot has
+  a narrow aimed beam, nothing like the bare-bulb lamp model. New **Measure relief ·
+  lamp photos** (`src/lampphotos.js`, `src/lampui.js`, under Calibrate): align each
+  shot to the even one on colour (r/sum, b/sum; patch NCC + affine fit), ratio to
+  the even shot, room light (local regression intercept), beam = local mean over
+  the predicted shading (2 refine rounds), per-pixel LS for slopes from near-lamp
+  geometry, multigrid W-cycle Poisson, drift removal (0.06 W), depth = 2–98% spread
+  in mm → Texture depth. Injected via GBuffer `opts.measured` {tex, rect} (export
+  tiles resample their window; renderState carries `measuredTex`). Light like this
+  (graze = that lamp, raw graze settings), Compare (lamp photo in Before/Split via
+  sRGB texture swapped for `lin`). Results on the set: self-check r = 0.87/0.86/0.80,
+  depth 1.51 mm; in-app leave-one-out render vs real photo r = 0.75–0.83 (old
+  estimate ~0); renders show ~60% of the photo's contrast. Synthetic: depth 10–20%
+  shallow with all lamps above, right with lamps on four sides. Calibrate's lamp
+  distance is now labelled "out from painting" (face, not wall). Samples picker
+  (`#samplePick`): Red panel / DSC_8382 (cropped to the panel 314–1692 × 4–1331 of
+  the 2000 px uploads; lamp shots cropped alike in `samples/dsc8382/`).
 - 10-13 (merged to `main`): **Export for testing** button (studio.js Projects →
   `src/testbundle.js`): prompt for a note, then a stored (uncompressed) zip written by
   hand (`makeZip`, crc32) with the files above. Views are grabbed from the preview
@@ -163,26 +186,27 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
-00. User feedback on Shadow smoothing / extra-light reach on the sample painting; maybe
-   a sideways (perpendicular) shadow blur if streaks remain at low angles. Earlier
-   review of that painting also noted: waxy sheen with extra lights (specular),
+00. User feedback on Measure relief with DSC_8382 on the live site. Then: a crop /
+   "painting edges" tool, so raw tripod shots (with wall) can be used as they are;
+   save measured relief (or the lamp photos) in projects and test bundles.
+0. Contrast: renders at the measured depth show ~60% of the lamp photos' stroke
+   contrast (losses in integration, normal pass, all-lamps-above). Calibrate a gain
+   against the lamp photos, or fix the losses; the user says the thickest paint is
+   ~4.8 mm (3/16 in), measured 2–98% spread of stroke relief is 1.5 mm.
+0b. Model the spot's beam (aim + cone) for the calibrated lamp; the lamp photos
+   already measure it (`beam` in lampphotos.js) — could drive the graze lamp so
+   Compare matches the photo's pool of light.
+1. Earlier review of the sample painting: waxy sheen with extra lights (specular),
    salmon/copper colour drift on the red, dark corners from lamp falloff after Auto-fit.
-0. Calibrate with two tripod shots (even + raking): relief from the even one, score on
-   the raking one — makes the score a real check and frees depth vs lamp distance.
-   Also: a fine-band score needs an albedo that does not keep the photo's shading.
-0b. From the real-painting tests: retune/remove "Every detail (raw)"; a shadow-aware
-   directional estimate (or a synthetic rig with cast shadows + fill) to replace the
-   fixed SIDE_SHARE; red ground relit brighter/oranger than the photo.
-1. Check calibrated relief on real photos of impasto (synthetic-only so far; the
-   cloud environment's network policy blocked Wikimedia). See "Real-painting test" above.
-2. Optional "match original brightness" exposure after a lighting preset
-3. Project save for the multi-photo capture workflow (currently single-photo only)
+2. From the real-painting tests: retune/remove "Every detail (raw)"; red ground
+   relit brighter/oranger than the photo.
+3. Optional "match original brightness" exposure after a lighting preset
 4. Large-export memory limits / preview vs export differences at very high res
-5. User feedback on the graze presets on real photos (lab is synthetic only); the
-   1–1.5° presets still lose some real ridge shadow and read bright — a better
-   ridge-vs-grain discriminator would help.
-6. Feedback on layers/masks (maybe a "current result" source, mask brush hardness,
+5. Feedback on layers/masks (maybe a "current result" source, mask brush hardness,
    showing the mask alone)
+6. Project save for the multi-photo capture workflow (currently single-photo only)
+7. Graze presets on real photos: the 1–1.5° presets lose some ridge shadow and read
+   bright (one-photo relief); recheck them on measured relief.
 
 ## Gotchas
 - Calibrated mode (`state.physical`, single photo only) derives heightScale,
@@ -192,3 +216,7 @@ To judge it on a real painting, by eye:
 - Must serve over HTTP (ES modules); don't open index.html directly.
 - Deploy index.html, studio.css, src/, samples/, _headers together.
 - Tests must open `/?synth`: the default start is the sample photo.
+- Measured relief lives in app.js `measured` (preview-sized RGBA16F texture), not in
+  state/history/projects; a new photo (setSource without keep) drops it. Lamp
+  photos must be cropped exactly like the painting photo (same shape) and lamp
+  "out" is from the painted face.

@@ -136,7 +136,10 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-          targets = gbuf.build(tex, pw, ph, state);
+          // Measured relief: this tile's window of the preview-sized map (v up).
+          targets = gbuf.build(tex, pw, ph, state.measuredTex
+            ? { ...state, measured: { tex: state.measuredTex, rect: [px0 / W, (H - py1) / H, px1 / W, (H - py0) / H] } }
+            : state);
         }
 
         if (!target || target.w !== pw || target.h !== ph) {

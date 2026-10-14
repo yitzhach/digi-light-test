@@ -73,12 +73,12 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'calibrateSection';
   const row = (id, label) => `<div class="row calRow"><label for="${id}">${label}</label><input id="${id}" type="range"><input id="${id}N" type="number" aria-label="${label}"></div>`;
   box.innerHTML = `<summary>Calibrate · match your raking photo</summary><div class="grp">
-    <p class="note">For a photo lit by one lamp close to the wall. Measure from the painting's edges: the app works out the light's angles across the painting.</p>
+    <p class="note">For a photo lit by one lamp close to the wall. Measure from the painting's edges, and out from its painted face, not the wall: a panel or stretcher 2.5 in deep puts the paint 2.5 in nearer the lamp. The app works out the light's angles across the painting.</p>
     <label class="selectRow">Units<select id="calUnits"><option value="in">inches</option><option value="cm">cm</option></select></label>
     ${row('calWidth', 'Painting width')}
     ${row('calAbove', 'Lamp above top edge')}
     ${row('calLeft', 'Lamp from left edge')}
-    ${row('calOut', 'Lamp out from wall')}
+    ${row('calOut', 'Lamp out from painting')}
     <p class="note" id="calGeometry"></p>
     <button id="calUse">Light it like the photo</button>
     ${row('calDepth', 'Texture depth (mm)')}
@@ -86,11 +86,11 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
     <div class="calScore"><button id="calMeasure">Match score</button><output id="calScore">–</output><button id="calSplit">Split with photo</button></div>
     <div class="calFitWhat"><span>Auto-fit may change</span>
       <label><input type="checkbox" id="calFitPos" checked> lamp position</label>
-      <label><input type="checkbox" id="calFitOut"> lamp distance from wall</label>
+      <label><input type="checkbox" id="calFitOut"> lamp distance from painting</label>
       <label><input type="checkbox" id="calFitDepth" checked> texture depth</label>
       <label><input type="checkbox" id="calFitFill" checked> room light</label></div>
     <div class="calScore"><button id="calFit">Auto-fit</button><button id="calStop" disabled>Stop</button><output id="calFitStatus"></output></div>
-    <p class="note">Auto-fit tries small changes to the ticked settings and keeps each one that raises the match: the lamp within about half a painting width of your measurements, its distance from the wall from half to twice yours, texture depth from a quarter to four times yours. Depth and the lamp's distance from the wall both set how long the shadows are, so one photo cannot tell them apart: fit one and keep the other as measured. With one photo the relief is read from the same picture, so a high score means the settings agree with it, not that they are exact. Undo goes back to before the fit.</p>
+    <p class="note">Auto-fit tries small changes to the ticked settings and keeps each one that raises the match: the lamp within about half a painting width of your measurements, its distance from the painting from half to twice yours, texture depth from a quarter to four times yours. Depth and the lamp's distance from the painting both set how long the shadows are, so one photo cannot tell them apart: fit one and keep the other as measured. With one photo the relief is read from the same picture, so a high score means the settings agree with it, not that they are exact. Undo goes back to before the fit.</p>
   </div>`;
   after.after(box);
 
@@ -274,6 +274,15 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
   $('calFit').onclick = () => autoFit();
   $('calStop').onclick = () => { stop = true; };
 
+  $('calUnits').addEventListener('change', () => document.dispatchEvent(new Event('digilight:units')));
+  /** Light it like a lamp photo (Measure relief · lamp photos): the graze light
+   *  becomes that lamp. Unlike Light it like the photo, Photo was lit is left alone,
+   *  since the painting photo there is the evenly lit one. */
+  function useLamp(l, extra = {}) {
+    setGraze({ opacity: 1, fill: state.graze.fill ?? GRAZE_AMBIENT, ...extra });
+    applyLamp({ ...l }); draft = null;
+    sync(); renderGraze(); api.render(); checkpoint();
+  }
   sync();
-  return { sync, measure, autoFit, forgetDraft: () => { draft = null; } };
+  return { sync, measure, autoFit, useLamp, units: () => units, forgetDraft: () => { draft = null; } };
 }

@@ -261,6 +261,59 @@ await page.evaluate(()=>{const s=__studio.snapshot();s.graze.lamp={left:1,above:
 await page.locator('#grazeSection').evaluate(e=>e.open=true);await page.focus('#grazeDial');await page.keyboard.press('ArrowUp');await settle();assert.equal((await setting('graze')).lamp,undefined);
 console.log('PASS calibrate: lamp geometry, match score, auto-fit, undo and saving');}
 {const r=await page.evaluate(async()=>{const {lightReach}=await import('./src/shade.js');const L=(p,on=true)=>({power:p,rgb:[1,1,1],enabled:on});const reach=[...lightReach([L(4),L(1),L(0.1),L(9,false)])].slice(0,4);const s=__studio.snapshot();delete s.shadowDetail;const legacy=__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).shadowDetail;const before=__bench.state.shadowDetail;__bench.state.shadowDetail=0.01;__bench.render();await new Promise(r=>setTimeout(r,400));return {reach,legacy,before,err:document.querySelector('#err').textContent};});assert.deepEqual(r.reach.map(v=>+v.toFixed(3)),[1,0.25,0.15,0.15]);assert.equal(r.legacy,0);assert.equal(r.before,0.004);assert.equal(r.err,'');await page.evaluate(()=>{__bench.state.shadowDetail=0.004;});console.log('PASS shadow smoothing and extra-light shadow reach');}
+// Measure relief · lamp photos: a synthetic painting whose relief does not show in its
+// even shot, three lamp shots (the first moved 2 px, as a creeping tripod does), and
+// the measured relief compared with the truth, through the section's own controls.
+{const W=420,H=340,widthCm=40,lamps=[{left:-5,above:15,out:12},{left:20,above:14,out:13},{left:45,above:15,out:12}];
+const png=await page.evaluate(({W,H,widthCm,lamps})=>{
+  const n=W*H,ht=new Float32Array(n),k=W/widthCm;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)ht[y*W+x]=1.5*Math.sin(x/9+Math.sin(y/23))*Math.cos(y/13)+Math.sin((x+y)/5.5)+2*Math.exp(-((x-150)**2+(y-120)**2)/400);
+  window.__lampTruth=ht;
+  const alb=(x,y)=>{const a=[[0.55,0.25,0.2],[0.45,0.45,0.42],[0.25,0.22,0.3]][(Math.floor(x/60)+Math.floor(y/50))%3].slice();a[0]*=1+0.25*Math.sin(x/4.7)*Math.sin(y/3.9);return a;};
+  const enc=v=>{v=Math.max(0,Math.min(1,v));return Math.round(255*(v<=0.0031308?12.92*v:1.055*v**(1/2.4)-0.055));};
+  const img=(f,dx=0)=>{const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d'),d=g.createImageData(W,H);
+    for(let y=0;y<H;y++)for(let X=0;X<W;X++){const x=Math.min(W-1,Math.max(0,X-dx)),v=f(x,y),a=alb(x,y),o=(y*W+X)*4;d.data[o]=enc(a[0]*v);d.data[o+1]=enc(a[1]*v);d.data[o+2]=enc(a[2]*v);d.data[o+3]=255;}
+    g.putImageData(d,0,0);return c.toDataURL('image/png').split(',')[1];};
+  const lit=l=>(x,y)=>{const hx=(ht[y*W+Math.min(W-1,x+1)]-ht[y*W+Math.max(0,x-1)])/2,hy=(ht[Math.min(H-1,y+1)*W+x]-ht[Math.max(0,y-1)*W+x])/2;
+    const lx=l.left*k-x-0.5,ly=-l.above*k-y-0.5,lz=l.out*k,r=Math.hypot(lx,ly,lz);return 0.15+1.6*Math.max(0,(-hx*lx-hy*ly+lz)/(r*Math.hypot(hx,hy,1)))*(lz/r)**2;};
+  return {even:img(()=>0.6),shots:lamps.map((l,i)=>img(lit(l),i===0?2:0))};},{W,H,widthCm,lamps});
+const buf=b=>Buffer.from(b,'base64');
+await page.locator('#file').setInputFiles({name:'even.png',mimeType:'image/png',buffer:buf(png.even)});await page.waitForFunction(w=>__bench.canvas.width===w,W);await settle();
+await page.locator('#calibrateSection').evaluate(e=>e.open=true);await page.locator('#lampSection').evaluate(e=>e.open=true);await page.selectOption('#calUnits','cm');
+await page.locator('#calWidthN').evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));},widthCm);
+assert.equal(await page.locator('#lampMeasure').isDisabled(),true);assert.equal(await page.locator('#lampUse').isDisabled(),true);
+await page.locator('#lampFile').setInputFiles(png.shots.map((b,i)=>({name:`lamp${i+1}.png`,mimeType:'image/png',buffer:buf(b)})));
+await page.waitForFunction(()=>document.querySelectorAll('.lampRow').length===3);
+for(let i=0;i<3;i++)for(const k of ['above','left','out']){const el=page.locator('.lampRow').nth(i).locator(`input[data-k=${k}]`);await el.fill(String(lamps[i][k]));await el.dispatchEvent('change');}
+const r=await page.evaluate(async()=>{const {boxBlur,DRIFT_SIGMA}=await import('/src/lampphotos.js');const res=await __studio.lamp.measure();const W=res.w,H=res.h,t=__lampTruth,d=boxBlur(t,W,H,DRIFT_SIGMA*W);
+  let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;const tv=[];for(let y=10;y<H-10;y++)for(let x=10;x<W-10;x++){const i=y*W+x,a=t[i]-d[i],b=res.height[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;n++;tv.push(a);}
+  tv.sort((a,b)=>a-b);const corr=(sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2));
+  const trueMm=(tv[Math.floor(tv.length*0.98)]-tv[Math.floor(tv.length*0.02)])*__bench.state.paintingWidthCm*10/W;
+  return {corr,depth:res.depthMm,trueMm,check:res.check,shift:res.shots[0].align.map,state:__bench.state.textureDepthMm};});
+assert.ok(r.corr>0.85,'measured vs true relief '+JSON.stringify(r));assert.ok(Math.abs(r.depth/r.trueMm-1)<0.25,'depth '+JSON.stringify(r));
+assert.ok(r.check.every(c=>c>0.8),'check '+JSON.stringify(r.check));assert.ok(Math.abs(r.shift[2]-2)<0.3&&Math.abs(r.shift[5])<0.3,'alignment '+JSON.stringify(r.shift));
+assert.equal(r.state,Math.min(10,Math.max(0.05,+r.depth.toFixed(2))));
+assert.equal(await page.locator('#lampUse').isChecked(),true);assert.match(await page.locator('#lampResult').textContent(),/Measured relief .* mm deep.*Check: .*\(good\)/);
+const on=await pixels();await page.locator('#lampUse').uncheck();await settle();const off=await pixels();assert.notEqual(on,off);await page.locator('#lampUse').check();await settle();assert.equal(await pixels(),on);
+await page.locator('.lampRow').nth(0).locator('[data-act=compare]').click();await settle();
+assert.equal(await setting('compareSplit'),0.5);assert.equal(await page.locator('#compareLabel').textContent(),'LAMP 1 ← → AFTER');assert.equal((await setting('graze')).lamp.left,-5);assert.equal((await setting('graze')).detail,0);
+const cmp=await pixels();await page.locator('.lampRow').nth(0).locator('[data-act=compare]').click();await settle();assert.equal(await setting('compareSplit'),-1);assert.notEqual(await pixels(),cmp);
+const par=await page.evaluate(async()=>{const s=__bench.state;s.maxTile=200;const c=await __bench.exportFullRes();delete s.maxTile;__bench.render();
+  const W=__bench.canvas.width,H=__bench.canvas.height,a=document.createElement('canvas');a.width=W;a.height=H;const ax=a.getContext('2d');ax.drawImage(__bench.canvas,0,0);const b=document.createElement('canvas');b.width=W;b.height=H;const bx=b.getContext('2d');bx.drawImage(c,0,0);
+  const da=ax.getImageData(0,0,W,H).data,db=bx.getImageData(0,0,W,H).data;let d=0;for(let i=0;i<da.length;i+=4)d+=Math.abs(da[i]-db[i]);return d/(W*H);});
+assert.ok(par<1,'tiled export with measured relief matches the preview '+par);
+await page.locator('#file').setInputFiles({name:'other.png',mimeType:'image/png',buffer:buf(png.shots[1])});await page.waitForFunction(()=>document.querySelector('#lampUse').disabled);
+assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('.lampRow').count(),3);
+console.log('PASS lamp photos: measured relief matches the truth',JSON.stringify({corr:+r.corr.toFixed(3),depth:+r.depth.toFixed(2),trueMm:+r.trueMm.toFixed(2),check:r.check.map(c=>+c.toFixed(2)),exportDiff:+par.toFixed(3)}));}
+// The DSC_8382 sample (the user's tripod set) and its lamp shots, with the lamp
+// positions and the panel's width filled in.
+{await page.selectOption('#samplePick','dsc8382');await page.waitForFunction(()=>__bench.canvas.width===1378);await settle();
+assert.equal(await page.locator('#lampSample').isHidden(),false);await page.click('#lampSample');await page.waitForFunction(()=>__studio.lamp.rows.length===6);await settle();
+const rows=await page.evaluate(()=>__studio.lamp.rows.slice(3).map(r=>({name:r.name,w:r.w,h:r.h,lamp:r.lamp})));
+assert.deepEqual(rows.map(r=>r.name),['DSC_8379.jpg','DSC_8380.jpg','DSC_8381.jpg']);assert.ok(rows.every(r=>r.w===1378&&r.h===1327));
+assert.ok(Math.abs(rows[1].lamp.left+2.8*2.54)<1e-9&&Math.abs(rows[1].lamp.out-5.75*2.54)<1e-9);assert.ok(Math.abs(await setting('paintingWidthCm')-48.26)<1e-9);
+assert.equal(await page.locator('#lampSample').isHidden(),true);await page.evaluate(()=>{__studio.lamp.rows.length=0;});
+console.log('PASS DSC_8382 sample with its lamp photos');}
 {page.once('dialog',d=>d.accept('streaks top left'));const [dl]=await Promise.all([page.waitForEvent('download'),page.click('#testBundle')]);const zp=outputDir+'/bundle.zip';await dl.saveAs(zp);const buf=require('fs').readFileSync(zp);const names=[];for(let o=0;o+30<buf.length&&buf.readUInt32LE(o)===0x04034b50;){const n=buf.readUInt16LE(o+26),sz=buf.readUInt32LE(o+18);names.push(buf.toString('utf8',o+30,o+30+n));if(names.at(-1)==='notes.txt')assert.equal(buf.toString('utf8',o+30+n,o+30+n+sz),'streaks top left');o+=30+n+sz;}for(const f of ['project.digilight.json','notes.txt','view-relit.png','view-original.png','view-split.png','view-shadows.png','view-height.png','original.jpg','relit-full.png','info.json'])assert.ok(names.includes(f),f);await page.waitForFunction(()=>document.querySelector('#projectStatus').textContent.startsWith('Test bundle downloaded'));console.log('PASS export for testing bundle');}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
