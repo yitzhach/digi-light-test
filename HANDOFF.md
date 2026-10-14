@@ -86,16 +86,19 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-14
-- **Branch `feature/metrology`** (not merged; the user says when to merge into `main`):
+- **Branch `feature/metrology` merged into `main` (2026-10-14, user asked).** It was:
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
   (2) item 3 relief-only raking view + colour-over-relief preset — DONE on the branch; (3) items 1+2+19
   profile probe + calibrated colour height map + ISO stats — DONE on the branch; (4) items 14–16 stroke
   direction / Best raking direction, overexposure warning, glint mask — DONE on the branch.
-  All four steps are on `feature/metrology`, waiting for the user to say merge. Ask before
+  All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
+- Last code change on `main`: (2026-10-14) merge of `feature/metrology`: texture contrast score + Fit depth to photos,
+  Relief view / Relief only / Colour over relief, Profile · height map (ISO roughness, colour map),
+  clipping warnings, glint masking, Best raking direction
+- Before that: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
 - Before that: (2026-10-14) batch looks saved as projects; + Light copies the selected light
 - Before that: **Batch preview · compare looks** (`src/batch.js`)
 - Before that: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
@@ -168,7 +171,7 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
-- 10-14 (branch `feature/metrology`): **photo checks** (doc items 14–16).
+- 10-14 (merged to `main` from `feature/metrology`): **photo checks** (doc items 14–16).
   `src/photocheck.js`: `clipping(rgba)` (share with any channel ≥250 / all ≤5, warn over
   0.5%) and `clippingOf(img)` (nearest-sampled at ≤1500 px); warning on each lamp photo
   row (`.lampClip`) and in Calibrate for the painting photo (`#calClip`,
@@ -193,7 +196,7 @@ To judge it on a real painting, by eye:
   across 12.4%, along (from 82°, the top) 15.6% → picks 82°. Likely helped by every lamp
   shot being lit from above (vertical slopes measured best). Not done from item 14: the
   Measure relief warning when all lamps are on one side.
-- 10-14 (branch `feature/metrology`): **Profile · height map** section (`src/probe.js`, after
+- 10-14 (merged to `main` from `feature/metrology`): **Profile · height map** section (`src/probe.js`, after
   Measure relief; doc items 1, 2, 19). **Draw a profile**: a drag on the painting (capture
   listeners on `#paper`, so lights/brushes don't see it) draws a line (SVG `#probeOverlay`
   in `#paper`, canvas-pixel viewBox, scales with zoom). Plot (`#probePlot`) of height in
@@ -213,7 +216,7 @@ To judge it on a real painting, by eye:
   One-photo at 2.16 mm: same line P-V 2.64 mm, RMS 371 µm; painting Sq 294 µm, Sku 8.23
   (spiky: grain on colour edges). Test in browser.cjs (sine/square-wave ISO values,
   read-back orientation, dragged line = measured heights, scale bar).
-- 10-14 (branch `feature/metrology`): **Relief view + Relief only / Colour over relief**
+- 10-14 (merged to `main` from `feature/metrology`): **Relief view + Relief only / Colour over relief**
   (doc item 3). `graze.grey` 0..1 (validated, in history/projects): shade.js uses an
   even grey albedo `GRAZE_GREY` 0.3 linear under the graze light (flat paint lands near
   mid-grey: DSC_8382 lamp 3 median 128/255) and turns the graze result to its luma (no
@@ -226,7 +229,7 @@ To judge it on a real painting, by eye:
   These export (view 7 itself does not; exports are always view 0). On DSC_8382 the
   one-photo relief view shows its grain and the figure's outline as fake relief; the
   measured one shows the strokes. Test in browser.cjs.
-- 10-14 (branch `feature/metrology`): **texture contrast score + Fit depth to photos**
+- 10-14 (merged to `main` from `feature/metrology`): **texture contrast score + Fit depth to photos**
   (doc items 12–13). `src/texscore.js`: `textureScore(rgba, w, h, mmPerPx)` = RL-Sq
   style: Rec.709 luma of the encoded values ÷ Gaussian blur of `BIG_MM` 2.5 mm (in mm,
   scales with Painting width), light Gaussian `SMALL_PX` 1.5 px, population std with
