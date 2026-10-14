@@ -95,7 +95,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-14) Light like this sets room light 0.25
+- Last code change on `main`: (2026-10-14) Measure relief fits Texture depth to the lamp photos
+- Before that: (2026-10-14) Light like this sets room light 0.25
 - Before that: (2026-10-14) merge of `feature/metrology`: texture contrast score + Fit depth to photos,
   Relief view / Relief only / Colour over relief, Profile · height map (ISO roughness, colour map),
   clipping warnings, glint masking, Best raking direction
@@ -172,6 +173,16 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`; user: "do what creates the best final image"): **Measure relief now
+  fits Texture depth** to the lamp photos' stroke contrast right after measuring
+  (`lamp.measure({fit})`, default on; runs `fitDepth({fill: LAMP_ROOM, auto: true})`, which
+  keeps the spread if no depth matches; result in `res.fit`, two undo steps). DSC_8382 with
+  defaults only (`tools/batches/auto-fit.json`, render-batch `autoFit: true`): depth 2.11 mm
+  (spread 1.50), Light like this room 0.25 → logRMS vs the lamp photos 0.257/0.274/0.299,
+  texture match 96/104/100%; old defaults (1.51 mm, room 0.06) were 0.311/0.331/0.380.
+  render-batch keeps the spread for the base unless `autoFit`. Test fix: the fit undo
+  test renders before its checkpoint (any pointerup checkpoints, so a pre-render
+  snapshot differed after undo and wiped redo).
 - 10-14 (pushed to `main`; user said "your call"): **Light like this sets graze room light
   0.25** (lampui.js `LAMP_ROOM`; Fit depth calls `lightLike(i, true)` and keeps the room
   light as set). Spec `tools/batches/room-light.json` (measured relief, fitted 2.11 mm):
@@ -496,8 +507,6 @@ To judge it on a real painting, by eye:
    `docs/conoscopic-paper-improvements.md` (
    profile probe + relief-only view are the cheapest; items 12–13, texture-contrast
    score → auto texture depth, go straight at the 60% contrast / depth problem).
-0e. From the Fit depth results: once room light is settled (0c), Measure relief could run
-   Fit depth itself and set ~2.2 mm on DSC_8382 instead of the 1.51 mm spread.
 0c. (Light like this done 10-14: fixed 0.25.) Calibrate still: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).

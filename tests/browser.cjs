@@ -289,10 +289,10 @@ const r=await page.evaluate(async()=>{const {boxBlur,DRIFT_SIGMA}=await import('
   let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;const tv=[];for(let y=10;y<H-10;y++)for(let x=10;x<W-10;x++){const i=y*W+x,a=t[i]-d[i],b=res.height[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;n++;tv.push(a);}
   tv.sort((a,b)=>a-b);const corr=(sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2));
   const trueMm=(tv[Math.floor(tv.length*0.98)]-tv[Math.floor(tv.length*0.02)])*__bench.state.paintingWidthCm*10/W;
-  return {corr,depth:res.depthMm,trueMm,check:res.check,shift:res.shots[0].align.map,state:__bench.state.textureDepthMm};});
+  return {corr,depth:res.depthMm,trueMm,check:res.check,shift:res.shots[0].align.map,state:__bench.state.textureDepthMm,fit:res.fit&&{depth:res.fit.depth,reached:res.fit.reached}};});
 assert.ok(r.corr>0.85,'measured vs true relief '+JSON.stringify(r));assert.ok(Math.abs(r.depth/r.trueMm-1)<0.25,'depth '+JSON.stringify(r));
 assert.ok(r.check.every(c=>c>0.8),'check '+JSON.stringify(r.check));assert.ok(Math.abs(r.shift[2]-2)<0.3&&Math.abs(r.shift[5])<0.3,'alignment '+JSON.stringify(r.shift));
-assert.equal(r.state,Math.min(10,Math.max(0.05,+r.depth.toFixed(2))));
+assert.ok(r.fit,'Measure relief fits the depth');assert.equal(r.state,r.fit.reached==='yes'?r.fit.depth:Math.min(10,Math.max(0.05,+r.depth.toFixed(2))),JSON.stringify(r.fit));assert.match(await page.locator('#lampFitResult').textContent(),/^Texture depth [\d.]+ mm/);
 assert.equal(await page.locator('#lampUse').isChecked(),true);assert.match(await page.locator('#lampResult').textContent(),/Measured relief .* mm deep.*Check: .*\(good\)/);
 const on=await pixels();await page.locator('#lampUse').uncheck();await settle();const off=await pixels();assert.notEqual(on,off);await page.locator('#lampUse').check();await settle();assert.equal(await pixels(),on);
 await page.locator('.lampRow').nth(0).locator('[data-act=compare]').click();await settle();
@@ -325,7 +325,7 @@ console.log('PASS measured relief saved in projects, on and off');}
   const strokes=W=>{const H=W*2/3;return textureScore(mk(W,H,(x,y)=>(0.3+0.4*x)*(1+0.2*Math.sin(2*Math.PI*x*300/30)*Math.sin(2*Math.PI*y*200/30))),W,H,300/W).score;};
   return {flat:textureScore(mk(300,200,()=>0.5),300,200,1).score,pool:textureScore(mk(300,200,(x,y)=>0.2+0.6*x*(1-0.5*y)),300,200,1).score,s300:strokes(300),s600:strokes(600)};});
 assert.equal(u.flat,0);assert.ok(u.pool<0.01,'pool of light '+JSON.stringify(u));assert.ok(u.s300>0.01&&Math.abs(u.s600/u.s300-1)<0.12,'resolution '+JSON.stringify(u));
-const f=await page.evaluate(async()=>{const before=__studio.snapshot(),hi=__studio.history.index;const r=await __studio.lamp.fitDepth();
+const f=await page.evaluate(async()=>{__bench.state.textureDepthMm=3;__bench.dirty();__bench.render();__studio.checkpoint();const before=__studio.snapshot(),hi=__studio.history.index;const r=await __studio.lamp.fitDepth();
   return {depth:r.depth,reached:r.reached,samples:r.samples,lamps:r.lamps.map(l=>l.depth),per:r.lamps.map(l=>l.samples.map(x=>[+x[0].toFixed(3),+x[1].toFixed(3)])),photo:r.photo,before:JSON.stringify(before),after:JSON.stringify(__studio.snapshot()),hi,hi2:__studio.history.index};});
 assert.equal(f.reached,'yes',JSON.stringify(f.samples));assert.equal(await setting('textureDepthMm'),f.depth);assert.equal(f.hi2,f.hi+1);
 const t=[...f.samples].sort((a,b)=>a[0]-b[0]);assert.ok(t.at(-1)[1]>t[0][1],'contrast rises with depth '+JSON.stringify(t));
@@ -377,7 +377,7 @@ const g=await page.evaluate(async()=>{const r=__studio.lamp.rows[1],c=document.c
   let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;x.fillStyle='rgb(246,244,240)';for(let i=0;i<260;i++)x.fillRect(Math.floor(rnd()*(r.w-2)),Math.floor(rnd()*(r.h-2)),2,2);
   r.img=await createImageBitmap(c);const t=__lampTruth,W=r.w,H=r.h,{boxBlur,DRIFT_SIGMA}=await import('/src/lampphotos.js'),d=boxBlur(t,W,H,DRIFT_SIGMA*W);
   const corr=h=>{let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;for(let y=10;y<H-10;y++)for(let x=10;x<W-10;x++){const i=y*W+x,a=t[i]-d[i],b=h[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;n++;}return (sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2));};
-  const a=await __studio.lamp.measure({glints:false}),ca=corr(a.height),b=await __studio.lamp.measure(),cb=corr(b.height);
+  const a=await __studio.lamp.measure({glints:false,fit:false}),ca=corr(a.height),b=await __studio.lamp.measure({fit:false}),cb=corr(b.height);
   return {corrOff:ca,corrOn:cb,checkOff:a.check,checkOn:b.check,glint:b.shots.map(s=>s.glint)};});
 assert.ok(g.glint[1]>0.003&&g.glint[1]>4*Math.max(g.glint[0],g.glint[2]),'glints found in the glinted photo only '+JSON.stringify(g));
 assert.ok(g.corrOn>g.corrOff&&g.checkOn[1]>g.checkOff[1],'leaving glints out helps '+JSON.stringify(g));assert.match(await page.locator('#lampResult').textContent(),/Glints left out: [\d.]+%, [\d.]+%, [\d.]+% of each lamp photo/);

@@ -1,0 +1,12 @@
+{
+ "base": { "sample": "dsc8382" },
+ "lampPhotos": true,
+ "measure": true,
+ "autoFit": true,
+ "common": { "relief": "measured" },
+ "variants": [
+  { "name": "Lamp 1, Light like this (defaults)", "lightLike": 0 },
+  { "name": "Lamp 2, Light like this (defaults)", "lightLike": 1 },
+  { "name": "Lamp 3, Light like this (defaults)", "lightLike": 2 }
+ ]
+}

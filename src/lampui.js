@@ -112,15 +112,21 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     return wctx.getImageData(0, 0, w, h).data;
   }
 
-  async function measure({ glints = true } = {}) {
+  // After measuring, Texture depth is fitted to the lamp photos' stroke contrast (Fit
+  // depth, at the room light Light like this uses), not left at the measured 2-98%
+  // spread: on DSC_8382 the spread (1.50 mm) gave renders 81% of the photos' stroke
+  // contrast and the fit (about 2.1 mm) 100%, with the best log RMS against the photos.
+  // `fit: false` keeps the spread (render-batch, tests).
+  async function measure({ glints = true, fit = true } = {}) {
     const w = api.canvas.width, h = api.canvas.height, src = api.source();
     if (!src || !rows.length || busy) return null;
     const aspect = h / w;
     const off = rows.find((r) => Math.abs(r.h / r.w - aspect) > 0.02 * aspect);
     if (off) { $('lampStatus').textContent = `${off.name} is not cropped like the painting photo (shape differs). Crop all photos alike.`; return null; }
     busy = true; renderRows(); $('lampResult').textContent = '';
+    let res;
     try {
-      const res = await measureRelief({
+      res = await measureRelief({
         even: pixels(src, w, h), w, h, widthCm: W(),
         shots: rows.map((r) => ({ rgba: pixels(r.img, w, h), lamp: { ...r.lamp } })), glints,
         onProgress: (m) => { $('lampStatus').textContent = m; },
@@ -134,15 +140,16 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       $('lampStatus').textContent = 'Done.';
       $('lampResult').innerHTML = report(res);
       if (comparing >= 0) compare(comparing);
-      return res;
     } finally { busy = false; renderRows(); }
+    if (fit) res.fit = await fitDepth({ fill: LAMP_ROOM, auto: true });
+    return res;
   }
   $('lampMeasure').onclick = () => measure();
   $('lampUse').onchange = (e) => { api.measured.use(e.target.checked); };
 
   function report(res) {
     const u = units(), wTxt = `${(W() / CM[u]).toFixed(u === 'in' ? 1 : 0)} ${u}`;
-    const lines = [`<b>Measured relief ${res.depthMm.toFixed(2)} mm deep</b> (2–98% spread) on a ${wTxt} wide painting; Texture depth is set to it.`];
+    const lines = [`<b>Measured relief ${res.depthMm.toFixed(2)} mm deep</b> (2–98% spread) on a ${wTxt} wide painting; Texture depth is set to it, then fitted to the photos' stroke contrast (Fit depth, below).`];
     const al = res.shots.map((s, i) => {
       const [ax, bx, cx, ay, by, cy] = s.align.map, w = res.w, h = res.h;
       const dx = ax * w / 2 + bx * h / 2 + cx, dy = ay * w / 2 + by * h / 2 + cy, zoom = (ax + by) / 2 * 100;
@@ -225,7 +232,9 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     return { score: textureScore(px, w, h, mmPerPx(), { mask }).score, mask };
   }
   let fitStop = false;
-  async function fitDepth({ lamps, lo = 0.25, hi = 10 } = {}) {
+  // fill: graze room light during the fit (else as set); auto: keep the depth unless the
+  // fit reached a match (Measure relief runs it so).
+  async function fitDepth({ lamps, lo = 0.25, hi = 10, fill, auto = false } = {}) {
     if (busy || !rows.length || !api.source()) return null;
     const use = (lamps ?? rows.map((_, i) => i)).filter((i) => rows[i]);
     busy = true; fitStop = false; renderRows();
@@ -234,6 +243,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     let res, photo;
     setBatching(true);
     try {
+      if (fill != null) state.graze.fill = fill;
       $('lampFitStatus').textContent = 'Scoring the lamp photos…'; await frame();
       const scored = use.map((i) => scorePhoto(i)), masks = scored.map((p) => p.mask);
       photo = scored.map((p) => p.score);
@@ -270,12 +280,13 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     };
     const depth = Math.min(10, Math.max(0.05, +res.depth.toFixed(2)));
     const out = { ...res, depth, from: d0, photo, lamps: use.map((i, k) => ({ lamp: i + 1, photo: photo[k], depth: cross(per[k]), samples: per[k] })), stopped: fitStop };
-    if (!fitStop) {
+    const apply = !fitStop && (!auto || res.reached === 'yes');
+    if (apply) {
       state.physical = 1; state.textureDepthMm = depth;
       api.dirty(); syncQuick(); cal.sync(); api.render(); checkpoint();
     } else api.render();
     const m = api.measured.get(), spread = m?.on && m.info?.depthMm;
-    $('lampFitStatus').textContent = fitStop ? 'Stopped.' : 'Done.';
+    $('lampFitStatus').textContent = fitStop ? 'Stopped.' : apply ? 'Done.' : `Kept ${d0.toFixed(2)} mm: no depth matched.`;
     $('lampFitResult').innerHTML = fitStop ? '' :
       (res.reached === 'yes' ? `<b>Texture depth ${depth.toFixed(2)} mm</b>: the renders match the lamp photos' stroke contrast` :
         res.reached === 'low' ? `<b>Texture depth ${depth.toFixed(2)} mm</b> (the shallowest tried): even that has more stroke contrast than the photos (${Math.round(res.ratio * 100)}%)` :

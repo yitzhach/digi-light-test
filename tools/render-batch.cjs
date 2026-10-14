@@ -11,7 +11,9 @@
 // spec:
 //   { "base": { "sample": "dsc8382" } | { "project": "path/to/project.digilight.json" },
 //     "lampPhotos": true,        // dsc8382 only: add the sample's lamp shots
-//     "measure": true,           // run Measure relief (needs lampPhotos)
+//     "measure": true,           // run Measure relief (needs lampPhotos); the base keeps the
+//                                // measured spread as depth unless "autoFit": true (the app's
+//                                // own Measure relief then fits the depth, as the button does)
 //     "fitDepth": { "lamps": [0, 1, 2], "fill": 0.25, "relief": "measured" },  // Fit depth to
 //                                // photos (needs lampPhotos); fill = graze room light and relief
 //                                // = measured | onephoto during the fit; a variant's
@@ -63,7 +65,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
     await page.waitForFunction(() => __studio.lamp.rows.length >= 1);
     await page.waitForTimeout(500);
     if (SPEC.measure) {
-      measured = await page.evaluate(async () => { const r = await __studio.lamp.measure(); return r && { depthMm: r.depthMm, check: r.check }; });
+      measured = await page.evaluate(async (fit) => { const r = await __studio.lamp.measure({ fit }); return r && { depthMm: r.depthMm, fitMm: r.fit?.depth, check: r.check }; }, !!SPEC.autoFit);
       console.log('measured relief', JSON.stringify(measured));
       const n = await page.evaluate(() => __studio.lamp.rows.length);
       for (let i = 0; i < n; i++) save(`lamp-${i + 1}.png`, await page.evaluate((i) => {
