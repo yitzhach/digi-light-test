@@ -238,13 +238,19 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       restore(snap); setBatching(false); busy = false; api.dirty();
     }
     // Each lamp's own crossing, read off its samples (straight lines on log depth).
+    // Null when its samples never reach 1 (or are past it at the first).
     const cross = (s) => {
       const t = [...s].sort((a, b) => a[0] - b[0]);
-      for (let j = 1; j < t.length; j++) if (t[j - 1][1] < 1 && t[j][1] >= 1) {
+      for (let j = 1; j < t.length; j++) if ((t[j - 1][1] < 1) !== (t[j][1] < 1)) {
         const f = (1 - t[j - 1][1]) / (t[j][1] - t[j - 1][1]);
         return Math.exp(Math.log(t[j - 1][0]) + f * (Math.log(t[j][0]) - Math.log(t[j - 1][0])));
       }
       return null;
+    };
+    const lampTxt = (l) => {
+      if (l.depth) return `${l.depth.toFixed(2)} mm`;
+      const t = [...l.samples].sort((a, b) => a[0] - b[0]);
+      return t[0][1] >= 1 ? `under ${t[0][0].toFixed(2)} mm` : `over ${t.at(-1)[0].toFixed(2)} mm`;
     };
     const depth = Math.min(10, Math.max(0.05, +res.depth.toFixed(2)));
     const out = { ...res, depth, from: d0, photo, lamps: use.map((i, k) => ({ lamp: i + 1, photo: photo[k], depth: cross(per[k]), samples: per[k] })), stopped: fitStop };
@@ -259,7 +265,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
         res.reached === 'low' ? `<b>Texture depth ${depth.toFixed(2)} mm</b> (the shallowest tried): even that has more stroke contrast than the photos (${Math.round(res.ratio * 100)}%)` :
           `<b>Texture depth ${depth.toFixed(2)} mm</b> (the deepest tried): even that has only ${Math.round(res.ratio * 100)}% of the photos' stroke contrast; lower Room light or check the lamp positions`) +
       ` (${m?.on ? 'measured' : 'one-photo'} relief${spread ? `, measured spread ${spread.toFixed(2)} mm` : ''}; was ${d0.toFixed(2)} mm). ` +
-      `Each lamp alone: ${out.lamps.map((l) => `${l.lamp}: ${l.depth ? l.depth.toFixed(2) + ' mm' : '–'}`).join(' · ')}. ` +
+      `Each lamp alone: ${out.lamps.map((l) => `${l.lamp}: ${lampTxt(l)}`).join(' · ')}. ` +
       `Photo contrast: ${photo.map((p) => (p * 100).toFixed(1) + '%').join(', ')}. Undo goes back.`;
     renderRows();
     return out;

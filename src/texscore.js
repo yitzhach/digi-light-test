@@ -14,14 +14,37 @@
 // Kernels are in mm on the painting, not in pixels, so a photo of any resolution
 // scores alike (the paper's 501 / 21 px kernels were for 204.8 px/mm).
 
-import { boxBlur } from './lampphotos.js';
-
 export const BIG_MM = 2.5;      // broad blur: lighting and vignetting are smooth beyond this
-export const SMALL_PX = 1.5;    // light blur against pixel noise and JPEG blocks
+export const SMALL_PX = 1.5;    // light blur against pixel noise and JPEG blocks; in pixels, as
+                                // in the paper, so strokes near the pixel scale count less
 const BORDER = 0.03;            // share of each side cut, on top of twice the broad blur
 
-/** Box radius for three passes that behave like a Gaussian of `sigma` px. */
-const radius = (sigma) => Math.max(0, Math.round(Math.sqrt(sigma * sigma + 0.25) - 0.5));
+/** Gaussian blur of `sigma` px, separable, kernel cut at 3 sigma, clamped at the
+ *  edges. A true Gaussian, not repeated boxes: those round to whole radii, which
+ *  at the few-pixel sizes used here is off by up to 10% and moves the score. */
+export function gaussBlur(src, w, h, sigma) {
+  const out = Float32Array.from(src);
+  if (sigma < 0.3) return out;
+  const r = Math.ceil(3 * sigma), k = new Float32Array(2 * r + 1);
+  let sum = 0;
+  for (let i = -r; i <= r; i++) sum += k[i + r] = Math.exp(-i * i / (2 * sigma * sigma));
+  for (let i = 0; i < k.length; i++) k[i] /= sum;
+  const t = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      for (let i = -r; i <= r; i++) v += k[i + r] * out[o + Math.min(w - 1, Math.max(0, x + i))];
+      t[o + x] = v;
+    }
+  }
+  for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) {
+    let v = 0;
+    for (let i = -r; i <= r; i++) v += k[i + r] * t[Math.min(h - 1, Math.max(0, y + i)) * w + x];
+    out[y * w + x] = v;
+  }
+  return out;
+}
 
 /**
  * Texture contrast of RGBA bytes (w × h) of a painting `mmPerPx` mm per pixel.
@@ -34,10 +57,10 @@ export function textureScore(rgba, w, h, mmPerPx, { bigMm = BIG_MM, smallPx = SM
   // Rec. 709 luma of the encoded values, as the paper (and the eye) take brightness.
   for (let i = 0; i < n; i++) y[i] = (0.2126 * rgba[i * 4] + 0.7152 * rgba[i * 4 + 1] + 0.0722 * rgba[i * 4 + 2]) / 255;
   const bigPx = bigMm / Math.max(1e-6, mmPerPx);
-  const base = boxBlur(y, w, h, radius(bigPx));
+  const base = gaussBlur(y, w, h, bigPx);
   const q = new Float32Array(n);
   for (let i = 0; i < n; i++) q[i] = base[i] > 0.01 ? y[i] / base[i] : 1;
-  const s = boxBlur(q, w, h, radius(smallPx));
+  const s = gaussBlur(q, w, h, smallPx);
   const cut = (len) => Math.min(Math.floor(len / 3), Math.ceil(2 * bigPx + BORDER * len));
   const bx = cut(w), by = cut(h);
   let sum = 0, sum2 = 0, k = 0;
