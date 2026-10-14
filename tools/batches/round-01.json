@@ -1,0 +1,18 @@
+{
+  "base": { "sample": "dsc8382" },
+  "lampPhotos": true,
+  "measure": true,
+  "common": { "relief": "measured", "graze": { "opacity": 1 } },
+  "variants": [
+    { "name": "Lamp 1, room 0.15, lift off", "lightLike": 0, "graze": { "fill": 0.15 } },
+    { "name": "Lamp 1, room 0.25, lift off", "lightLike": 0, "graze": { "fill": 0.25 } },
+    { "name": "Lamp 1, room 0.35, lift off", "lightLike": 0, "graze": { "fill": 0.35 } },
+    { "name": "Lamp 1, room 0.25, lift +50%", "lightLike": 0, "graze": { "fill": 0.25, "lift": 0.5 } },
+    { "name": "Lamp 2, room 0.15, lift +50%", "lightLike": 1, "graze": { "fill": 0.15, "lift": 0.5 } },
+    { "name": "Lamp 2, room 0.25, lift off", "lightLike": 1, "graze": { "fill": 0.25 } },
+    { "name": "Lamp 2, room 0.35, lift -30%", "lightLike": 1, "graze": { "fill": 0.35, "lift": -0.3 } },
+    { "name": "Lamp 3, room 0.15, lift +50%", "lightLike": 2, "graze": { "fill": 0.15, "lift": 0.5 } },
+    { "name": "Lamp 3, room 0.25, lift off", "lightLike": 2, "graze": { "fill": 0.25 } },
+    { "name": "Lamp 3, room 0.35, lift -30%", "lightLike": 2, "graze": { "fill": 0.35, "lift": -0.3 } }
+  ]
+}

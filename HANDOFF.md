@@ -35,11 +35,25 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   lift +100%: 0.319 / 0.511 / 0.570 · 09 one-photo, room 0.25: 0.467 / 0.621 / 0.410
   (local matches the photo) · 10 one-photo, room 0.25 + lift +50%: 0.505 / 0.701 / 0.370.
   Room light is the main lever for both reliefs; lift is a secondary taste control.
+- Round 1 (10-14, `tools/batches/round-01.json`, measured relief, graze opacity 1,
+  shown to the user, picks PENDING): room 0.15/0.25/0.35 × lift −30/0/+50% on lamps
+  1–3. vsLampPhoto depth / local / logRMS (photo depth 0.502/0.547/0.458, local
+  0.626/0.619/0.538 for lamps 1/2/3): 01 L1 0.15 off 0.446/0.708/0.270 · 02 L1 0.25
+  off 0.484/0.731/0.264 · 03 L1 0.35 off 0.512/0.746/0.271 · 04 L1 0.25 +50
+  0.513/0.792/0.265 · 05 L2 0.15 +50 0.524/0.730/0.262 · 06 L2 0.25 off
+  0.530/0.708/0.273 · 07 L2 0.35 −30 0.553/0.724/0.285 · 08 L3 0.15 +50
+  0.448/0.697/0.313 · 09 L3 0.25 off 0.463/0.674/0.300 · 10 L3 0.35 −30
+  0.491/0.692/0.304. Claude's picks: 02, 05, 09. Taught: room ~0.25 matches depth on
+  all lamps; local shadows are too shallow in every variant (+lift makes it worse,
+  −lift barely helps) → round 2 idea: fix room 0.25, vary texture depth / stroke
+  contrast instead. Renders are redder/more saturated than the photos and lack the
+  beam pool (known, Next up 0b).
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
 - Last updated: 2026-10-14
+- Last push to `main`: (2026-10-14) round 1 spec + log (no code change)
 - Last code change on `main`: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
   sheet + scores vs lamp photos) for the automated test rounds below
 - Before that: Shadow lift is two-way: −100..+100%, centre = off
