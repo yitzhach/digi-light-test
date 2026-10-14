@@ -296,7 +296,7 @@ assert.equal(r.state,Math.min(10,Math.max(0.05,+r.depth.toFixed(2))));
 assert.equal(await page.locator('#lampUse').isChecked(),true);assert.match(await page.locator('#lampResult').textContent(),/Measured relief .* mm deep.*Check: .*\(good\)/);
 const on=await pixels();await page.locator('#lampUse').uncheck();await settle();const off=await pixels();assert.notEqual(on,off);await page.locator('#lampUse').check();await settle();assert.equal(await pixels(),on);
 await page.locator('.lampRow').nth(0).locator('[data-act=compare]').click();await settle();
-assert.equal(await setting('compareSplit'),0.5);assert.equal(await page.locator('#compareLabel').textContent(),'LAMP 1 ← → AFTER');assert.equal((await setting('graze')).lamp.left,-5);assert.equal((await setting('graze')).detail,0);
+assert.equal(await setting('compareSplit'),0.5);assert.equal(await page.locator('#compareLabel').textContent(),'LAMP 1 ← → AFTER');assert.equal((await setting('graze')).lamp.left,-5);assert.equal((await setting('graze')).detail,0);assert.equal((await setting('graze')).fill,0.25);
 const cmp=await pixels();await page.locator('.lampRow').nth(0).locator('[data-act=compare]').click();await settle();assert.equal(await setting('compareSplit'),-1);assert.notEqual(await pixels(),cmp);
 const par=await page.evaluate(async()=>{const s=__bench.state;s.maxTile=200;const c=await __bench.exportFullRes();delete s.maxTile;__bench.render();
   const W=__bench.canvas.width,H=__bench.canvas.height,a=document.createElement('canvas');a.width=W;a.height=H;const ax=a.getContext('2d');ax.drawImage(__bench.canvas,0,0);const b=document.createElement('canvas');b.width=W;b.height=H;const bx=b.getContext('2d');bx.drawImage(c,0,0);

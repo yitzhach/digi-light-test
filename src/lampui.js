@@ -11,6 +11,7 @@ import { textureScore, fitDepth as fitDepthTo, BIG_MM } from './texscore.js';
 import { clippingOf, CLIP_HI, CLIP_LO } from './photocheck.js';
 
 const CM = { in: 2.54, cm: 1 };
+const LAMP_ROOM = 0.25;   // graze room light for Light like this (see lightLike)
 
 export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, snapshot, restore, setBatching }) {
   const $ = (id) => document.getElementById(id);
@@ -23,7 +24,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     <label class="lampUse"><input type="checkbox" id="lampUse" disabled> Use measured relief</label>
     <p class="note" id="lampResult"></p>
     <div class="calScore"><button id="lampFit" disabled title="Render each lamp photo's light at several depths and keep the one whose stroke contrast matches the photos">Fit depth to photos</button><output id="lampFitStatus"></output></div>
-    <p class="note" id="lampFitResult">Fit depth sets Texture depth so the render under each lamp has as much stroke contrast as the lamp photo: brightness over a ${BIG_MM} mm blur of itself, then its spread (the RL-Sq score from raking-light roughness work). It works with measured or one-photo relief. Set the graze light's Room light first: more room light means less contrast, so a deeper fit.</p>
+    <p class="note" id="lampFitResult">Fit depth sets Texture depth so the render under each lamp has as much stroke contrast as the lamp photo: brightness over a ${BIG_MM} mm blur of itself, then its spread (the RL-Sq score from raking-light roughness work). It works with measured or one-photo relief. It keeps the graze light's Room light as set (Light like this sets 0.25, which matched the sample's lamp photos best): more room light means less contrast, so a deeper fit.</p>
   </div>`;
   after.after(box);
 
@@ -160,9 +161,13 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // Graze light as this lamp. With measured relief in use, without the smoothing that
   // hides a one-photo estimate's grain: there is no grain to hide, and the render is
   // meant to be set against the photo.
-  function lightLike(i) {
+  // Room light LAMP_ROOM: on DSC_8382 it matched the lamp photos best (log RMS 0.277 over
+  // the three lamps, against 0.304 with each photo's measured room share and 0.31-0.37 at
+  // the graze default 0.06; twice the share tied with it). `keepFill` (Fit depth) leaves
+  // the room light the user set.
+  function lightLike(i, keepFill = false) {
     const raw = api.measured.get()?.on ? { detail: 0, clean: 0, fine: 1, soft: 0 } : {};
-    cal.useLamp(rows[i].lamp, raw);
+    cal.useLamp(rows[i].lamp, keepFill ? raw : { ...raw, fill: LAMP_ROOM });
   }
 
   // The lamp photo at the preview's size, lined up as the measurement found it.
@@ -237,7 +242,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
         state.physical = 1; state.textureDepthMm = d; api.dirty();
         let lg = 0;
         for (const [k, i] of use.entries()) {
-          lightLike(i);
+          lightLike(i, true);
           const sc = textureScore(renderPixels(), w, h, mmPerPx(), { mask: masks[k] }).score, ratio = sc / Math.max(1e-6, photo[k]);
           per[k].push([d, ratio, sc]); lg += Math.log(Math.max(1e-6, ratio));
         }

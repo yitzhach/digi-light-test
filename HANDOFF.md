@@ -95,7 +95,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-14) merge of `feature/metrology`: texture contrast score + Fit depth to photos,
+- Last code change on `main`: (2026-10-14) Light like this sets room light 0.25
+- Before that: (2026-10-14) merge of `feature/metrology`: texture contrast score + Fit depth to photos,
   Relief view / Relief only / Colour over relief, Profile · height map (ISO roughness, colour map),
   clipping warnings, glint masking, Best raking direction
 - Before that: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
@@ -171,6 +172,13 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`; user said "your call"): **Light like this sets graze room light
+  0.25** (lampui.js `LAMP_ROOM`; Fit depth calls `lightLike(i, true)` and keeps the room
+  light as set). Spec `tools/batches/room-light.json` (measured relief, fitted 2.11 mm):
+  logRMS per lamp with fill = measured room share (0.12/0.21/0.15) 0.290/0.281/0.342
+  (mean 0.304), fixed 0.25 0.257/0.274/0.299 (0.277), 2× share 0.257/0.281/0.294
+  (0.277). One painting can't separate 0.25 from 2× share (shares only span 12–21%);
+  the fixed value is simpler. Revisit with a second lamp set in a brighter/darker room.
 - 10-14 (merged to `main` from `feature/metrology`): **photo checks** (doc items 14–16).
   `src/photocheck.js`: `clipping(rgba)` (share with any channel ≥250 / all ≤5, warn over
   0.5%) and `clippingOf(img)` (nearest-sampled at ≤1500 px); warning on each lamp photo

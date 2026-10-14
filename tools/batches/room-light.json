@@ -1,0 +1,108 @@
+{
+ "base": {
+  "sample": "dsc8382"
+ },
+ "lampPhotos": true,
+ "measure": true,
+ "fitDepth": {
+  "fill": 0.25
+ },
+ "common": {
+  "relief": "measured",
+  "graze": {
+   "opacity": 1
+  }
+ },
+ "variants": [
+  {
+   "name": "Lamp 1, room share = 0.12",
+   "lightLike": 0,
+   "graze": {
+    "fill": 0.12
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 1, room 0.25 = 0.25",
+   "lightLike": 0,
+   "graze": {
+    "fill": 0.25
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 1, room 2x share = 0.24",
+   "lightLike": 0,
+   "graze": {
+    "fill": 0.24
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 2, room share = 0.21",
+   "lightLike": 1,
+   "graze": {
+    "fill": 0.21
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 2, room 0.25 = 0.25",
+   "lightLike": 1,
+   "graze": {
+    "fill": 0.25
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 2, room 2x share = 0.42",
+   "lightLike": 1,
+   "graze": {
+    "fill": 0.42
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 3, room share = 0.15",
+   "lightLike": 2,
+   "graze": {
+    "fill": 0.15
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 3, room 0.25 = 0.25",
+   "lightLike": 2,
+   "graze": {
+    "fill": 0.25
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  },
+  {
+   "name": "Lamp 3, room 2x share = 0.30",
+   "lightLike": 2,
+   "graze": {
+    "fill": 0.3
+   },
+   "state": {
+    "textureDepthMm": "fit"
+   }
+  }
+ ]
+}
