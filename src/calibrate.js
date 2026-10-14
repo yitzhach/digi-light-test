@@ -15,6 +15,7 @@
 // shot from the same tripod position, evenly lit, would make it a real check.
 
 import { lampAngles, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, SIDE_SHARE } from './presets.js';
+import { clippingOf } from './photocheck.js';
 
 const CM = { in: 2.54, cm: 1 };
 const MATCH_W = 320;          // the score is measured on a copy this wide
@@ -74,6 +75,7 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
   const row = (id, label) => `<div class="row calRow"><label for="${id}">${label}</label><input id="${id}" type="range"><input id="${id}N" type="number" aria-label="${label}"></div>`;
   box.innerHTML = `<summary>Calibrate · match your raking photo</summary><div class="grp">
     <p class="note">For a photo lit by one lamp close to the wall. Measure from the painting's edges, and out from its painted face, not the wall: a panel or stretcher 2.5 in deep puts the paint 2.5 in nearer the lamp. The app works out the light's angles across the painting.</p>
+    <p class="note warn" id="calClip" hidden></p>
     <label class="selectRow">Units<select id="calUnits"><option value="in">inches</option><option value="cm">cm</option></select></label>
     ${row('calWidth', 'Painting width')}
     ${row('calAbove', 'Lamp above top edge')}
@@ -283,6 +285,15 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
     applyLamp({ ...l }); draft = null;
     sync(); renderGraze(); api.render(); checkpoint();
   }
+  // Clipped highlights or crushed shadows in the photo: no shading there to match.
+  function checkPhoto() {
+    const src = api.source(), c = src ? clippingOf(src) : null;
+    $('calClip').hidden = !c?.warn; $('calClip').textContent = c?.warn ? `This photo: ${c.warn}` : '';
+    photoLuma = null;
+    return c;
+  }
+  document.addEventListener('digilight:source', checkPhoto);
+  checkPhoto();
   sync();
-  return { sync, measure, autoFit, useLamp, units: () => units, forgetDraft: () => { draft = null; } };
+  return { sync, measure, autoFit, useLamp, checkPhoto, units: () => units, forgetDraft: () => { draft = null; } };
 }

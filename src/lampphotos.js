@@ -38,6 +38,20 @@ export const ALIGN_SEARCH = 0.01;     // how far a shot may have moved
 const SHADOW_S = 0.1;                 // shading below this is shadow: no slope to read
 const REFINE = 2;                     // rounds of taking the relief out of the beam
 const CHECK_BAND = [0.0022, 0.009];   // stroke-scale band the check scores
+// Glints (varnish, wet-looking impasto) under a spot lamp read as steep slopes. A pixel
+// is taken as a glint if it is well above what a facet turned straight at the lamp could
+// give (no matte surface does that), or above it while near-white and having lost the
+// paint's colour (specular light is the lamp's colour, not the paint's). Tested once the
+// beam is known without the relief (first refine round). On DSC_8382 (matte) this masks
+// 0.29% / 0.29% / 0.07% of the three shots and leaves the self-check as it was or a
+// little higher (0.868 / 0.861 / 0.798 -> 0.869 / 0.864 / 0.799); at 1.0 x the maximum
+// it masked 2% and lowered it.
+export const GLINT = {
+  over: 1.6,                          // shading over 1.6 times the Lambertian maximum
+  near: 1.2,                          // ... or 1.2 times it, near-white and washed out
+  white: 235,                         // brightest channel at least this (8-bit)
+  colour: 0.15,                       // paint saturation the colour test needs
+};
 
 const SRGB = new Float32Array(256);
 for (let i = 0; i < 256; i++) { const c = i / 255; SRGB[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
@@ -201,10 +215,11 @@ function solve3x3(A, b) {
   ];
 }
 
-/** The shot's luminance resampled onto the even photo's pixels (bilinear), and a
- *  mask of pixels that are blown (any channel at 250+) or fell outside the shot. */
+/** The shot's luminance resampled onto the even photo's pixels (bilinear), a mask of
+ *  pixels that are blown (any channel at 250+) or fell outside the shot, and each
+ *  pixel's saturation and whether it is near-white (for the glint test). */
 export function warpShot(rgba, w, h, map) {
-  const n = w * h, lum = luminance(rgba, n), out = new Float32Array(n), bad = new Uint8Array(n);
+  const n = w * h, lum = luminance(rgba, n), out = new Float32Array(n), bad = new Uint8Array(n), sat = new Float32Array(n), white = new Uint8Array(n);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const sx = x + map[0] * x + map[1] * y + map[2], sy = y + map[3] * x + map[4] * y + map[5];
     const i = y * w + x;
@@ -213,8 +228,10 @@ export function warpShot(rgba, w, h, map) {
     out[i] = (lum[j] * (1 - fx) + lum[j + 1] * fx) * (1 - fy) + (lum[j + w] * (1 - fx) + lum[j + w + 1] * fx) * fy;
     const k = (Math.round(sy) * w + Math.round(sx)) * 4;
     if (rgba[k] >= 250 || rgba[k + 1] >= 250 || rgba[k + 2] >= 250) bad[i] = 1;
+    const mx = Math.max(rgba[k], rgba[k + 1], rgba[k + 2]), mn = Math.min(rgba[k], rgba[k + 1], rgba[k + 2]);
+    sat[i] = mx > 0 ? (mx - mn) / mx : 0; white[i] = mx >= GLINT.white ? 1 : 0;
   }
-  return { lum: out, bad };
+  return { lum: out, bad, sat, white };
 }
 
 // ------------------------------------------------------------------ the solve
@@ -404,8 +421,29 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
  * shot the alignment and room-light share. With three or more shots, `check` holds,
  * per shot, how well the others predict it (correlation over stroke-sized detail).
  */
-export async function measureRelief({ even, shots, w, h, widthCm, onProgress = () => {} }) {
+/** Glint mask for one shot (dilated a pixel): see GLINT. */
+function findGlints(sh, warped, evenSat, px, w, h) {
+  const n = w * h, g = new Uint8Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if (!sh.valid[i]) continue;
+    const dx = px.x - x - 0.5, dy = px.y - y - 0.5, sMax = Math.hypot(dx, dy, px.z) / px.z, s = sh.s[i];
+    // The colour test needs paint with colour to lose: on grey or white paint only the
+    // brightness test applies.
+    if (s > GLINT.over * sMax || (s > GLINT.near * sMax && warped.white[i] && evenSat[i] > GLINT.colour && warped.sat[i] < 0.5 * evenSat[i])) g[i] = 1;
+  }
+  const out = new Uint8Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!g[y * w + x]) continue;
+    for (let v = Math.max(0, y - 1); v <= Math.min(h - 1, y + 1); v++) for (let u = Math.max(0, x - 1); u <= Math.min(w - 1, x + 1); u++) out[v * w + u] = 1;
+  }
+  return out;
+}
+
+export async function measureRelief({ even, shots, w, h, widthCm, onProgress = () => {}, glints = true }) {
   const n = w * h, evenLum = luminance(even, n);
+  const evenSat = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const r = even[i * 4], g = even[i * 4 + 1], b = even[i * 4 + 2], mx = Math.max(r, g, b); evenSat[i] = mx > 0 ? (mx - Math.min(r, g, b)) / mx : 0; }
   // Very dark paint has too little light to divide by.
   const dark = percentiles(evenLum, [0.5])[0] * 0.04;
   const evenOk = new Uint8Array(n);
@@ -414,9 +452,9 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   for (let k = 0; k < shots.length; k++) {
     onProgress(`Aligning lamp photo ${k + 1} of ${shots.length}…`); await tick();
     const al = align(even, shots[k].rgba, w, h);
-    const { lum, bad } = warpShot(shots[k].rgba, w, h, al.map);
-    const sh = shading(lum, bad, evenLum, evenOk, w, h);
-    S.push({ ...sh, align: al, px: lampPixels(shots[k].lamp, widthCm, w) });
+    const warped = warpShot(shots[k].rgba, w, h, al.map), px = lampPixels(shots[k].lamp, widthCm, w);
+    const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h);
+    S.push({ ...sh, align: al, px, warped, glint: 0, glintMask: null });
   }
   onProgress('Reading the slopes…'); await tick();
   const all = S.map((_, k) => k);
@@ -438,6 +476,16 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
       const bn = boxBlur(num, w, h, BEAM_SIGMA * w), bd = boxBlur(pred, w, h, BEAM_SIGMA * w);
       for (let i = 0; i < n; i++) bn[i] /= Math.max(1e-4, bd[i]);
       normalise(sh, bn);
+      // Glints, once the beam no longer holds the relief (the first beam, a plain local
+      // mean, is pulled down by shadows, so lit facets looked brighter than they are):
+      // left out of the solve from here on; where no shot is left, the integration
+      // fills in.
+      if (round === 0 && glints) {
+        const g = sh.glintMask = findGlints(sh, sh.warped, evenSat, sh.px, w, h);
+        let k = 0;
+        for (let i = 0; i < n; i++) if (g[i]) { if (sh.valid[i]) k++; sh.valid[i] = 0; sh.ok[i] = 0; }
+        sh.glint = k / n;
+      }
     }
     ({ hx, hy } = slopes(S, all, w, h));
   }
@@ -468,6 +516,6 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   }
   return {
     height, w, h, depthMm, check,
-    shots: S.map((sh) => ({ align: sh.align, room: sh.a, usable: sh.ok.reduce((t, v) => t + v, 0) / n })),
+    shots: S.map((sh) => ({ align: sh.align, room: sh.a, usable: sh.ok.reduce((t, v) => t + v, 0) / n, glint: sh.glint, glintMask: sh.glintMask })),
   };
 }

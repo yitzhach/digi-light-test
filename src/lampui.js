@@ -8,6 +8,7 @@
 
 import { measureRelief, align } from './lampphotos.js';
 import { textureScore, fitDepth as fitDepthTo, BIG_MM } from './texscore.js';
+import { clippingOf, CLIP_HI, CLIP_LO } from './photocheck.js';
 
 const CM = { in: 2.54, cm: 1 };
 
@@ -15,7 +16,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   const $ = (id) => document.getElementById(id);
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'lampSection';
   box.innerHTML = `<summary>Measure relief · lamp photos</summary><div class="grp">
-    <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. Saved projects keep the measured relief, not the photos.</p>
+    <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. Saved projects keep the measured relief, not the photos. Glare from varnish reads as steep slopes: glints are found and left out, and a polarising filter on the lamp with a crossed one on the lens removes most of it before it happens.</p>
     <div id="lampRows"></div>
     <div class="calScore"><button id="lampAdd">Add lamp photos…</button><input type="file" id="lampFile" accept="image/*" multiple hidden><button id="lampSample" hidden>Add the sample's lamp photos</button></div>
     <div class="calScore"><button id="lampMeasure" disabled>Measure relief</button><output id="lampStatus"></output></div>
@@ -44,6 +45,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
             <button data-act="light" title="Graze light becomes this lamp">Light like this</button>
             <button data-act="compare" class="${comparing === i ? 'on' : ''}" title="Before / Split show this photo">Compare</button>
             <button data-act="del" aria-label="Remove lamp photo ${i + 1}">✕</button></div>
+          ${r.clip?.warn ? `<p class="note warn lampClip">${r.clip.warn}</p>` : ''}
           <label>Above top edge<input type="number" step="0.25" data-k="above" value="${fmt(r.lamp.above)}"></label>
           <label>From left edge<input type="number" step="0.25" data-k="left" value="${fmt(r.lamp.left)}"></label>
           <label>Out from painting<input type="number" step="0.25" min="0.1" data-k="out" value="${fmt(r.lamp.out)}"></label>
@@ -76,7 +78,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     for (const f of files) {
       try {
         const img = await createImageBitmap(f);
-        rows.push({ name: f.name, img, w: img.width, h: img.height, lamp: guess(rows.length), map: null });
+        rows.push({ name: f.name, img, w: img.width, h: img.height, lamp: guess(rows.length), map: null, clip: clippingOf(img) });
       } catch { $('lampStatus').textContent = `Could not open ${f.name}.`; }
     }
     renderRows();
@@ -94,7 +96,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     try {
       for (const [name, left, above, out] of SAMPLE_LAMPS) {
         const img = await createImageBitmap(await (await fetch(`samples/dsc8382/${name}.jpg`)).blob());
-        rows.push({ name: `${name}.jpg`, img, w: img.width, h: img.height, lamp: { left: left * 2.54, above: above * 2.54, out: out * 2.54 }, map: null });
+        rows.push({ name: `${name}.jpg`, img, w: img.width, h: img.height, lamp: { left: left * 2.54, above: above * 2.54, out: out * 2.54 }, map: null, clip: clippingOf(img) });
       }
       if (Math.abs(state.paintingWidthCm - 48.26) > 0.01) { state.paintingWidthCm = 48.26; api.dirty(); syncQuick(); cal.sync(); api.render(); checkpoint(); }
       $('lampStatus').textContent = 'Sample lamp photos added; painting width set to 19 in.';
@@ -109,7 +111,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     return wctx.getImageData(0, 0, w, h).data;
   }
 
-  async function measure() {
+  async function measure({ glints = true } = {}) {
     const w = api.canvas.width, h = api.canvas.height, src = api.source();
     if (!src || !rows.length || busy) return null;
     const aspect = h / w;
@@ -119,7 +121,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     try {
       const res = await measureRelief({
         even: pixels(src, w, h), w, h, widthCm: W(),
-        shots: rows.map((r) => ({ rgba: pixels(r.img, w, h), lamp: { ...r.lamp } })),
+        shots: rows.map((r) => ({ rgba: pixels(r.img, w, h), lamp: { ...r.lamp } })), glints,
         onProgress: (m) => { $('lampStatus').textContent = m; },
       });
       res.shots.forEach((s, i) => { rows[i].map = s.align.map; });
@@ -146,6 +148,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       return `${i + 1}: ${Math.hypot(dx, dy).toFixed(1)} px${Math.abs(zoom) >= 0.05 ? `, zoom ${zoom > 0 ? '+' : ''}${zoom.toFixed(2)}%` : ''}${s.align.used < s.align.of / 2 ? ' (uncertain)' : ''}`;
     });
     lines.push(`Lined up to the painting photo: ${al.join(' · ')}. Room light: ${res.shots.map((s) => Math.round(s.room * 100) + '%').join(', ')} of each lamp photo's brightness.`);
+    if (res.shots.some((s) => s.glint != null)) lines.push(`Glints left out: ${res.shots.map((s) => (s.glint * 100).toFixed(2) + '%').join(', ')} of each lamp photo.`);
     if (res.check) {
       const lo = Math.min(...res.check), verdict = lo >= 0.6 ? 'good' : lo >= 0.35 ? 'usable' : 'poor: check the lamp positions and that the photos line up';
       lines.push(`Check: each lamp photo predicted from the others at r = ${res.check.map((c) => c.toFixed(2)).join(', ')} (${verdict}).`);
@@ -204,10 +207,17 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   }
   /** Score of the current render and of lamp photo i, both on the preview. */
   const mmPerPx = () => W() * 10 / api.canvas.width;
+  // Clipped pixels (blown or crushed in the photo, or outside it once lined up) carry no
+  // shading: left out of both scores.
   function scorePhoto(i) {
     const w = api.canvas.width, h = api.canvas.height, r = rows[i];
     if (!r.map) r.map = align(pixels(api.source(), w, h), pixels(r.img, w, h), w, h).map;
-    return textureScore(pixels(lined(r, w, h), w, h), w, h, mmPerPx()).score;
+    const px = pixels(lined(r, w, h), w, h), mask = new Uint8Array(w * h);
+    for (let k = 0; k < w * h; k++) {
+      const a = px[k * 4], b = px[k * 4 + 1], c = px[k * 4 + 2];
+      mask[k] = px[k * 4 + 3] < 255 || a >= CLIP_HI || b >= CLIP_HI || c >= CLIP_HI || (a <= CLIP_LO && b <= CLIP_LO && c <= CLIP_LO) ? 1 : 0;
+    }
+    return { score: textureScore(px, w, h, mmPerPx(), { mask }).score, mask };
   }
   let fitStop = false;
   async function fitDepth({ lamps, lo = 0.25, hi = 10 } = {}) {
@@ -220,14 +230,15 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     setBatching(true);
     try {
       $('lampFitStatus').textContent = 'Scoring the lamp photos…'; await frame();
-      photo = use.map((i) => scorePhoto(i));
+      const scored = use.map((i) => scorePhoto(i)), masks = scored.map((p) => p.mask);
+      photo = scored.map((p) => p.score);
       let tries = 0;
       res = await fitDepthTo(async (d) => {
         state.physical = 1; state.textureDepthMm = d; api.dirty();
         let lg = 0;
         for (const [k, i] of use.entries()) {
           lightLike(i);
-          const sc = textureScore(renderPixels(), w, h, mmPerPx()).score, ratio = sc / Math.max(1e-6, photo[k]);
+          const sc = textureScore(renderPixels(), w, h, mmPerPx(), { mask: masks[k] }).score, ratio = sc / Math.max(1e-6, photo[k]);
           per[k].push([d, ratio, sc]); lg += Math.log(Math.max(1e-6, ratio));
         }
         tries++; $('lampFitStatus').textContent = `Try ${tries}: ${d.toFixed(2)} mm → ${Math.round(Math.exp(lg / use.length) * 100)}% of the photos' contrast`;

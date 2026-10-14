@@ -360,6 +360,32 @@ await page.click('#probeMapColour');await settle();assert.equal(await setting('h
 assert.match(await page.locator('#heightBar').textContent(),/^Height, measured .*-[\d.]+ (µm|mm)0[\d.]+ (µm|mm)$/);assert.equal(await page.locator('#views button.on').textContent(),'Height');
 await page.evaluate(()=>{__bench.state.viewMode=0;__bench.state.heightColour=0;document.dispatchEvent(new Event('digilight:views'));__bench.render();});await settle();assert.equal(await page.locator('#heightBar').isHidden(),true);
 console.log('PASS profile probe, ISO roughness and colour height map',JSON.stringify({sine:{Sq:+k.Sq.toFixed(4),Sku:+k.Sku.toFixed(3)},readback:+rb.corr.toFixed(5),line:+pr.len.toFixed(1),Sq:+pr.Sq.toFixed(3)}));}
+// Photo checks (photocheck.js, doc items 14–16): clipping shares and the warning on a lamp
+// photo; stroke direction of known stripes; glints added to one lamp photo are found and
+// left out; Best raking direction keeps the strongest of four directions, one undo step.
+{const u=await page.evaluate(async()=>{const {clipping,strokeDirection,nearerSide}=await import('/src/photocheck.js');
+  const px=new Uint8ClampedArray(100*100*4).fill(128);for(let i=0;i<150;i++)px.set([255,255,255],i*4*7);const c=clipping(px),ok=clipping(new Uint8ClampedArray(400).fill(128));
+  const W=160,H=120,al=30*Math.PI/180,Z=new Float32Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)Z[y*W+x]=Math.sin(2*Math.PI*(x*Math.cos(al)-y*Math.sin(al))/9);
+  return {hi:c.hi,warn:c.warn,okWarn:ok.warn,dir:strokeDirection(Z,W,H),side:nearerSide(30,200)};});
+assert.ok(Math.abs(u.hi-0.015)<1e-9&&/1\.5% blown highlights/.test(u.warn)&&u.okWarn==='','clipping '+JSON.stringify(u));
+assert.ok(Math.abs(u.dir.acrossDeg-30)<2&&Math.abs(u.dir.strokeDeg-120)<2&&u.dir.coherence>0.9&&u.side===210,'stroke direction '+JSON.stringify(u));
+const clipped=await page.evaluate(({W,H})=>{const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#806050';x.fillRect(0,0,W,H);x.fillStyle='#fff';x.fillRect(10,10,40,40);return c.toDataURL('image/png').split(',')[1];},{W,H});
+await page.locator('#lampFile').setInputFiles({name:'blown.png',mimeType:'image/png',buffer:buf(clipped)});await page.waitForFunction(()=>document.querySelectorAll('.lampRow').length===4);
+assert.match(await page.locator('.lampRow').nth(3).locator('.lampClip').textContent(),/Overexposed .*1\.1% blown highlights/);assert.equal(await page.locator('.lampRow').nth(1).locator('.lampClip').count(),0);
+await page.locator('.lampRow').nth(3).locator('[data-act=del]').click();await page.waitForFunction(()=>document.querySelectorAll('.lampRow').length===3);
+const g=await page.evaluate(async()=>{const r=__studio.lamp.rows[1],c=document.createElement('canvas');c.width=r.w;c.height=r.h;const x=c.getContext('2d');x.drawImage(r.img,0,0);
+  let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;x.fillStyle='rgb(246,244,240)';for(let i=0;i<260;i++)x.fillRect(Math.floor(rnd()*(r.w-2)),Math.floor(rnd()*(r.h-2)),2,2);
+  r.img=await createImageBitmap(c);const t=__lampTruth,W=r.w,H=r.h,{boxBlur,DRIFT_SIGMA}=await import('/src/lampphotos.js'),d=boxBlur(t,W,H,DRIFT_SIGMA*W);
+  const corr=h=>{let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;for(let y=10;y<H-10;y++)for(let x=10;x<W-10;x++){const i=y*W+x,a=t[i]-d[i],b=h[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;n++;}return (sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2));};
+  const a=await __studio.lamp.measure({glints:false}),ca=corr(a.height),b=await __studio.lamp.measure(),cb=corr(b.height);
+  return {corrOff:ca,corrOn:cb,checkOff:a.check,checkOn:b.check,glint:b.shots.map(s=>s.glint)};});
+assert.ok(g.glint[1]>0.003&&g.glint[1]>4*Math.max(g.glint[0],g.glint[2]),'glints found in the glinted photo only '+JSON.stringify(g));
+assert.ok(g.corrOn>g.corrOff&&g.checkOn[1]>g.checkOff[1],'leaving glints out helps '+JSON.stringify(g));assert.match(await page.locator('#lampResult').textContent(),/Glints left out: [\d.]+%, [\d.]+%, [\d.]+% of each lamp photo/);
+const hi=await page.evaluate(()=>__studio.history.index),a0=(await setting('graze')).angle;const br=await page.evaluate(()=>{const r=__studio.bestRaking();return {from:r.best.from,best:r.best.score,scores:r.tries.map(t=>t.score),coh:r.coherence};});
+assert.equal((await setting('graze')).angle,br.from);assert.equal(br.best,Math.max(...br.scores));assert.equal(await page.evaluate(()=>__studio.history.index),hi+1);
+assert.match(await page.locator('#grazeBestNote').textContent(),/^Strokes run mostly at \d+°.*coherence [\d.]+ \(measured relief\)\. Stroke contrast .*Light now from \d+°/);
+await page.click('#undo');await settle();assert.equal((await setting('graze')).angle,a0);
+console.log('PASS photo checks: clipping warning, stroke direction, glints left out, best raking direction',JSON.stringify({corrOff:+g.corrOff.toFixed(4),corrOn:+g.corrOn.toFixed(4),checkOff:g.checkOff.map(c=>+c.toFixed(3)),checkOn:g.checkOn.map(c=>+c.toFixed(3)),glint:g.glint.map(v=>+(v*100).toFixed(2)),best:br.from,coh:+br.coh.toFixed(2)}));}
 await page.locator('#file').setInputFiles({name:'other.png',mimeType:'image/png',buffer:buf(png.shots[1])});await page.waitForFunction(()=>document.querySelector('#lampUse').disabled);
 assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('.lampRow').count(),3);
 console.log('PASS lamp photos: measured relief matches the truth',JSON.stringify({corr:+r.corr.toFixed(3),depth:+r.depth.toFixed(2),trueMm:+r.trueMm.toFixed(2),check:r.check.map(c=>+c.toFixed(2)),exportDiff:+par.toFixed(3)}));}

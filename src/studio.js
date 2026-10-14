@@ -1,6 +1,8 @@
 import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT } from './presets.js';
 import { initLampPhotos } from './lampui.js';
 import { initProbe } from './probe.js';
+import { strokeDirection, nearerSide } from './photocheck.js';
+import { textureScore } from './texscore.js';
 import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
 import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
@@ -79,6 +81,8 @@ export function initStudio(api) {
     <div class="row"><label for="grazeClean">Clean shadows</label><input id="grazeClean" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
     <div class="row"><label for="grazeSoft">Softness</label><input id="grazeSoft" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
     <div class="row"><label for="grazeLift">Shadow lift</label><input id="grazeLift" type="range" min="-1" max="1" step="0.01"><output data-own></output></div>
+    <div class="calScore"><button id="grazeBest" title="Light across the painting's main stroke direction, where it shows the strokes most">Best raking direction</button></div>
+    <p class="note" id="grazeBestNote"></p>
     <div class="views"><button id="grazeGrey" title="The graze light falls on an even grey instead of the paint's colour">Grey surface</button><button id="grazeReliefOnly" title="Graze light alone, at 100%, on grey">Relief only</button><button id="grazeColourOver" title="Relief only, with the photo's colour laid over it (an Overlay layer)">Colour over relief</button></div>
     <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
     <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
@@ -246,6 +250,39 @@ export function initStudio(api) {
     setGraze({ grey: 1, opacity: 1 }); renderLayers(); render(); checkpoint();
   }
   $('grazeReliefOnly').onclick = () => reliefOnly(false);
+  // Best raking direction (doc item 14): strokes are directional, and a light along them
+  // hardly shows them. The relief's structure tensor gives the main stroke direction and
+  // how one-way it is (coherence). The graze light alone is then scored (texture contrast,
+  // texscore.js) from across the strokes, along them and the two diagonals, each from the
+  // side nearer where it was, and the strongest is kept: on a painting whose strokes run
+  // every way (DSC_8382: coherence 0.08) across is not reliably the best.
+  function grazeScore(angle) {
+    const keep = { viewMode: state.viewMode, compareSplit: state.compareSplit, layers: state.layers }, g = { ...state.graze };
+    Object.assign(state, { viewMode: 0, compareSplit: -1, layers: [] });
+    Object.assign(state.graze, { angle, enabled: true, opacity: 1 }); delete state.graze.lamp;
+    try {
+      api.renderNow();
+      const c = api.canvas, x = document.createElement('canvas'); x.width = c.width; x.height = c.height;
+      const ctx = x.getContext('2d'); ctx.drawImage(c, 0, 0);
+      return textureScore(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height, state.paintingWidthCm * 10 / c.width).score;
+    } finally { Object.assign(state, keep); for (const k of Object.keys(state.graze)) delete state.graze[k]; Object.assign(state.graze, g); }
+  }
+  function bestRaking() {
+    const hm = probe.heights();
+    if (!hm) { $('grazeBestNote').textContent = 'No relief to read the strokes from.'; return null; }
+    const d = strokeDirection(hm.H, hm.w, hm.h), was = state.graze.angle;
+    const tries = [['across the strokes', 0], ['diagonal', 45], ['along the strokes', 90], ['diagonal', 135]]
+      .map(([name, off]) => { const from = Math.round(nearerSide(d.acrossDeg + off, was) * 2) / 2 % 360; return { name, from, score: grazeScore(from) }; });
+    const best = tries.reduce((a, b) => (b.score > a.score ? b : a)), across = tries[0], along = tries[2];
+    setGraze({ angle: best.from, lamp: null }); checkpoint();
+    const how = d.coherence < 0.1 ? 'hardly (they run every way)' : d.coherence < 0.3 ? 'somewhat' : 'strongly';
+    const pct = (v) => `${(v * 100).toFixed(1)}%`;
+    $('grazeBestNote').textContent = `Strokes run mostly at ${Math.round(d.strokeDeg)}°, ${how}: coherence ${d.coherence.toFixed(2)} (${hm.source} relief). ` +
+      `Stroke contrast with the graze light from across them (${Math.round(across.from)}°) ${pct(across.score)}, along them (${Math.round(along.from)}°) ${pct(along.score)}, ` +
+      `diagonals ${pct(tries[1].score)} and ${pct(tries[3].score)}. Light now from ${Math.round(best.from)}° (${best.name}).`;
+    return { ...d, tries, best };
+  }
+  $('grazeBest').onclick = () => bestRaking();
   $('grazeColourOver').onclick = () => reliefOnly(true);
   for (const name of Object.keys(grazePresets)) $('grazePreset').add(new Option(name, name));
   $('grazePreset').onchange = e => { const v = grazePresets[e.target.value]; if (v) setGraze({ ...v }); };
@@ -620,5 +657,5 @@ export function initStudio(api) {
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
     listProjects:()=>list()});
-  window.__studio={calibrate:cal,lamp,probe,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={calibrate:cal,lamp,probe,bestRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

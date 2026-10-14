@@ -91,7 +91,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
   (2) item 3 relief-only raking view + colour-over-relief preset — DONE on the branch; (3) items 1+2+19
   profile probe + calibrated colour height map + ISO stats — DONE on the branch; (4) items 14–16 stroke
-  direction / Best raking direction, overexposure warning, glint mask. Ask before
+  direction / Best raking direction, overexposure warning, glint mask — DONE on the branch.
+  All four steps are on `feature/metrology`, waiting for the user to say merge. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
 - Last code change on `main`: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
@@ -125,6 +126,7 @@ of a painting → estimate surface relief → relight with movable virtual light
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
 - `lampphotos.js` (maths) + `lampui.js` (section) — relief measured from lamp photos
+- `photocheck.js` — clipping check, stroke direction (structure tensor)
 - `probe.js` — Profile · height map section: line profile, ISO roughness, colour height map scale bar
 - `texscore.js` — RL-Sq style texture contrast score + depth fit (Fit depth to photos)
 - `photometric.js`, `register.js`, `sphere.js` — multi-photo capture path (demo section)
@@ -166,6 +168,31 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (branch `feature/metrology`): **photo checks** (doc items 14–16).
+  `src/photocheck.js`: `clipping(rgba)` (share with any channel ≥250 / all ≤5, warn over
+  0.5%) and `clippingOf(img)` (nearest-sampled at ≤1500 px); warning on each lamp photo
+  row (`.lampClip`) and in Calibrate for the painting photo (`#calClip`,
+  `cal.checkPhoto`); Fit depth leaves clipped/outside pixels out of both scores
+  (texscore `mask`). DSC_8382: lamp 1 0.68% blown (warned), lamps 2/3 0.26% / 0.06%,
+  painting photo 0. **Glints** (lampphotos.js `GLINT` {over 1.6, near 1.2, white 235,
+  colour 0.15}, `findGlints`, run in the first refine round once the beam is known
+  without the relief; `measureRelief({glints})`, `lamp.measure({glints})`): s over
+  1.6× the Lambertian maximum |L|/Lz, or over 1.2× while near-white and washed out on
+  coloured paint; dilated 1 px; left out (valid/ok = 0), integration fills. Report line
+  "Glints left out: …"; `shots[k].glint`, `.glintMask`. DSC_8382: 0.30/0.29/0.07%,
+  check 0.868/0.861/0.798 → 0.869/0.864/0.799, depth 1.513 → 1.500 mm (mostly the
+  panel's bottom/side edges, where the beam takes in the wall, plus specks on the grey
+  impasto). Tried first: test on the first beam (a plain local mean) at 1.0× flagged 8%
+  and lowered the check. Synthetic set with 2×2 near-white specks added to lamp 2: found
+  0/2.83/0.36%, corr with truth 0.857 → 0.890, lamp 2 check 0.19 → 0.45. Help text has
+  the polariser tip. **Best raking direction** (Graze section, `#grazeBest`,
+  `__studio.bestRaking()`): `strokeDirection(H)` = structure tensor of the probe's
+  heights (strokeDeg, acrossDeg, coherence); scores the graze light alone (texture
+  contrast) from across / along / both diagonals (side nearer the current angle) and
+  keeps the best; one undo step. DSC_8382: coherence 0.08 (strokes run every way);
+  across 12.4%, along (from 82°, the top) 15.6% → picks 82°. Likely helped by every lamp
+  shot being lit from above (vertical slopes measured best). Not done from item 14: the
+  Measure relief warning when all lamps are on one side.
 - 10-14 (branch `feature/metrology`): **Profile · height map** section (`src/probe.js`, after
   Measure relief; doc items 1, 2, 19). **Draw a profile**: a drag on the painting (capture
   listeners on `#paper`, so lights/brushes don't see it) draws a line (SVG `#probeOverlay`
