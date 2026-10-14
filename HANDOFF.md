@@ -498,7 +498,7 @@ To judge it on a real painting, by eye:
    score → auto texture depth, go straight at the 60% contrast / depth problem).
 0e. From the Fit depth results: once room light is settled (0c), Measure relief could run
    Fit depth itself and set ~2.2 mm on DSC_8382 instead of the 1.51 mm spread.
-0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
+0c. (Light like this done 10-14: fixed 0.25.) Calibrate still: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
 00. User to redo their DSC_8382 scene on the live site with Measure relief (Add the
