@@ -121,6 +121,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): test round 1 rendered and sent (see Test rounds); waiting
+  on the user's picks before round 2.
 - 10-14 (pushed to `main`): Shadow lift vs the real DSC_8382 lamp photos. Method
   (scratch script, not in repo): sample + its lamp shots, Measure relief, for each lamp
   Light like this, graze opacity 1, render at lift −1..+1; compare with the aligned
@@ -298,6 +300,7 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+-1. Log the user's round 1 picks, then round 2 (see Test rounds).
 0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
