@@ -11,7 +11,7 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replac
 const fmtNum = (v, d) => (Math.round(v * 10 ** d) / 10 ** d).toString().replace('-', '−');
 const pct = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v) * 100)}%`;
 
-export function initBatch({ state, api, after, snapshot, restore, setBatching, useLighting, lighting, grazePresets, userPresets, presetSettings, checkpoint, FILL_MAX, GRAZE_AMBIENT }) {
+export function initBatch({ state, api, after, snapshot, restore, setBatching, useLighting, lighting, grazePresets, userPresets, presetSettings, checkpoint, FILL_MAX, GRAZE_AMBIENT, saveLook, listProjects }) {
   const $ = (id) => document.getElementById(id);
   // One setting stepped from..to: [key, label, min, max, step, read, write, show]
   const SWEEPS = [
@@ -159,12 +159,18 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
         const blob = await encode(canvas, type, 0.95);
         files.push({ name: `${pad(it.num)}-${slug(it.name)}-${canvas.width}x${canvas.height}.${ext}`, blob });
       }
+      // Each exported look is also kept as a project variation, so it can be reopened and built on.
+      let saved = 0;
+      if (saveLook) {
+        for (const it of picked) { restore(clone(it.settings)); try { it.projectId = await saveLook(it.name, it.projectId); saved++; } catch { /* storage unavailable: the files still download */ } }
+        try { await listProjects(); } catch { /* list refresh is cosmetic */ }
+      }
       if (files.length === 1) download(files[0].blob, files[0].name);
       else {
         const zip = makeZip(await Promise.all(files.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.blob.arrayBuffer()) }))));
         download(zip, `digilight-batch-${files.length}-full.zip`);
       }
-      say(`Exported ${files.length} at full size.`);
+      say(`Exported ${files.length} at full size.${saved ? ` Saved ${saved === 1 ? 'it' : 'them'} in Projects & variations (Saved list) to reopen and build on.` : ''}`);
     } catch (e) { say('Export failed: ' + e.message); }
     finally { restore(clone(keep)); api.dirty(); api.render(); setBatching(false); running = false; }
   }

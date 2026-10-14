@@ -484,8 +484,11 @@ function rebuildTabs() {
   if (state.lights.length < MAX_LIGHTS) {
     const add = document.createElement('button');
     add.textContent = '+ Light';
+    // A new light starts from the selected light's character (colour, brightness,
+    // height, beam, softness, shadow lift) so it matches the look; only its place differs.
     add.onclick = () => {
-      state.lights.push(newLight(state.lights.length));
+      const from = state.lights[state.selected], spot = newLight(state.lights.length);
+      state.lights.push(from ? { ...from, rgb: [...from.rgb], x: spot.x, y: spot.y, aimX: 0.5, aimY: 0.5, enabled: true } : spot);
       state.selected = state.lights.length - 1;
       rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
     };

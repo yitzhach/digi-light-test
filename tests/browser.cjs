@@ -354,8 +354,12 @@ const sb=await page.locator('#bvStage').boundingBox();await page.mouse.move(sb.x
 await page.click('#bvNext');assert.deepEqual(await page.evaluate(()=>__batch.viewer.zoom),z1);
 const [dl]=await Promise.all([page.waitForEvent('download',{timeout:120000}),page.click('#bvExport')]);assert.match(dl.suggestedFilename(),/^01-current-look-\d+x\d+\.(png|jpg)$/);
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before);
+await page.waitForFunction(()=>[...document.querySelectorAll('#projectList option')].some(o=>o.textContent.endsWith(' — Current look')));
 await page.click('#bvPrev');await page.click('#bvApply');assert.equal(await setting('exposure'),-1);assert.ok(await page.locator('#batchViewer').isHidden());await page.click('#undo');await settle();assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before);
-console.log('PASS batch preview: WebP looks, settings and history restored, zoom kept, picked export, use this look');}
+{await page.evaluate(()=>Object.assign(__bench.state.lights[__bench.state.selected],{kelvin:2700,power:3.3,z:0.21,lift:0.4}));await page.getByRole('button',{name:'+ Light',exact:true}).click();await settle();
+const L=await setting('lights'),n=L.at(-1);
+const src=L.find(l=>l.kelvin===2700&&l!==n);assert.ok(src&&n.kelvin===2700&&n.power===3.3&&n.z===0.21&&n.lift===0.4&&(n.x!==src.x||n.y!==src.y),JSON.stringify(n));await page.click('#undo');await settle();}
+console.log('PASS batch preview: WebP looks, settings and history restored, zoom kept, picked export saved as a project, use this look; + Light starts from the selected light');}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));

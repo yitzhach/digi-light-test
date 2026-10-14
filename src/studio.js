@@ -595,6 +595,9 @@ export function initStudio(api) {
   const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick});
   // Batch preview: rate several looks, export the chosen ones (batch.js).
   initBatch({state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
-    userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT});
+    userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT,
+    // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
+    saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
+    listProjects:()=>list()});
   window.__studio={calibrate:cal,lamp,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

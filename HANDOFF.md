@@ -70,7 +70,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) **Batch preview · compare looks** (`src/batch.js`)
+- Last code change on `main`: (2026-10-14) batch looks saved as projects; + Light copies the selected light
+- Before that: **Batch preview · compare looks** (`src/batch.js`)
 - Before that: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
   sheet + scores vs lamp photos) for the automated test rounds below
 - Before that: Shadow lift is two-way: −100..+100%, centre = off
@@ -152,6 +153,10 @@ To judge it on a real painting, by eye:
   restore + checkpoint. Test in browser.cjs; `window.__batch` hook. Test bundle test
   timeout raised to 120 s (took >30 s in software GL on main too). Not yet tried on a
   real iPhone. Ideas: ratings saved with the project, a "my test rounds" preset list.
+- 10-14 (pushed to `main`): Export picked also saves each look as a project variation
+  ("<project> — <look>", studio.js `saveLook`; re-export reuses the id). **+ Light** now
+  starts from the selected light's character (all its values; new spot from newLight,
+  aimed at the centre), so added lights match the look; the user asked for this.
 - 10-14 (pushed to `main`): test rounds 1 and 2 rendered and sent on swipe/star pages
   (see Test rounds); waiting on the user's round 2 stars.
 - 10-14 (pushed to `main`): Shadow lift vs the real DSC_8382 lamp photos. Method

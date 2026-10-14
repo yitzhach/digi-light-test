@@ -79,7 +79,8 @@ exposure), the lighting or graze presets, or your saved presets, each applied on
 of the current settings; the current look can be #1. **Export picked** renders the
 ticked looks at full resolution in the Export format (one file, or a .zip for
 several); **Download previews** saves the previews with `ratings.json`; **Use this
-look** applies one (undoable). Your settings and undo history are untouched by the
+look** applies one (undoable). Exported looks are also saved as project variations
+(Projects & variations → Saved) so they can be reopened and built on. Your settings and undo history are untouched by the
 batch itself.
 
 With several lights, only the strongest one casts full-length shadows; each other
