@@ -77,7 +77,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   to 10 mm). With the Classic raking graze on: 27.2 / 15.4 / 8.9 / 4.9. No code clamp
   (only aoScale saturates at 2 mm): steep slopes saturate the shading, so depth matters
   little past ~6 mm. 0.5 mm steps there change ~1–2 levels. Idea: show each look's
-  difference from the previous one in the viewer.
+  difference from the previous one in the viewer. 3rd sweep (2→10 mm, 7 looks + current,
+  old build, screenshot only): 03 = 3.33 mm best (★3), "very very minor changes" up to
+  10 mm. So depth is not what holds the painting at 3★; past ~3 mm leave it (3–4 mm) and
+  vary lighting / graze / room light / relief source next.
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
