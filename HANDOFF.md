@@ -1,11 +1,48 @@
 # DigiLight — Handoff
 
 Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
+
+## NEXT SESSION STARTS HERE: automated test rounds (user's plan, 10-14)
+The user wants Claude to run the tests, not them. Each round:
+1. Write `tools/batches/round-NN.json` with **10 variants** (spec format at the top
+   of `tools/render-batch.cjs`: base sample or project, lampPhotos/measure, common
+   patch, variants with state/graze/lights patches, relief measured|onephoto,
+   lightLike N). Vary one or two things per round so the picks teach something.
+2. Serve (`python3 -m http.server 8766`) and run
+   `DIGILIGHT_BROWSER=/opt/pw-browsers/chromium node tools/render-batch.cjs --spec tools/batches/round-NN.json --out <scratchpad>/round-NN`
+   (~2 min for 10 on dsc8382 with Measure relief).
+3. Look at `sheet.png` yourself first (Read it); sanity-check `results.json`
+   (vsLampPhoto: depth vs photoDepth, local vs photoLocal, lower logRMS is closer
+   to the real photo). Send the user `sheet.png` (SendUserFile, render) plus the 2–3
+   best single images, with a one-line description per number.
+4. The user answers with the numbers that look best (and why). Log the round in
+   **Test rounds** below (spec, picks, what it taught), refine, next round. When a
+   pick settles a default, change the code (presets/defaults), run tests/browser.cjs,
+   push to `main`, update this file.
+Bases available: `{"sample":"dsc8382"}` (+ lampPhotos/measure for real lamp photos
+to score against), `{"sample":"painting"}` (red panel phone photo, no lamp shots), or
+`{"project":"<path>"}` for a user's bundle (unzip `*-test-*.zip`, use
+project.digilight.json). Ideas for round 1: room light (graze `fill`) 0.15–0.35 ×
+Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle scene
+(the 13:31 bundle: one light from 135° + graze 119.5°, opacity 0.75).
+
+## Test rounds
+- Round 0 (10-14, `tools/batches/dsc8382-shadows.json`, lamp 1, not yet shown to the
+  user as a round): vsLampPhoto (photo depth 0.502, local 0.626):
+  01 measured, room 0.06: 0.390 / 0.669 / logRMS 0.311 · 03 measured, room 0.25:
+  0.484 / 0.731 / 0.264 (best logRMS) · 05 measured, lift +50%: 0.407 / 0.736 / 0.300 ·
+  07 one-photo (Classic raking graze), lift off: 0.269 / 0.384 / 0.676 · 08 one-photo
+  lift +100%: 0.319 / 0.511 / 0.570 · 09 one-photo, room 0.25: 0.467 / 0.621 / 0.410
+  (local matches the photo) · 10 one-photo, room 0.25 + lift +50%: 0.505 / 0.701 / 0.370.
+  Room light is the main lever for both reliefs; lift is a secondary taste control.
+
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) Shadow lift is two-way: −100..+100%, centre = off
+- Last code change on `main`: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
+  sheet + scores vs lamp photos) for the automated test rounds below
+- Before that: Shadow lift is two-way: −100..+100%, centre = off
   (left deepens darks: y − 0.8|s| y (1−y)^4)
 - Before that: **Shadow lift** slider (each light + Graze light)
 - Before that: zoom up to 1000%; phone pinch zoom + Full screen view
@@ -80,8 +117,9 @@ To judge it on a real painting, by eye:
   (Light like this leaves 0.06; measurement says room is 12–21% of each shot) at 0.25,
   lift 0: −0.01 / +0.11 / 0.279 — better than any lift. One-photo estimate: shadows far
   too deep (depth 0.13 vs photo 0.50, local 0.18 vs 0.62, logRMS 1.08); lift +1 → 0.17 /
-  0.26 / 0.89, helps but nowhere near. Conclusion: recesses are right with measured
-  relief (the global darks lack room light); lift is for the one-photo estimate.
+  0.26 / 0.89, helps but nowhere near. CORRECTION: those one-photo runs inherited the
+  raw graze settings (Detail 0 etc.) from the measured runs; with the default graze
+  settings see Round 0 below: room light 0.25 is the main fix for one-photo too.
   Candidate: Light like this should set graze fill from the measured room share.
 - 10-14 (pushed to `main`): user bundle `Untitled_painting-test-2026-10-141331` (iPhone,
   one light from 135° at 22°, graze 1° from 119.5° at opacity 0.75, one-photo relief,

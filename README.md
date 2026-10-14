@@ -101,6 +101,9 @@ bulb to strip light). **Graze preset** offers Gentle raking, Classic raking (the
 default), Long shadows, Long shadows clean surface, Soft strip light, and Every
 detail (raw, the old look). `tools/graze-lab.cjs` measures these against synthetic
 paintings with known relief.
+`tools/render-batch.cjs --spec tools/batches/<name>.json` renders a numbered batch of
+look variants (patches on one base scene) to PNGs plus a labelled contact sheet, and
+scores any variant lit like a lamp photo against that photo.
 The **Grazing side light** preset makes one of your own lights a grazing light;
 Angle to wall goes down to 1°, and Brightness is logarithmic so these powers fit.
 
@@ -113,9 +116,9 @@ how much of the light's pool reaches each point: full on the part of the paintin
 nearest the light, fading with its distance falloff and beam edge. The plain graze
 light lifts evenly (it stands for a distant light); a calibrated lamp's lift fades.
 Off (the default) leaves the render exactly as before. Against the DSC_8382 lamp
-photos it helps the one-photo estimate (its shadows run far too deep) but with
-measured relief the recesses are already right; there, raise Calibrate's room light
-instead (about 0.25 matched the photos' shadow depth).
+photos the shadows under a calibrated lamp come out too deep mostly for lack of room
+light: Calibrate's room light at about 0.25 (Light like this leaves 0.06) matched the
+photos' shadow depth best, with measured and one-photo relief alike; lift adds less.
 
 **View zoom.** The toolbar **− / 100% / +** zooms the view from 20% to 1000% (steps … 4, 6, 8, 10×)
 (keys - = 0); 100% fits the painting to the stage and the percentage button returns there.

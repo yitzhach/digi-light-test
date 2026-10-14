@@ -1,0 +1,18 @@
+{
+  "base": { "sample": "dsc8382" },
+  "lampPhotos": true,
+  "measure": true,
+  "common": { "graze": { "opacity": 1 } },
+  "variants": [
+    { "name": "Measured, lift off, room 0.06", "relief": "measured", "lightLike": 0 },
+    { "name": "Measured, room light 0.15", "relief": "measured", "lightLike": 0, "graze": { "fill": 0.15 } },
+    { "name": "Measured, room light 0.25", "relief": "measured", "lightLike": 0, "graze": { "fill": 0.25 } },
+    { "name": "Measured, room light 0.35", "relief": "measured", "lightLike": 0, "graze": { "fill": 0.35 } },
+    { "name": "Measured, lift +50%", "relief": "measured", "lightLike": 0, "graze": { "lift": 0.5 } },
+    { "name": "Measured, room 0.25, lift -30%", "relief": "measured", "lightLike": 0, "graze": { "fill": 0.25, "lift": -0.3 } },
+    { "name": "One-photo, lift off", "relief": "onephoto", "lightLike": 0 },
+    { "name": "One-photo, lift +100%", "relief": "onephoto", "lightLike": 0, "graze": { "lift": 1 } },
+    { "name": "One-photo, room 0.25", "relief": "onephoto", "lightLike": 0, "graze": { "fill": 0.25 } },
+    { "name": "One-photo, room 0.25, lift +50%", "relief": "onephoto", "lightLike": 0, "graze": { "fill": 0.25, "lift": 0.5 } }
+  ]
+}
