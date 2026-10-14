@@ -164,6 +164,11 @@ To judge it on a real painting, by eye:
   and 11 ranked ideas (profile probe with P-V/RMS, calibrated colour height map,
   relief-only raking view, period readout, mm/px hint, finer depth slider, synthetic
   cases, colour-vs-relief mismatch on measured relief only). Docs only, no code.
+  Then Part B (items 12–19) from DiSciacca et al. 2026 "Surface roughness from raking
+  light images" (RL-Sq: luma ÷ big Gaussian blur, small blur, std; r 0.87 vs
+  profilometer Sq): texture-contrast score render vs lamp photo, auto texture depth
+  from it, stroke anisotropy / best raking angle, clipping + glint masking for lamp
+  photos, repeatability CV, ISO 25178 stats. The user will take these to another chat.
 - 10-14 (pushed to `main`): **Batch preview · compare looks** (`src/batch.js`, section after
   Projects; user's idea after the test rounds). Looks = steps of one setting (SWEEPS:
   depth, graze fill, graze lift, all-lights lift, graze elevation, graze opacity,
@@ -366,7 +371,8 @@ To judge it on a real painting, by eye:
 -1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;
    if it holds, make Measure relief set depth ≈ 1.5× the spread.
 0d. Ideas from `docs/conoscopic-paper-improvements.md` (ask the user which first;
-   profile probe + relief-only view are the cheapest and most useful).
+   profile probe + relief-only view are the cheapest; items 12–13, texture-contrast
+   score → auto texture depth, go straight at the 60% contrast / depth problem).
 0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).

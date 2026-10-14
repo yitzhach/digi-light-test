@@ -1,4 +1,13 @@
-# Improvements from "Panel Painting Surface Investigation by Conoscopic Holography"
+# Improvement ideas from two surface-metrology papers
+
+- **Part A**: "Panel Painting Surface Investigation by Conoscopic Holography"
+  (Fontana et al., INOA/ENEA), items 1–11.
+- **Part B**: "Surface roughness from raking light images" (DiSciacca, Crockett,
+  Lackey, Messier, *Surf. Topogr.: Metrol. Prop.* 14 (2026) 025001), items 12–19.
+
+These are ideas only. No code has been changed for any of them.
+
+# Part A: Conoscopic holography (Fontana et al.)
 
 Source: R. Fontana, M.C. Gambino, E. Pampaloni, L. Pezzati (INOA, Florence),
 C. Seccaroni (ENEA). The paper uses a conoscopic laser micro-profilometer to survey
@@ -158,3 +167,154 @@ conservation use.
   software equivalent.
 - The paper's figures are screenshots with no raw data, so they cannot be used as
   ground truth. Only the sizes in the table above can be reused.
+
+# Part B: Surface roughness from raking light images (DiSciacca et al. 2026)
+
+The Lens Media Lab (Yale) photographs 1 cm of photographic paper under a fixed
+low-angle LED (the "Texturescope": 2048 × 2448 px, 16-bit, 204.8 px/mm, about
+5 µm/px). They show that one number taken from the raking photo, **RL-Sq**,
+follows the true areal roughness **Sq** (ISO 25178, the RMS of surface heights)
+measured with a ZYGO optical profilometer. Across 213 samples the correlation is
+Pearson **0.87**. A VGG16 CNN reached 0.93, but they chose RL-Sq anyway: it has
+3 fixed, interpretable parameters instead of 138 M learned ones, and it is far
+more repeatable.
+
+The RL-Sq recipe:
+1. Convert to greyscale with Rec. 709 weights (0.2125 R + 0.7154 G + 0.0721 B,
+   the same weights `studio.js` uses).
+2. Crop the evenly lit centre.
+3. Normalise by the image mean (× gain 250 / sum × N).
+4. **Divide by a Gaussian blur of itself** (501 px kernel, about 2.4 mm). This
+   removes vignetting, the light's fall-off and lens artefacts while keeping local
+   contrast.
+5. Smooth with a 21 px Gaussian (about 0.1 mm) to drop pixel noise.
+6. Crop the central 768 × 768 px (about 3.75 mm) and take the population standard
+   deviation.
+
+What else the paper reports:
+- **Repeatability:** coefficient of variation 0.000–0.006 for the same shot
+  repeated, and 0.04–0.14 with the sample moved between shots. The CNN was much
+  worse on the second (up to 0.66).
+- **Anisotropy:** directional textures change RL-Sq by about 0.5 units between
+  light at 0° and at 90°. Their fix is to average two shots taken 90° apart.
+- **Confounds:** any change in lightness reads as texture. That includes the
+  printed image itself, so they measure on blank or evenly toned areas. Metallic
+  flecks and specular glints make smooth papers read as rough.
+- **Exposure:** the histogram should span near-white to near-black without
+  touching either end.
+- **One number is not a match.** Very different surfaces can share the same Sq.
+  They combine it with colour, gloss and thickness on a radar chart, and leave
+  final matching to people.
+
+## What carries over to DigiLight
+
+The scale is different (about 5 µm/px on paper against our 0.25–0.35 mm/px on
+whole paintings), but the main result carries over. **The band-passed brightness
+contrast of a raking photo is a reliable, simple proxy for relief amplitude when
+the lighting geometry is fixed.** That is exactly the quantity we keep getting
+wrong: renders show about 60 % of the lamp photos' stroke contrast, and users pick
+depths well above the real paint.
+
+### 12. Texture contrast score (RL-Sq style) for render vs photo
+Add a single band-pass contrast number, computed the same way on the real
+raking/lamp photo and on our render under the same light:
+- greyscale (luma) ÷ Gaussian blur (about 2–3 mm in painting units, so it scales
+  with `paintingWidthCm`), then a light blur at about 1–2 px, then the standard
+  deviation over the painting (borders cut).
+- The ratio **render score / photo score** is a "texture contrast match". 100 %
+  means the render has as much stroke contrast as the real photo.
+- Where it goes: `tools/render-batch.cjs` `vsLampPhoto` (next to depth / local /
+  logRMS), Measure relief's Compare, and Calibrate's match panel.
+- The divide-by-blur step also cancels the spot lamp's beam pool, a known gap
+  (Next up 0b), so the score is fair even though we don't model the beam yet. It
+  is the same idea as render-batch's `local` (p10 over a 51 px box mean), but it
+  uses every pixel rather than the darkest 10 %.
+
+### 13. Auto texture depth from the contrast match
+Because the score tracks relief amplitude (r = 0.87 in the paper), we can solve for
+it. Render at two or three depths under "Light like this" (or Calibrate's lamp),
+fit score against depth, and set **Texture depth** where render score = photo
+score.
+- This replaces the hand-tuned "≈1.5× the measured spread" candidate rule (test
+  round 2) and the 8 mm guess from the in-app batch with a measured value per
+  painting.
+- It also works with one raking photo and no Measure relief. Calibrate's Auto-fit
+  could add this score as a target for depth: it is a broad-band fit now, and the
+  fine band was dropped because albedo dominates it. The divide-by-blur ratio
+  removes most of that.
+- Caveat: the score depends on light elevation, room fill and exposure, so it is
+  only valid render vs photo under the same geometry. Room fill (graze `fill`)
+  should be set first (Next up 0c), or fitted together with depth.
+
+### 14. Anisotropy: stroke direction and the best raking angle
+Strokes are strongly directional, much more than paper, and a light parallel to a
+stroke hardly shows it.
+- Compute a structure tensor of the relief gradient (or of the lamp/even ratio).
+  Report the dominant stroke direction and a coherence value (0 = isotropic,
+  1 = all one way).
+- Add a "Best raking direction" button on Graze light that sets the angle
+  perpendicular to the dominant stroke.
+- In Measure relief, warn when all lamp photos come from one side. We already know
+  depth is 10–20 % shallow with all lamps above and right with lamps on four sides.
+  The paper's advice is to add a shot about 90° round.
+- Report the texture score (item 12) for the light at θ and at θ + 90° so
+  users can see how much the direction matters on their painting.
+
+### 15. Exposure / clipping check on uploaded lamp and raking photos
+The method breaks if highlights clip or shadows crush, and the same is true of our
+lamp/even ratio and of Calibrate's match.
+- On upload (lampui.js, calibrate.js), show the share of pixels at ≥ 250 or ≤ 5 per
+  channel, and warn above about 0.5 %.
+- Mask clipped pixels out of the relief solve and the scores rather than trusting
+  them.
+
+### 16. Specular glints: detect and mask in Measure relief
+Varnish and wet-looking impasto make glints under a spot lamp, just as metallic
+flecks do on paper. We would read them as steep slopes.
+- Flag pixels where the lamp/even ratio is far above anything a Lambertian surface
+  can give under that lamp's geometry. Glints are also near-white and low in
+  saturation compared with the albedo.
+- Exclude those pixels from the per-pixel least squares (lampphotos.js) and let the
+  Poisson solve fill them.
+- Capture tip for the Measure relief help text: a polariser on the lamp and a
+  crossed one on the lens removes most glare.
+
+### 17. Region picker: score only where the colour is even
+The paper measures on blank margins because image content reads as texture.
+- When the user picks a region for scores or the profile probe (item 1), show how
+  much colour varies there (std of the albedo or of the even photo). Steer them to
+  even-toned paint for depth fitting.
+- This matters most for one-photo relief, where every colour edge becomes false
+  relief.
+
+### 18. Repeatability as a regression metric
+Copy their protocol for Measure relief:
+- **Repeatability:** run the same lamp set twice and get the coefficient of
+  variation of depth and texture score. It should be about 0.
+- **Reproducibility:** shift or crop the photos by a few px and re-measure. Our
+  shots already drift up to 2 px and 0.3 % zoom.
+- The CV across the three DSC_8382 lamps (leave-one-out) is a ready-made number to
+  log in HANDOFF and in a test in `tests/browser.cjs`. It would catch regressions in
+  alignment or integration that a single r value can hide.
+
+### 19. Roughness statistics in the readouts
+The profile probe and topographic view (items 1–2) should report the standard ISO
+25178 areal parameters for the region, not only P-V and RMS:
+- **Sq** (RMS), **Sa** (mean absolute), **Sz** (max height), **Sp / Sv** (max peak
+  and pit);
+- **Ssk** (skewness: impasto ridges on a flat ground are positive, crevices and
+  cracks negative);
+- **Sku** (kurtosis: spiky against rounded).
+
+All are cheap from the Float32 heights. Use the ISO names so the numbers mean the
+same thing to conservators. A small "surface card" per project (depth, Sq, Ssk,
+dominant direction, coherence, main period from item 4) would be our version of
+their radar chart. Low priority.
+
+### Not applicable from Part B
+- The CNN (VGG16). The paper's own conclusion goes against it for this use: it
+  overfits a small dataset, needs a big runtime and is not reproducible. It also
+  does not fit our static, no-build app.
+- Their absolute Sq values (paper: 0.036–46 µm, median 3.2 µm) and the fixed pixel
+  kernels (501 / 21 px at 204.8 px/mm) do not carry over. Scale the kernels by mm
+  per pixel instead.
