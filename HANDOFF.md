@@ -70,7 +70,14 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   relief type and lights not known): **06 = 8 mm was best (★3)**, the deepest look in the
   sweep, so the best value may be above 8 mm. Same direction as round 2: the app needs
   well over the real paint depth (thickest ~4.8 mm) to look right. Next: sweep 7–10 mm
-  and ask what keeps it at 3★.
+  and ask what keeps it at 3★. User's 2nd sweep 6→10 mm (9 looks, old screen-size
+  build): "almost indistinguishable". Measured on the painting sample (default single
+  light, one-photo relief, 1050 px), mean |Δ| vs 10 mm in 0–255 luma: 2 mm 14.5, 4 mm 9.3,
+  6 mm 5.8, 8 mm 3.5 (mostly overall darkening 74.6→61.4; high-pass/mean only +5% from 2
+  to 10 mm). With the Classic raking graze on: 27.2 / 15.4 / 8.9 / 4.9. No code clamp
+  (only aoScale saturates at 2 mm): steep slopes saturate the shading, so depth matters
+  little past ~6 mm. 0.5 mm steps there change ~1–2 levels. Idea: show each look's
+  difference from the previous one in the viewer.
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
