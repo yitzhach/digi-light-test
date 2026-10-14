@@ -69,6 +69,19 @@ the photo, the full-resolution result, preview captures of the relit, original,
 split, shadows and height views (and the sharp zoom, if shown), your note, and
 `info.json` (browser, GPU, errors, a summary of the lights).
 
+**Batch preview · compare looks** renders 2–10 looks of the painting as small
+previews (WebP at the preview's size, up to 1400 px; JPEG where the browser cannot
+encode WebP) and opens them in a full-screen viewer: swipe or Prev / Next, pinch,
+double-tap or wheel to zoom (the zoom and spot stay put across looks), hold for the
+original photo, 1–5 stars (4 and up are ticked for export). Looks come from steps of
+one setting (texture depth, graze room light, shadow lift, graze angle or opacity,
+exposure), the lighting or graze presets, or your saved presets, each applied on top
+of the current settings; the current look can be #1. **Export picked** renders the
+ticked looks at full resolution in the Export format (one file, or a .zip for
+several); **Download previews** saves the previews with `ratings.json`; **Use this
+look** applies one (undoable). Your settings and undo history are untouched by the
+batch itself.
+
 With several lights, only the strongest one casts full-length shadows; each other
 light's shadows reach in proportion to its brightness (at least 15%), so fill lights
 do not lay their own long streaks across the key light's. **Shadow smoothing**

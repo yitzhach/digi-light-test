@@ -1,8 +1,9 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT } from './presets.js';
 import { initLampPhotos } from './lampui.js';
 import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
 import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
+import { initBatch } from './batch.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -116,7 +117,7 @@ export function initStudio(api) {
   const live = k => sweep && (k === 'lights' || k === 'selected') ? sweep[k] : state[k];
   const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(live(k))]));
   const history = new History();
-  let before = false, split = false, brush = '', maskLayer = -1, painting = false, restoring = false, loading = false, projectId = null;
+  let before = false, split = false, brush = '', maskLayer = -1, painting = false, restoring = false, loading = false, projectId = null, batching = false;
   let sourceRevision = 0;
   let cal = null;   // Calibrate section (calibrate.js), made once the graze section exists
   const mask = document.createElement('canvas'); mask.width = mask.height = 768;
@@ -161,7 +162,7 @@ export function initStudio(api) {
   }
   function rebuildLayerMasks() { for (let i = 0; i < MAX_LAYERS; i++) drawLayerMask(i); state.layerMaskVersion++; }
   function historyUI() { $('undo').disabled = history.index <= 0; $('redo').disabled = history.index >= history.entries.length-1; }
-  function checkpoint() { if (!restoring && !loading && !painting && !state.exporting && !sweep) { history.push(snapshot()); historyUI(); } }
+  function checkpoint() { if (!restoring && !loading && !painting && !batching && !state.exporting && !sweep) { history.push(snapshot()); historyUI(); } }
   function syncQuick() {
     const mm = state.textureDepthMm, w = state.paintingWidthCm;
     $('textureDepthMm').nextElementSibling.textContent = `${mm.toFixed(mm < 1 ? 2 : 1)} mm`;
@@ -592,5 +593,8 @@ export function initStudio(api) {
   function usePhotoAzimuth(deg, share){calibrate();state.photoDiffuse=share;state.azimuthDeg=Math.round(deg)%360;state.albedoSuppress=0.5;api.dirty();syncQuick();}
   cal=initCalibrate({state,api,after:grazeBox,setGraze,renderGraze,syncQuick,checkpoint,usePhotoAzimuth,splitView:()=>$('splitView').click()});
   const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick});
+  // Batch preview: rate several looks, export the chosen ones (batch.js).
+  initBatch({state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
+    userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT});
   window.__studio={calibrate:cal,lamp,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

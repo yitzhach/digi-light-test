@@ -70,8 +70,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-14
-- Last push to `main`: (2026-10-14) round 1–2 specs + log (no code change)
-- Last code change on `main`: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
+- Last code change on `main`: (2026-10-14) **Batch preview · compare looks** (`src/batch.js`)
+- Before that: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
   sheet + scores vs lamp photos) for the automated test rounds below
 - Before that: Shadow lift is two-way: −100..+100%, centre = off
   (left deepens darks: y − 0.8|s| y (1−y)^4)
@@ -138,6 +138,20 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): **Batch preview · compare looks** (`src/batch.js`, section after
+  Projects; user's idea after the test rounds). Looks = steps of one setting (SWEEPS:
+  depth, graze fill, graze lift, all-lights lift, graze elevation, graze opacity,
+  exposure; From/To/count 2–10), lighting presets, graze presets or saved presets,
+  each applied on a clone of the base snapshot (+ optional current look as #1). Each
+  rendered with renderNow, copied in the same task, encoded WebP 0.85 (JPEG fallback,
+  e.g. Safari) at preview size. `batching` flag in studio.js blocks history checkpoints;
+  base settings restored after. Viewer `#batchViewer` (fixed overlay, own pinch/pan
+  shared across looks, hold = original, stars, 4★+ auto-ticks Export full size).
+  Export picked = restore each look's settings → api.exportFull → Export format (one
+  file or makeZip); Download previews = zip with ratings.json; Use this look =
+  restore + checkpoint. Test in browser.cjs; `window.__batch` hook. Test bundle test
+  timeout raised to 120 s (took >30 s in software GL on main too). Not yet tried on a
+  real iPhone. Ideas: ratings saved with the project, a "my test rounds" preset list.
 - 10-14 (pushed to `main`): test rounds 1 and 2 rendered and sent on swipe/star pages
   (see Test rounds); waiting on the user's round 2 stars.
 - 10-14 (pushed to `main`): Shadow lift vs the real DSC_8382 lamp photos. Method
