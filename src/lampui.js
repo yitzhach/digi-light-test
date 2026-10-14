@@ -266,7 +266,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
           `<b>Texture depth ${depth.toFixed(2)} mm</b> (the deepest tried): even that has only ${Math.round(res.ratio * 100)}% of the photos' stroke contrast; lower Room light or check the lamp positions`) +
       ` (${m?.on ? 'measured' : 'one-photo'} relief${spread ? `, measured spread ${spread.toFixed(2)} mm` : ''}; was ${d0.toFixed(2)} mm). ` +
       `Each lamp alone: ${out.lamps.map((l) => `${l.lamp}: ${lampTxt(l)}`).join(' · ')}. ` +
-      `Photo contrast: ${photo.map((p) => (p * 100).toFixed(1) + '%').join(', ')}. Undo goes back.`;
+      `Photo contrast: ${photo.map((p) => (p * 100).toFixed(1) + '%').join(', ')}. Undo goes back.` +
+      (m?.on ? '' : ' With one-photo relief much of the render\'s contrast is grain read from the colour, not strokes (on DSC_8382 it hardly tracks the real relief), so trust this depth less than one fitted on measured relief.');
     renderRows();
     return out;
   }

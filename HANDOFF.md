@@ -86,6 +86,14 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-14
+- **Branch `feature/metrology`** (not merged; the user says when to merge into `main`):
+  building `docs/conoscopic-paper-improvements.md` items in the user's order:
+  (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
+  (2) item 3 relief-only raking view + colour-over-relief preset; (3) items 1+2+19
+  profile probe + calibrated colour height map + ISO stats; (4) items 14–16 stroke
+  direction / Best raking direction, overexposure warning, glint mask. Ask before
+  items 8–11. Each step: before/after images + numbers to the user, test in
+  tests/browser.cjs, push the branch, update this file.
 - Last code change on `main`: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
 - Before that: (2026-10-14) batch looks saved as projects; + Light copies the selected light
 - Before that: **Batch preview · compare looks** (`src/batch.js`)
@@ -117,6 +125,7 @@ of a painting → estimate surface relief → relight with movable virtual light
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
 - `lampphotos.js` (maths) + `lampui.js` (section) — relief measured from lamp photos
+- `texscore.js` — RL-Sq style texture contrast score + depth fit (Fit depth to photos)
 - `photometric.js`, `register.js`, `sphere.js` — multi-photo capture path (demo section)
 - `synth.js` — synthetic painting with known relief (tests); `measure.js` — image stats
 - `tests/browser.cjs` — Playwright regression (see README "Validation")
@@ -156,6 +165,37 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (branch `feature/metrology`): **texture contrast score + Fit depth to photos**
+  (doc items 12–13). `src/texscore.js`: `textureScore(rgba, w, h, mmPerPx)` = RL-Sq
+  style: Rec.709 luma of the encoded values ÷ Gaussian blur of `BIG_MM` 2.5 mm (in mm,
+  scales with Painting width), light Gaussian `SMALL_PX` 1.5 px, population std with
+  borders cut (2 × big sigma + 3%); `gaussBlur` is a true separable Gaussian (3-pass
+  boxes rounded the radius, up to 10% off, which moved the score 20–30% between
+  resolutions). `fitDepth(ratioAt)` = doubling grid 0.25→10 mm, then 4 bisections on
+  log depth. Measure relief section: **Fit depth to photos** (`#lampFit`,
+  `__studio.lamp.fitDepth({lamps})`): each lamp photo scored once (lined up as Compare
+  shows it; aligned on the fly if not measured yet), then per trial depth graze = each
+  lamp in turn (Light like this), render scored, geometric mean of render/photo driven
+  to 1; snapshot restored afterwards except Texture depth, one undo step (batching flag
+  blocks checkpoints meanwhile). Readout: depth, each lamp's own crossing (or
+  under/over the tried range), photo scores; one-photo relief gets a warning.
+  `tools/render-batch.cjs`: vsLampPhoto gains `texture`, `photoTexture`, `textureMatch`
+  (render/photo); spec `fitDepth: {lamps, fill, relief}`, variant
+  `"state": {"textureDepthMm": "fit"}`. Specs `tools/batches/fit-depth*.json`.
+  **DSC_8382 results** (photo scores 0.156 / 0.166 / 0.190 for lamps 1–3):
+  measured relief, room 0.25: **fit 2.16 mm** (lamps alone 2.31 / 2.04 / 2.15);
+  measured 1.51 mm gives 81% of the photos' contrast, 8 mm gives 169–191% (crusty);
+  fitted logRMS 0.257 / 0.274 / 0.300 = best of all rounds. Measured relief, room
+  0.06 (Light like this default): fit 1.40 mm (1.49 / 1.36 / 1.38), i.e. the measured
+  depth is right if the room light is that low, but logRMS is worse (0.31–0.37), so
+  room ~0.25 + ~1.4× depth is the consistent pair (matches round 2's "≈1.5×").
+  One-photo relief, room 0.25: fit 6.2 mm (4.77 / 2.48 / over 10 mm) and contrast
+  saturates (6.2 → 8 mm: 104 → 107%); the contrast is grain, not strokes (by eye, and
+  local shadows 0.42 vs photo 0.63), which is probably why the user's one-photo
+  sweeps liked 6–8 mm. Tests: synthetic score checks (flat 0, light pool ~0, two
+  resolutions within 12%) + fit on the synthetic lamp set (bracket, settings kept,
+  undo). Also fixed a race in the Batch preview test (opening the section reset
+  From/To after the test typed them; failed on `main` too).
 - 10-14 (pushed to `main`): user asked for a way to hand their in-app ratings to Claude, and
   said a 4.1× zoomed preview was blurry. Batch viewer now has a **note** field per look and
   **Save ratings (.json)** → `digilight-ratings-<painting>-YYYYMMDD-HHMM.json`
@@ -380,9 +420,12 @@ To judge it on a real painting, by eye:
    Sharp previews (looks differ) and Save ratings, and to sweep 7–10 mm.
 -1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;
    if it holds, make Measure relief set depth ≈ 1.5× the spread.
-0d. Ideas from `docs/conoscopic-paper-improvements.md` (ask the user which first;
+0d. (In progress on `feature/metrology`, order set by the user, see Status.) Ideas from
+   `docs/conoscopic-paper-improvements.md` (
    profile probe + relief-only view are the cheapest; items 12–13, texture-contrast
    score → auto texture depth, go straight at the 60% contrast / depth problem).
+0e. From the Fit depth results: once room light is settled (0c), Measure relief could run
+   Fit depth itself and set ~2.2 mm on DSC_8382 instead of the 1.51 mm spread.
 0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
