@@ -618,6 +618,8 @@ function rebuildLightPanel() {
   p.appendChild(slider('Angle to wall', 1, 90, 0.5, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
     (v) => (v < 10 ? `${v.toFixed(1)}°` : `${Math.round(v)}°`)));
   p.appendChild(slider('Distance', LIGHT_Z_MIN, 2.5, 0.005, () => l.z, (v) => { l.z = v; rebuildHandles(); }, fmtLength));
+  // Brightens the dark tones this light falls on, most where it is nearest (shade.js liftShadows).
+  p.appendChild(slider('Shadow lift', 0, 1, 0.01, () => l.lift ?? 0, (v) => { l.lift = v; }, (v) => `${Math.round(v * 100)}%`));
 
   if (l.useKelvin) {
     p.appendChild(slider('Temperature', 1800, 10000, 50, () => l.kelvin,

@@ -328,6 +328,18 @@ assert.ok(Math.abs(rows[1].lamp.left+2.8*2.54)<1e-9&&Math.abs(rows[1].lamp.out-5
 assert.equal(await page.locator('#lampSample').isHidden(),true);await page.evaluate(()=>{__studio.lamp.rows.length=0;});
 console.log('PASS DSC_8382 sample with its lamp photos');}
 {page.once('dialog',d=>d.accept('streaks top left'));const [dl]=await Promise.all([page.waitForEvent('download'),page.click('#testBundle')]);const zp=outputDir+'/bundle.zip';await dl.saveAs(zp);const buf=require('fs').readFileSync(zp);const names=[];for(let o=0;o+30<buf.length&&buf.readUInt32LE(o)===0x04034b50;){const n=buf.readUInt16LE(o+26),sz=buf.readUInt32LE(o+18);names.push(buf.toString('utf8',o+30,o+30+n));if(names.at(-1)==='notes.txt')assert.equal(buf.toString('utf8',o+30+n,o+30+n+sz),'streaks top left');o+=30+n+sz;}for(const f of ['project.digilight.json','notes.txt','view-relit.png','view-original.png','view-split.png','view-shadows.png','view-height.png','original.jpg','relit-full.png','info.json'])assert.ok(names.includes(f),f);await page.waitForFunction(()=>document.querySelector('#projectStatus').textContent.startsWith('Test bundle downloaded'));console.log('PASS export for testing bundle');}
+// Shadow lift: 0 leaves the render alone; raised, it brightens the darks most near the light.
+{const lum=()=>page.evaluate(()=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);const d=x.getImageData(0,0,c.width,c.height).data,w=c.width,h=c.height;
+  const at=(u,v)=>{let s=0,n=0;for(let y=Math.floor(v*h)-5;y<Math.floor(v*h)+5;y++)for(let a=Math.floor(u*w)-5;a<Math.floor(u*w)+5;a++){const i=(y*w+a)*4;s+=d[i]+d[i+1]+d[i+2];n++;}return s/n/3;};return {near:at(.12,.12),far:at(.88,.88)};});
+ const saved=await page.evaluate(()=>JSON.stringify([__bench.state.lights,__bench.state.graze]));
+ await page.evaluate(()=>{const s=__bench.state;s.graze.enabled=false;s.lights.forEach((l,i)=>{l.enabled=i===0;});Object.assign(s.lights[0],{x:0,y:1,z:.3,power:.02,lift:0});});const base=await pixels(),l0=await lum();
+ await page.evaluate(()=>{__bench.state.lights[0].lift=0;});assert.equal(await pixels(),base,'lift 0 is a no-op');
+ await page.evaluate(()=>{__bench.state.lights[0].lift=1;});const l1=await lum();
+ assert.ok(l1.near-l0.near>2*(l1.far-l0.far)&&l1.near>l0.near+5,'lift strongest near the light '+JSON.stringify([l0,l1]));
+ await page.evaluate(s=>{const [L,G]=JSON.parse(s);__bench.state.lights.forEach((l,i)=>Object.assign(l,L[i]));Object.assign(__bench.state.graze,G);},saved);await page.evaluate(()=>{__bench.state.lights[0].lift=.4;__bench.state.graze.lift=.3;});
+ const v=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:__studio.snapshot()}));assert.equal(v.lights[0].lift,.4);assert.equal(v.graze.lift,.3);
+ await page.evaluate(()=>{__bench.state.lights[0].lift=0;__bench.state.graze.lift=0;});await settle();
+ console.log('PASS shadow lift: no-op at 0, strongest near the light, saved with the light and graze');}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));

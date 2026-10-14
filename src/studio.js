@@ -76,9 +76,10 @@ export function initStudio(api) {
     <div class="row"><label for="grazeReach">Shadow length</label><input id="grazeReach" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
     <div class="row"><label for="grazeClean">Clean shadows</label><input id="grazeClean" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
     <div class="row"><label for="grazeSoft">Softness</label><input id="grazeSoft" type="range" min="0" max="1" step="0.05"><output data-own></output></div>
+    <div class="row"><label for="grazeLift">Shadow lift</label><input id="grazeLift" type="range" min="0" max="1" step="0.01"><output data-own></output></div>
     <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
     <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
-    <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do. Softness: a bigger lamp, from a bare bulb to a strip light; softer shadow edges and calmer grain.</p></div>`;
+    <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do. Softness: a bigger lamp, from a bare bulb to a strip light; softer shadow edges and calmer grain. Shadow lift: brightens the dark paint and recesses the graze light falls on, less the farther a calibrated lamp is (each light has its own Shadow lift too).</p></div>`;
   lights.after(grazeBox);
   for (const [id,title] of [['presetName','My reusable presets'],['brushOff','Local texture correction'],['projectName','Projects & variations']]) {
     const group=$(id).closest('.grp'), heading=group.previousElementSibling;
@@ -208,6 +209,7 @@ export function initStudio(api) {
     $('grazeReach').value = g.reach; $('grazeReach').nextElementSibling.textContent = `${Math.round(g.reach * 100)}%`;
     $('grazeClean').value = g.clean; $('grazeClean').nextElementSibling.textContent = `${Math.round(g.clean * 100)}%`;
     $('grazeSoft').value = g.soft; $('grazeSoft').nextElementSibling.textContent = `${Math.round(g.soft * 100)}%`;
+    $('grazeLift').value = g.lift ?? 0; $('grazeLift').nextElementSibling.textContent = `${Math.round((g.lift ?? 0) * 100)}%`;
     const match = Object.entries(grazePresets).find(([, v]) => Object.entries(v).every(([k, x]) => Math.abs(g[k] - x) < 1e-6));
     $('grazePreset').value = match ? match[0] : '';
     $('grazeReadout').textContent += g.lamp ? ' · calibrated lamp' : '';
@@ -225,6 +227,7 @@ export function initStudio(api) {
   $('grazeReach').oninput = e => setGraze({ reach: +e.target.value });
   $('grazeClean').oninput = e => setGraze({ clean: +e.target.value });
   $('grazeSoft').oninput = e => setGraze({ soft: +e.target.value });
+  $('grazeLift').oninput = e => setGraze({ lift: +e.target.value });
   for (const name of Object.keys(grazePresets)) $('grazePreset').add(new Option(name, name));
   $('grazePreset').onchange = e => { const v = grazePresets[e.target.value]; if (v) setGraze({ ...v }); };
   $('grazeDial').addEventListener('pointerdown', e => {
@@ -507,7 +510,7 @@ export function initStudio(api) {
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of newControls)if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
-    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2]]){const v=l[k]??({softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
+    settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2],['lift',0,1]]){const v=l[k]??({lift:0,softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
     let points=0;
     const checkStrokes=(strokes,modes)=>{if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');return strokes.map(s=>{if(!modes.includes(s?.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});};
@@ -520,6 +523,7 @@ export function initStudio(api) {
     if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean,soft].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1||soft<0||soft>1)throw new Error('Invalid graze light.');
     settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean,soft};
     // Calibrate: the measured lamp (cm from the painting's edges) and room light.
+    if(g.lift!=null){if(!Number.isFinite(g.lift)||g.lift<0||g.lift>1)throw new Error('Invalid graze light.');settings.graze.lift=g.lift;}
     if(g.fill!=null){if(!Number.isFinite(g.fill)||g.fill<0||g.fill>FILL_MAX)throw new Error('Invalid graze light.');settings.graze.fill=g.fill;}
     if(g.lamp!=null){const L=g.lamp;if(typeof L!=='object'||![L.left,L.above,L.out].every(Number.isFinite)||Math.abs(L.left)>2000||Math.abs(L.above)>2000||L.out<LAMP_OUT_MIN||L.out>2000)throw new Error('Invalid graze light.');settings.graze.lamp={left:L.left,above:L.above,out:L.out};}
     return settings;

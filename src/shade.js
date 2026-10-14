@@ -47,6 +47,7 @@ uniform float uLightFalloff[${MAX_LIGHTS}];
 uniform vec2 uLightAim[${MAX_LIGHTS}];
 uniform float uLightSize[${MAX_LIGHTS}];     // source radius, in painting widths
 uniform float uLightReach[${MAX_LIGHTS}];    // share of uShadowDist this light's shadows may run
+uniform float uLightLift[${MAX_LIGHTS}];     // Shadow lift: how far this light raises the dark tones it falls on
 uniform sampler2D uShadowRelief;             // relief for the main lights' shadows: grain smoothed out
 
 uniform float uAspect;
@@ -87,6 +88,8 @@ uniform float uGrazeReach;      // longest graze march, in whole-image UV units
 uniform float uGrazeSize;       // source radius, in painting widths (Softness)
 uniform float uGrazeFine;       // share of the finer relief put back into its shading (no shadows)
 uniform float uGrazeFill;       // soft room light under the graze light, so its shadows read as shadows
+uniform float uGrazeLift;       // Shadow lift under the graze light
+uniform float uGrazeLiftFall;   // its falloff with distance: 2 for a calibrated lamp, 0 (even) otherwise
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -205,6 +208,28 @@ vec3 linearToSrgb(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(max(c, 1e-5), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
 }
 
+// Shadow lift, on display (sRGB) values: the darks rise, the lights barely move.
+// y + 5 s y (1 - y)^6 is strongest around y = 0.15 (dark paint, baked-in recesses),
+// leaves white at white, and stays monotonic for s up to 1 (its slope bottoms out
+// at 0.07). Scaling the colour by the luma ratio keeps its hue and saturation.
+// At 100%: 0.07 -> 0.29, 0.15 -> 0.43, 0.3 -> 0.47, 0.5 -> 0.54, 0.7 -> 0.70.
+vec3 liftShadows(vec3 c, float s) {
+  if (s <= 0.0) return c;
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  if (y <= 1e-4) return c;
+  float k = 1.0 - y, k3 = k * k * k;
+  float yl = y + 5.0 * min(s, 1.0) * y * k3 * k3;
+  return clamp(c * (yl / y), 0.0, 1.0);
+}
+
+// How much of a light's pool reaches this point: 1 on the part of the painting
+// nearest the light, falling off with its distance falloff (and the beam, via spot).
+float poolShare(vec3 lp, float dist, float falloff) {
+  vec2 near = clamp(vec2(lp.x, lp.y * uAspect), vec2(0.0), vec2(1.0, uAspect));
+  float dmin = max(length(vec3(near - vec2(lp.x, lp.y * uAspect), lp.z)), 1e-4);
+  return pow(min(1.0, dmin / dist), falloff);
+}
+
 void main() {
   vec2 gUV = uUVOffset + vUV * uUVScale;
   if (uSplit >= 0.0 && gUV.x < uSplit) {
@@ -239,6 +264,7 @@ void main() {
 
   vec3 acc = vec3(0.0);
   float litShare = 0.0, allShare = 0.0;   // for the Shadows view
+  float lift = 0.0;                        // Shadow lift, summed over the lights reaching here
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uLightCount) break;
     if (uLightEnabled[i] < 0.5) continue;
@@ -269,6 +295,8 @@ void main() {
     vec3 aim = normalize(vec3(uLightAim[i].x - lp.x, (uLightAim[i].y - lp.y) * uAspect, -lp.z));
     float spot = cone < 0.01 ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
     if (spot <= 0.0) continue;
+    // Shadow lift goes wherever the beam lands, cast shadows and facets turned away included.
+    lift += uLightLift[i] * spot * poolShare(lp, dist, uLightFalloff[i]);
 
     // Shadows view: everything inside the beam counts, and a facet turned away from
     // the light is in (attached) shadow just as much as one a ridge blocks.
@@ -305,7 +333,7 @@ void main() {
 
   acc *= exp2(uExposure);
   vec3 mapped = mix(clamp(acc, 0.0, 1.0), acesFilm(acc), uHighlightRolloff);
-  vec3 relit = clamp(linearToSrgb(mapped), 0.0, 1.0);
+  vec3 relit = liftShadows(clamp(linearToSrgb(mapped), 0.0, 1.0), lift);
 
   if (uGrazeOpacity > 0.0) {
     // The graze light shades and shadows the relief down to its Detail size only
@@ -334,7 +362,8 @@ void main() {
     }
     g *= exp2(uExposure);
     vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
-    relit = mix(relit, clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeOpacity);
+    vec3 gs = liftShadows(clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeLift * poolShare(uGrazePos, dist, uGrazeLiftFall));
+    relit = mix(relit, gs, uGrazeOpacity);
   }
   vec3 col = relit;
   vec4 lmask = texture(uLayerMask, gUV);
@@ -415,6 +444,7 @@ export class Shader {
     const falloff = new Float32Array(MAX_LIGHTS);
     const aim = new Float32Array(MAX_LIGHTS * 2);
     const size = new Float32Array(MAX_LIGHTS);
+    const lift = new Float32Array(MAX_LIGHTS);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
@@ -426,6 +456,7 @@ export class Shader {
       aim[i * 2] = l.aimX ?? l.x;
       aim[i * 2 + 1] = l.aimY ?? l.y;
       size[i] = l.size ?? 0.03;
+      lift[i] = l.lift ?? 0;
     });
     // Long shadows belong to the key light. Each extra light marches a share of the
     // reach set by its strength relative to the strongest one, so fills add light
@@ -444,6 +475,7 @@ export class Shader {
     gl.uniform2fv(u.uLightAim, aim);
     gl.uniform1fv(u.uLightSize, size);
     gl.uniform1fv(u.uLightReach, reach);
+    gl.uniform1fv(u.uLightLift, lift);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
@@ -503,6 +535,9 @@ export class Shader {
       gl.uniform3fv(u.uGrazePos, lampPosition(g.lamp, state.paintingWidthCm, aspect));
     } else gl.uniform3f(u.uGrazePos, 0.5 + Math.cos(gDir) * GRAZE_DISTANCE, 0.5 + Math.sin(gDir) * GRAZE_DISTANCE / aspect, gz);
     gl.uniform1f(u.uGrazeFill, g?.fill ?? GRAZE_AMBIENT);
+    gl.uniform1f(u.uGrazeLift, g?.lift ?? 0);
+    // The plain graze light stands for a distant one, so its lift is even; a calibrated lamp's fades.
+    gl.uniform1f(u.uGrazeLiftFall, g?.lamp ? 2 : 0);
     gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
     gl.uniform1f(u.uGrazeOpacity, gOn ? g.opacity : 0);
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading

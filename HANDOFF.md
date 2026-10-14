@@ -5,8 +5,8 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) **zoom up to 1000%** (steps 6×, 8×, 10×), after
-  phone pinch zoom + Full screen view
+- Last code change on `main`: (2026-10-14) **Shadow lift** slider (each light + Graze light)
+- Before that: zoom up to 1000%; phone pinch zoom + Full screen view
 - Before that: merge of `claude/compassionate-bardeen-wsnho5` (2026-10-14) —
   measured relief saved in projects and test bundles (`src/reliefsave.js`)
 - Earlier: merge of `claude/laughing-johnson-a03sam` (2026-10-14) —
@@ -68,6 +68,17 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): user bundle `Untitled_painting-test-2026-10-141331` (iPhone,
+  one light from 135° at 22°, graze 1° from 119.5° at opacity 0.75, one-photo relief,
+  empty note; their message: upper-left light barely changes the dark recesses vs
+  Before). Reproduced to 1.0/255. Darkest 10% of the photo got DARKER relit (44.5 →
+  33.5 of 255): relighting multiplies the photo's albedo, so dark paint/baked shadows
+  stay dark. Added **Shadow lift** (`l.lift`, `graze.lift`, 0..1, default 0 = no-op):
+  shade.js `liftShadows` on sRGB, y + 5 s y (1-y)^6 via luma ratio, s = Σ lift ×
+  spot × `poolShare` (1 at the painting point nearest the light, falls with the
+  light's falloff); graze: even unless a calibrated lamp. On the bundle at 50%/100%:
+  darkest 10% 33.5 → 54 / 75, brightest 10% 94 → 106 / 118. Test in browser.cjs.
+  Ask the user how 50% looks on their painting (100% washes out and heats the reds).
 - 10-14 (pushed to `main`): view zoom max 400% → 1000% (`ZOOM_MAX` 10, steps add 6/8/10).
   Sharp zoom still caps at the photo's own pixels, so past native size it just magnifies.
 - 10-14 (pushed to `main`): user asked for iPhone pinch zoom and a full-screen toggle.
