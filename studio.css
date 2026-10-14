@@ -128,6 +128,7 @@ body.batchOpen { overflow:hidden; }
 .bvStars button.lit { color:#e5b45a; }
 .bvPick { display:flex; align-items:center; gap:6px; font-size:14px; }
 .bvPick input { width:20px; height:20px; }
+.bvNote { width:100%; box-sizing:border-box; font-size:16px; padding:8px 10px; margin:2px 0 4px; }  /* 16px: iOS zooms smaller fields */
 .bvNav { display:flex; gap:8px; padding:6px 0; }
 .bvNav button { padding:11px 14px; font-size:15px; font-weight:600; }
 .bvHold { flex:1; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }

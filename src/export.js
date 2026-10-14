@@ -197,8 +197,9 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
  */
 export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const source = job.mode === 'photometric' ? job.sources[0] : job.source;
-  const W = source.width || source.naturalWidth;
-  const H = source.height || source.naturalHeight;
+  // job.width / height render it smaller than the photo (tiles resample the source).
+  const W = job.width || source.width || source.naturalWidth;
+  const H = job.height || source.height || source.naturalHeight;
   const out = document.createElement('canvas');
   out.width = W; out.height = H;
   const octx = out.getContext('2d', { willReadFrequently: false });

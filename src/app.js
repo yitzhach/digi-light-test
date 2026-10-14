@@ -1141,6 +1141,12 @@ async function boot() {
     },
     sample: () => currentSample,
     exportFull: () => exportImage({ mode: 'single', source: fullSource }, null, { viewMode: 0 }),
+    // The relit painting whole at outW px wide (at most the photo's own width), drawn from
+    // the full photo like the sharp zoom, for previews that stay sharp when zoomed.
+    renderAt: (outW) => {
+      const width = Math.max(1, Math.min(fullW, Math.round(outW))), height = Math.max(1, Math.round(fullH * width / fullW));
+      return exportImage({ mode: 'single', source: fullSource, width, height }, null, { viewMode: 0 });
+    },
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
     openSource: async image => {
@@ -1295,7 +1301,7 @@ function wireExport() {
  */
 async function exportImage(job, onProgress, extra) {
   const src = job.mode === 'photometric' ? job.sources[0] : job.source;
-  const st = Object.assign(renderState(src.width || src.naturalWidth), extra);
+  const st = Object.assign(renderState(job.width || src.width || src.naturalWidth), extra);
   state.exporting = true;
   cancelSharp();
   try {

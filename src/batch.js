@@ -1,11 +1,14 @@
 // Batch preview: render 2-10 looks of the painting as small WebP previews, review them
 // in a full-screen viewer (swipe, pinch zoom that stays on the same spot, hold for the
-// original, 1-5 stars), then export only the chosen ones at full resolution.
+// original, 1-5 stars, a note), then export only the chosen ones at full resolution.
+// Save ratings downloads the stars and notes as JSON, to hand to Claude for the next round.
 // Looks come from the built-in lighting or graze presets, the user's saved presets, or
 // steps of one setting (the way the automated test rounds vary one thing at a time).
 import { makeZip } from './testbundle.js';
 
 const MIN = 2, MAX = 10;
+// Sharp previews are drawn from the full photo, long side capped here (memory on phones).
+const SHARP_MAX = 3000;
 const pad = (n) => String(n).padStart(2, '0');
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9+-]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 const fmtNum = (v, d) => (Math.round(v * 10 ** d) / 10 ** d).toString().replace('-', '−');
@@ -35,9 +38,10 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
       <label>Looks <select id="batchCount">${Array.from({ length: MAX - MIN + 1 }, (_, i) => `<option${i + MIN === 5 ? ' selected' : ''}>${i + MIN}</option>`).join('')}</select></label></div>
     </div>
     <div id="batchPick" class="batchPick" hidden></div>
+    <label class="selectRow">Detail<select id="batchDetail"><option value="sharp" selected>Sharp zoom (from the full photo, slower)</option><option value="fast">Screen size (fast)</option></select></label>
     <label class="checkRow"><input id="batchCurrent" type="checkbox" checked> Include the current look as #1</label>
     <div class="views"><button id="batchRun">Render previews</button><button id="batchOpen" disabled>Review</button></div>
-    <p class="note" id="batchStatus">Previews are WebP at the preview's size, so they render fast and stay small.</p></div>`;
+    <p class="note" id="batchStatus">Sharp previews are drawn from the full photo (up to ${SHARP_MAX} px), so zooming in stays crisp down to the photo's own pixels. Screen size is quicker but blurs when zoomed.</p></div>`;
   after.after(box);
 
   const sweepOf = () => SWEEPS.find((s) => s[0] === $('batchKey').value);
@@ -113,21 +117,30 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     let list;
     try { list = await looks(); } catch (e) { $('batchStatus').textContent = e.message; return; }
     running = true; setBatching(true); $('batchRun').disabled = true;
-    const base = snapshot(), items = [];
+    const base = snapshot(), items = [], src = api.source();
+    const SW = src.width || src.naturalWidth, SH = src.height || src.naturalHeight;
+    // Sharp: the full photo's width (long side at most SHARP_MAX); nothing gained if that is no bigger than the preview.
+    let outW = Math.round(SW * Math.min(1, SHARP_MAX / Math.max(SW, SH)));
+    const sharp = $('batchDetail').value === 'sharp' && outW > api.canvas.width * 1.05;
+    if (!sharp) outW = api.canvas.width;
+    const outH = sharp ? Math.max(1, Math.round(SH * outW / SW)) : api.canvas.height;
     try {
-      const original = await encode(grab(4));
+      let orig;
+      if (sharp) { orig = document.createElement('canvas'); orig.width = outW; orig.height = outH; orig.getContext('2d').drawImage(src, 0, 0, outW, outH); } else orig = grab(4);
+      const original = await encode(orig);
       for (const [i, look] of list.entries()) {
         $('batchStatus').textContent = `Rendering ${i + 1} of ${list.length}: ${look.name}…`;
         restore(clone(base)); look.apply(state); api.dirty();
         const settings = snapshot();
         await frame();
-        const blob = await encode(grab(0));
-        items.push({ num: i + 1, name: look.name, settings, blob, url: URL.createObjectURL(blob), stars: 0, pick: false });
+        const blob = await encode(sharp ? await api.renderAt(outW) : grab(0));
+        items.push({ num: i + 1, name: look.name, settings, blob, url: URL.createObjectURL(blob), stars: 0, note: '', pick: false });
       }
       if (batch) for (const it of [...batch.items, batch.original]) URL.revokeObjectURL(it.url);
-      batch = { items, base, original: { blob: original, url: URL.createObjectURL(original) }, w: api.canvas.width, h: api.canvas.height, type: items[0].blob.type };
+      batch = { items, base, original: { blob: original, url: URL.createObjectURL(original) }, w: outW, h: outH, type: items[0].blob.type,
+        made: new Date(), looksFrom: describe(), detail: sharp ? 'sharp' : 'screen' };
       const kb = items.reduce((s, it) => s + it.blob.size, 0) / 1024;
-      $('batchStatus').textContent = `${items.length} previews, ${Math.round(kb)} KB in all (${batch.type === 'image/webp' ? 'WebP' : 'JPEG'}). Rate them, then export the ones you like.`;
+      $('batchStatus').textContent = `${items.length} previews at ${outW}×${outH}, ${Math.round(kb)} KB in all (${batch.type === 'image/webp' ? 'WebP' : 'JPEG'}). Rate them, then export the ones you like.`;
       $('batchOpen').disabled = false;
     } catch (e) { $('batchStatus').textContent = 'Batch failed: ' + e.message; }
     finally {
@@ -144,7 +157,49 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
-  const ratings = () => batch.items.map(({ num, name, stars, pick, settings }) => ({ num, name, stars, selected: pick, settings }));
+  // What the looks were made from, in words, for the ratings file.
+  function describe() {
+    const src = $('batchSource').value;
+    if (src !== 'sweep') return { from: $('batchSource').selectedOptions[0].textContent };
+    const [, label] = sweepOf();
+    return { from: 'Steps of one setting', setting: label, fromValue: +$('batchFrom').value, toValue: +$('batchTo').value, count: +$('batchCount').value };
+  }
+  // Settings that differ from the base look; objects (graze, lamp) one level down.
+  function changed(base, s) {
+    const out = {}, same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    for (const k of Object.keys(s)) {
+      if (same(base[k], s[k])) continue;
+      const a = base[k], b = s[k];
+      if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(b)) {
+        out[k] = {}; for (const j of Object.keys(b)) if (!same(a[j], b[j])) out[k][j] = b[j];
+      } else out[k] = b;
+    }
+    return out;
+  }
+  // Everything Claude needs to read a round: the painting, the stars, the notes, and each look's settings.
+  function ratings() {
+    const src = api.source(), m = api.measured?.get?.();
+    return {
+      format: 'digilight-ratings', version: 1, saved: new Date().toISOString(), made: batch.made.toISOString(), site: location.host,
+      painting: $('projectName')?.value.trim() || 'Untitled painting', sample: api.sample?.() || null,
+      photo: { w: src?.width || src?.naturalWidth || 0, h: src?.height || src?.naturalHeight || 0 },
+      relief: m?.on ? 'measured' : 'one-photo', previews: { w: batch.w, h: batch.h, detail: batch.detail },
+      looksFrom: batch.looksFrom,
+      looks: batch.items.map(({ num, name, stars, note, pick, settings }) => ({ num, name, stars, note: note || '', selected: pick, changed: changed(batch.base, settings) })),
+      base: batch.base,
+      settings: Object.fromEntries(batch.items.map((it) => [pad(it.num), it.settings])),
+    };
+  }
+  const ratingsName = () => {
+    const d = new Date(), t = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    return `digilight-ratings-${slug($('projectName')?.value.trim() || 'painting') || 'painting'}-${t}.json`;
+  };
+  function saveRatings(say) {
+    const name = ratingsName();
+    download(new Blob([JSON.stringify(ratings(), null, 1)], { type: 'application/json' }), name);
+    const n = batch.items.filter((it) => it.stars || it.note).length;
+    say(`Saved ${name} (${n} of ${batch.items.length} looks rated or noted). Attach that file in your Claude chat.`);
+  }
   async function exportPicked(say) {
     const picked = batch.items.filter((it) => it.pick);
     if (!picked.length) { say('Tick “Export full size” on the looks you want first.'); return; }
@@ -178,7 +233,7 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     const ext = batch.type === 'image/webp' ? 'webp' : 'jpg';
     const files = [{ name: `00-original.${ext}`, blob: batch.original.blob }, ...batch.items.map((it) => ({ name: `${pad(it.num)}-${slug(it.name)}.${ext}`, blob: it.blob }))];
     const data = await Promise.all(files.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.blob.arrayBuffer()) })));
-    data.push({ name: 'ratings.json', data: new TextEncoder().encode(JSON.stringify(ratings(), null, 1)) });
+    data.push({ name: 'ratings.json', data: new TextEncoder().encode(JSON.stringify(ratings(), null, 1)) });  // same as Save ratings
     download(makeZip(data), `digilight-batch-${batch.items.length}-previews.zip`);
     say('Previews downloaded, with your ratings in ratings.json.');
   }
@@ -187,8 +242,8 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     $('batchStatus').textContent = `Applied “${it.name}”. Undo goes back.`;
   }
 
-  const viewer = makeViewer({ get batch() { return batch; }, exportPicked, zipPreviews, applyLook });
-  window.__batch = { run, get batch() { return batch; }, viewer, exportPicked, zipPreviews, applyLook, looks };
+  const viewer = makeViewer({ get batch() { return batch; }, exportPicked, zipPreviews, applyLook, saveRatings });
+  window.__batch = { run, get batch() { return batch; }, viewer, exportPicked, zipPreviews, applyLook, looks, ratings, saveRatings };
   return { pickList };
 }
 
@@ -201,9 +256,10 @@ function makeViewer(ctx) {
       <div class="bvZoomCtl"><button id="bvOut" aria-label="Zoom out">−</button><button id="bvFit">Fit</button><button id="bvIn" aria-label="Zoom in">+</button></div></div>
     <div class="bvRate"><div class="bvStars" id="bvStars" role="group" aria-label="Stars">${[1, 2, 3, 4, 5].map((k) => `<button data-k="${k}" aria-label="${k} star${k > 1 ? 's' : ''}">★</button>`).join('')}</div>
       <label class="bvPick"><input type="checkbox" id="bvPick"> Export full size</label></div>
+    <input id="bvNote" class="bvNote" type="text" placeholder="Note on this look (what's right or wrong)" aria-label="Note on this look" autocomplete="off">
     <div class="bvNav"><button id="bvPrev">‹ Prev</button><button id="bvHold" class="bvHold">Hold: original</button><button id="bvNext">Next ›</button></div>
     <div class="bvDots" id="bvDots"></div>
-    <div class="bvActions"><button id="bvApply">Use this look</button><button id="bvExport" class="primary">Export picked</button><button id="bvZip">Download previews</button></div>
+    <div class="bvActions"><button id="bvApply">Use this look</button><button id="bvExport" class="primary">Export picked</button><button id="bvRatings">Save ratings (.json)</button><button id="bvZip">Download previews</button></div>
     <p class="bvStatus" id="bvStatus">Swipe or Prev / Next. Pinch or double-tap to zoom; Prev / Next keep the same spot.</p>`;
   document.body.append(el);
   const $ = (id) => el.querySelector('#' + id), stage = $('bvStage'), img = $('bvImg');
@@ -264,6 +320,7 @@ function makeViewer(ctx) {
     $('bvCount').textContent = `${pad(it.num)} / ${list.length}`; $('bvName').textContent = it.name;
     el.querySelectorAll('#bvStars button').forEach((b) => b.classList.toggle('lit', +b.dataset.k <= it.stars));
     $('bvPick').checked = it.pick;
+    if ($('bvNote').value !== (it.note || '')) $('bvNote').value = it.note || '';
     $('bvPrev').disabled = cur === 0; $('bvNext').disabled = cur === list.length - 1;
     const dots = $('bvDots'); dots.replaceChildren();
     for (const [i, x] of list.entries()) {
@@ -281,6 +338,8 @@ function makeViewer(ctx) {
     if (!it.pickSet) it.pick = it.stars >= 4;
     paint();
   });
+  $('bvNote').addEventListener('input', () => { items()[cur].note = $('bvNote').value; });
+  $('bvNote').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('bvNote').blur(); });
   $('bvPick').onchange = () => { const it = items()[cur]; it.pick = $('bvPick').checked; it.pickSet = true; paint(); };
   $('bvPrev').onclick = () => go(cur - 1); $('bvNext').onclick = () => go(cur + 1);
   const hold = $('bvHold');
@@ -291,6 +350,7 @@ function makeViewer(ctx) {
   $('bvApply').onclick = () => { ctx.applyLook(items()[cur]); close(); };
   $('bvExport').onclick = () => ctx.exportPicked(say);
   $('bvZip').onclick = () => ctx.zipPreviews(say);
+  $('bvRatings').onclick = () => ctx.saveRatings(say);
   el.addEventListener('keydown', (e) => {
     if (e.target.matches('input[type=number],input[type=text]')) return;
     if (e.key === 'ArrowRight') go(cur + 1); else if (e.key === 'ArrowLeft') go(cur - 1);

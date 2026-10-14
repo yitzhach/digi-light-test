@@ -350,6 +350,14 @@ const items=await page.evaluate(()=>__batch.batch.items.map(i=>({name:i.name,typ
 assert.equal(items.length,4);assert.deepEqual(items.map(i=>i.exp),[items[0].exp,-1,0,1]);assert.ok(items.every(i=>i.type==='image/webp'&&i.size>1000),JSON.stringify(items));assert.notEqual(items[1].size,items[3].size);
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before);assert.equal(await page.evaluate(()=>__studio.history.index),hi);
 await page.click('#bvStars button[data-k="5"]');await page.click('#bvNext');await page.click('#bvStars button[data-k="2"]');assert.equal(await page.textContent('#bvExport'),'Export picked (1)');
+{const d=await page.evaluate(()=>{const b=__batch.batch,c=__bench.canvas;return {detail:document.querySelector('#batchDetail').value,w:b.w,h:b.h,cw:c.width,ch:c.height};});
+assert.equal(d.detail,'sharp');assert.ok(d.w>=d.cw&&Math.abs(d.w/d.h-d.cw/d.ch)<0.01,JSON.stringify(d));
+await page.fill('#bvNote','too dark on the left');await page.click('#bvPrev');assert.equal(await page.inputValue('#bvNote'),'');await page.click('#bvNext');assert.equal(await page.inputValue('#bvNote'),'too dark on the left');
+await page.focus('#bvNote');await page.keyboard.press('End');await page.keyboard.press('4');assert.equal(await page.evaluate(()=>__batch.batch.items[1].stars),2);
+const [rd]=await Promise.all([page.waitForEvent('download'),page.click('#bvRatings')]);assert.match(rd.suggestedFilename(),/^digilight-ratings-.+-\d{8}-\d{4}\.json$/);
+const rj=JSON.parse(require('fs').readFileSync(await rd.path(),'utf8'));assert.equal(rj.format,'digilight-ratings');assert.equal(rj.looks.length,4);
+assert.deepEqual(rj.looks.slice(0,2).map(l=>[l.stars,l.note,l.selected]),[[5,'',true],[2,'too dark on the left4',false]]);
+assert.deepEqual(rj.looks[1].changed,{exposure:-1});assert.equal(rj.looksFrom.setting,'Exposure');assert.equal(rj.settings['02'].exposure,-1);assert.equal(rj.previews.w,d.w);}
 const sb=await page.locator('#bvStage').boundingBox();await page.mouse.move(sb.x+sb.width*.3,sb.y+sb.height*.4);await page.mouse.wheel(0,-500);const z1=await page.evaluate(()=>__batch.viewer.zoom);assert.ok(z1.z>2);
 await page.click('#bvNext');assert.deepEqual(await page.evaluate(()=>__batch.viewer.zoom),z1);
 const [dl]=await Promise.all([page.waitForEvent('download',{timeout:120000}),page.click('#bvExport')]);assert.match(dl.suggestedFilename(),/^01-current-look-\d+x\d+\.(png|jpg)$/);
@@ -359,7 +367,7 @@ await page.click('#bvPrev');await page.click('#bvApply');assert.equal(await sett
 {await page.evaluate(()=>Object.assign(__bench.state.lights[__bench.state.selected],{kelvin:2700,power:3.3,z:0.21,lift:0.4}));await page.getByRole('button',{name:'+ Light',exact:true}).click();await settle();
 const L=await setting('lights'),n=L.at(-1);
 const src=L.find(l=>l.kelvin===2700&&l!==n);assert.ok(src&&n.kelvin===2700&&n.power===3.3&&n.z===0.21&&n.lift===0.4&&(n.x!==src.x||n.y!==src.y),JSON.stringify(n));await page.click('#undo');await settle();}
-console.log('PASS batch preview: WebP looks, settings and history restored, zoom kept, picked export saved as a project, use this look; + Light starts from the selected light');}
+console.log('PASS batch preview: WebP looks, sharp previews, notes and Save ratings JSON, settings and history restored, zoom kept, picked export saved as a project, use this look; + Light starts from the selected light');}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));

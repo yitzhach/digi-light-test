@@ -76,7 +76,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-14
-- Last code change on `main`: (2026-10-14) batch looks saved as projects; + Light copies the selected light
+- Last code change on `main`: (2026-10-14) batch viewer: per-look notes, **Save ratings (.json)**, sharp previews
+- Before that: (2026-10-14) batch looks saved as projects; + Light copies the selected light
 - Before that: **Batch preview · compare looks** (`src/batch.js`)
 - Before that: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
   sheet + scores vs lamp photos) for the automated test rounds below
@@ -145,6 +146,18 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (pushed to `main`): user asked for a way to hand their in-app ratings to Claude, and
+  said a 4.1× zoomed preview was blurry. Batch viewer now has a **note** field per look and
+  **Save ratings (.json)** → `digilight-ratings-<painting>-YYYYMMDD-HHMM.json`
+  {format 'digilight-ratings', painting, sample, photo w/h, relief measured|one-photo,
+  previews {w,h,detail}, looksFrom (sweep setting/range), looks [{num, name, stars, note,
+  selected, changed (diff vs base)}], base, settings by look}; the previews zip's
+  ratings.json is the same. **The user uploads that file in chat: read `looks` first.**
+  New **Detail** select (default Sharp): each look rendered with `api.renderAt(outW)`
+  (app.js; exportImage with job.width/height, export.js honours them) from the full photo,
+  long side ≤ `SHARP_MAX` 3000. On the painting sample: 1932×2576, ~2 MB WebP a look,
+  ~4× slower than Screen size in software GL; finer grain and ~6% darker than the
+  1400 px preview (it matches Export full size; the old previews did not).
 - 10-14 (pushed to `main`): read the user's PDF (Fontana et al., conoscopic holography on
   Leonardo/Perugino panels) → `docs/conoscopic-paper-improvements.md`: reference feature
   sizes (weave 85–130 µm, retouch 60–90 µm, tool grooves 0.6–1.5 mm apart / ≤30 µm deep)
@@ -348,6 +361,8 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+-2. User's in-app depth sweeps: 8 mm best (★3) at screen size; ask them to redo it with
+   Sharp previews (looks differ) and Save ratings, and to sweep 7–10 mm.
 -1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;
    if it holds, make Measure relief set depth ≈ 1.5× the spread.
 0d. Ideas from `docs/conoscopic-paper-improvements.md` (ask the user which first;
