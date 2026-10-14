@@ -36,7 +36,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   (local matches the photo) · 10 one-photo, room 0.25 + lift +50%: 0.505 / 0.701 / 0.370.
   Room light is the main lever for both reliefs; lift is a secondary taste control.
 - Round 1 (10-14, `tools/batches/round-01.json`, measured relief, graze opacity 1,
-  shown to the user, picks PENDING): room 0.15/0.25/0.35 × lift −30/0/+50% on lamps
+  shown to the user on a swipe page with star ratings): room 0.15/0.25/0.35 × lift −30/0/+50% on lamps
   1–3. vsLampPhoto depth / local / logRMS (photo depth 0.502/0.547/0.458, local
   0.626/0.619/0.538 for lamps 1/2/3): 01 L1 0.15 off 0.446/0.708/0.270 · 02 L1 0.25
   off 0.484/0.731/0.264 · 03 L1 0.35 off 0.512/0.746/0.271 · 04 L1 0.25 +50
@@ -48,12 +48,29 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   −lift barely helps) → round 2 idea: fix room 0.25, vary texture depth / stroke
   contrast instead. Renders are redder/more saturated than the photos and lack the
   beam pool (known, Next up 0b).
+  User's stars (no notes; said Claude's read was accurate, and the later lamp 3 renders
+  had "nice shadow shifting, very realistic"): 09 ★4; 02, 05, 07, 08, 10 ★3; 01, 03,
+  04, 06 unrated. → Lamp 3 at room 0.25 is the favourite.
+- Round 2 (10-14, `tools/batches/round-02.json`, measured relief, room 0.25, opacity 1,
+  lift off unless noted; sent, picks PENDING): texture depth (measured 1.51 mm).
+  depth / local / logRMS: 01 L3 1.5 mm 0.463/0.674/0.300 · 02 L3 2.0 0.431/0.605/0.297
+  · 03 L3 2.5 0.398/0.530/0.313 (local = photo 0.538) · 04 L3 3.0 0.374/0.473/0.342 ·
+  05 L3 4.0 0.360/0.418/0.404 (crusty by eye) · 06 L3 2.5 lift −30 0.393/0.522/0.316 ·
+  07 L1 2.5 0.454/0.649/0.262 (best logRMS of both rounds) · 08 L1 3.0
+  0.431/0.599/0.280 · 09 L2 2.5 0.459/0.574/0.292 · 10 L2 3.0 0.429/0.513/0.329.
+  Taught: ~1.5× the measured depth (2–2.5 mm) closes the fine-shadow gap (matches the
+  "renders show ~60% of the photo's contrast" note); it overshoots overall darkness, so
+  room light may need to go up with it. Claude's picks: 03, 07, 02. Candidate default:
+  Measure relief sets Texture depth ≈ 1.5× the 2–98% spread. Review pages: swipe viewer
+  artifacts (round 1 KosdnNmiC9zoeM23RFZXrf, round 2 VDxrYW7MHAhdHfpsis5pEq) keep stars
+  in their db collection `ratings` (docs rNN-MM {round, render, stars, why}); read with
+  ArtifactData list.
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
 - Last updated: 2026-10-14
-- Last push to `main`: (2026-10-14) round 1 spec + log (no code change)
+- Last push to `main`: (2026-10-14) round 1–2 specs + log (no code change)
 - Last code change on `main`: (2026-10-14) `tools/render-batch.cjs` (batch renders + contact
   sheet + scores vs lamp photos) for the automated test rounds below
 - Before that: Shadow lift is two-way: −100..+100%, centre = off
@@ -121,8 +138,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
-- 10-14 (pushed to `main`): test round 1 rendered and sent (see Test rounds); waiting
-  on the user's picks before round 2.
+- 10-14 (pushed to `main`): test rounds 1 and 2 rendered and sent on swipe/star pages
+  (see Test rounds); waiting on the user's round 2 stars.
 - 10-14 (pushed to `main`): Shadow lift vs the real DSC_8382 lamp photos. Method
   (scratch script, not in repo): sample + its lamp shots, Measure relief, for each lamp
   Light like this, graze opacity 1, render at lift −1..+1; compare with the aligned
@@ -300,7 +317,8 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
--1. Log the user's round 1 picks, then round 2 (see Test rounds).
+-1. Read round 2 stars (ArtifactData), then round 3: depth 2–2.5 mm × room 0.25–0.35;
+   if it holds, make Measure relief set depth ≈ 1.5× the spread.
 0c. Light like this / Calibrate: set the graze room fill from the lamp measurement's
    room share (0.06 now; ~0.25 matched the photos' shadow depth best, see 10-14).
    One-photo graze shadows are far too deep vs real photos (depth 0.13 vs 0.50).
