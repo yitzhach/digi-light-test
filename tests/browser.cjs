@@ -360,6 +360,30 @@ console.log('PASS DSC_8382 sample with its lamp photos');}
  await page.evaluate(()=>{__bench.state.lights[0].lift=-.4;});const v=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:__studio.snapshot()}));assert.equal(v.lights[0].lift,-.4);assert.equal(v.graze.lift,.3);
  await page.evaluate(()=>{__bench.state.lights[0].lift=0;__bench.state.graze.lift=0;});await settle();
  console.log('PASS shadow lift: no-op at 0, strongest near the light, negative deepens, saved with the light and graze');}
+// Relief view and Relief only / Colour over relief (doc item 3): the graze light on an even
+// grey, with no colour; the view works with the graze light hidden and ignores layers;
+// Colour over relief adds one Overlay layer of the photo, Relief only takes it away.
+{const snap=await page.evaluate(()=>JSON.stringify(__studio.snapshot()));
+const look=()=>page.evaluate(()=>{__bench.render();const c=__bench.canvas,x=document.createElement('canvas');x.width=c.width;x.height=c.height;const g=x.getContext('2d');g.drawImage(c,0,0);const d=g.getImageData(0,0,c.width,c.height).data;
+  let ch=0,y=0;for(let i=0;i<d.length;i+=4){ch+=Math.max(d[i],d[i+1],d[i+2])-Math.min(d[i],d[i+1],d[i+2]);y+=0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];}return {url:c.toDataURL(),chroma:ch/(d.length/4),y:y/(d.length/4)};});
+await page.evaluate(()=>{const s=__bench.state;s.graze.enabled=false;s.layers=[];s.viewMode=0;});const relit=await look();
+await page.locator('#views button',{hasText:/^Relief$/}).click();await settle();assert.equal(await setting('viewMode'),7);
+const rv=await look();assert.notEqual(rv.url,relit.url);assert.ok(rv.chroma<0.35*relit.chroma&&rv.y>60&&rv.y<200,'relief view is grey '+JSON.stringify([relit.chroma,rv.chroma,rv.y]));
+await page.evaluate(()=>{__bench.state.graze.enabled=true;__bench.state.layers=[{mode:'multiply',source:'original',opacity:1,enabled:true}];});assert.equal((await look()).url,rv.url,'relief view: graze on or off, layers ignored');
+await page.evaluate(()=>{__bench.state.layers=[];__bench.state.viewMode=0;});await settle();
+await page.locator('#grazeSection').evaluate(e=>e.open=true);
+await page.click('#grazeReliefOnly');await settle();let g=await setting('graze');assert.ok(g.enabled&&g.grey===1&&g.opacity===1,JSON.stringify(g));
+const ro=await look();assert.ok(ro.chroma<0.35*relit.chroma,'relief only is grey');
+await page.click('#grazeColourOver');await settle();await page.click('#grazeColourOver');await settle();
+let L=await setting('layers');assert.equal(L.length,1);assert.deepEqual(L[0],{mode:'overlay',source:'original',opacity:1,enabled:true});
+const co=await look();assert.ok(co.chroma>2*ro.chroma,'colour over relief has colour '+JSON.stringify([ro.chroma,co.chroma]));
+await page.click('#grazeReliefOnly');await settle();assert.equal((await setting('layers')).length,0);
+await page.click('#undo');await settle();assert.equal((await setting('layers')).length,1);
+await page.click('#grazeGrey');await settle();assert.equal((await setting('graze')).grey,0);assert.ok((await look()).chroma>co.chroma*0.5);await page.click('#undo');await settle();assert.equal((await setting('graze')).grey,1);
+const v=await page.evaluate(()=>__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:__studio.snapshot()}).graze.grey);assert.equal(v,1);
+const bad=await page.evaluate(()=>{const s=__studio.snapshot();s.graze.grey=2;try{__studio.validate({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:s});return false;}catch{return true;}});assert.equal(bad,true);
+await page.evaluate(s=>{__studio.restore(JSON.parse(s));__studio.checkpoint();},snap);await settle();
+console.log('PASS relief view, Relief only and Colour over relief',JSON.stringify({relitChroma:+relit.chroma.toFixed(1),reliefChroma:+rv.chroma.toFixed(1),colourOverChroma:+co.chroma.toFixed(1),reliefY:+rv.y.toFixed(0)}));}
 // Batch preview: steps of one setting render as WebP previews; the live settings and undo
 // history come back unchanged; zoom stays put across looks; picked looks export full size.
 {await page.getByText('Batch preview · compare looks').click();await settle();await page.selectOption('#batchKey','exp');await page.fill('#batchFrom','-1');await page.fill('#batchTo','1');await page.selectOption('#batchCount','3');

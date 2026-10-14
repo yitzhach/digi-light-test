@@ -746,6 +746,9 @@ const VIEWS = [
   ['Height', 2, 'Reconstructed relief after integration along the azimuth.'],
   ['Albedo', 3, 'Base colour with the baked fine-scale shading divided out.'],
   ['Original', 4, 'The untouched source, for before/after.'],
+  ['Relief', 7, 'The relief alone: the graze light (its direction and settings, even while hidden) on an even '
+    + 'grey surface, the way conservators use raking-light images. It shows what the colour hides, and how clean the '
+    + 'relief is: a one-photo estimate shows its grain here.'],
   ['Shadows', 6, 'Where the lights cast shadows across the relief: blue is shadow. Raise the texture '
     + 'depth or lower a light\'s angle and they lengthen; a diffused light softens their edges.'],
 ];
@@ -802,7 +805,8 @@ function updateDerived(workingW, st = state) {
   // at half maximum), so its blur in pixels follows the working width and a
   // full-resolution export smooths exactly as much of the painting as the preview.
   const g = st.graze;
-  st.grazeSigmaPx = st.mode === 'single' && g && g.enabled && g.opacity > 0
+  // The Relief view (7) shows the graze light even while it is hidden.
+  st.grazeSigmaPx = st.mode === 'single' && g && (st.viewMode === 7 || (g.enabled && g.opacity > 0))
     ? Math.max(0, g.detail ?? 0) * W / 2.355 : 0;
   // Shadow smoothing (Fine-tune) is a feature size in painting widths too, so
   // preview and export drop the same grain from the main lights' shadows.
@@ -811,7 +815,7 @@ function updateDerived(workingW, st = state) {
   // light a degree off the wall throws shadows far longer than any of theirs. Its
   // Shadow length setting takes that share of the tallest relief over tan(elevation).
   st.grazeReach = st.shadowDist;
-  if (st.calibrated && g && g.enabled && g.opacity > 0 && g.reach > 0) {
+  if (st.calibrated && g && (st.viewMode === 7 || (g.enabled && g.opacity > 0)) && g.reach > 0) {
     const rise = physicalDepth(st) * st.reliefAmount * 1.5;
     // A calibrated lamp is lowest to the wall at the corner farthest from it.
     const asp = imgH / Math.max(1, imgW);

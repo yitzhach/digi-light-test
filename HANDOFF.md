@@ -89,7 +89,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 - **Branch `feature/metrology`** (not merged; the user says when to merge into `main`):
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
-  (2) item 3 relief-only raking view + colour-over-relief preset; (3) items 1+2+19
+  (2) item 3 relief-only raking view + colour-over-relief preset — DONE on the branch; (3) items 1+2+19
   profile probe + calibrated colour height map + ISO stats; (4) items 14–16 stroke
   direction / Best raking direction, overexposure warning, glint mask. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
@@ -165,6 +165,19 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (branch `feature/metrology`): **Relief view + Relief only / Colour over relief**
+  (doc item 3). `graze.grey` 0..1 (validated, in history/projects): shade.js uses an
+  even grey albedo `GRAZE_GREY` 0.3 linear under the graze light (flat paint lands near
+  mid-grey: DSC_8382 lamp 3 median 128/255) and turns the graze result to its luma (no
+  5000 K / room tint). New view **Relief** (`viewMode` 7, app.js VIEWS): graze light on
+  grey at 100%, no layers, even while the graze light is hidden (app.js
+  `updateDerived` builds the graze relief and reach for view 7 too). Graze section
+  buttons: **Grey surface** (toggle), **Relief only** (grey, opacity 1, removes the
+  colour layer), **Colour over relief** (same + one Original layer in Overlay at 100%:
+  Overlay on a mid-grey relief gives back the colour on flat paint, darker in shadows).
+  These export (view 7 itself does not; exports are always view 0). On DSC_8382 the
+  one-photo relief view shows its grain and the figure's outline as fake relief; the
+  measured one shows the strokes. Test in browser.cjs.
 - 10-14 (branch `feature/metrology`): **texture contrast score + Fit depth to photos**
   (doc items 12–13). `src/texscore.js`: `textureScore(rgba, w, h, mmPerPx)` = RL-Sq
   style: Rec.709 luma of the encoded values ÷ Gaussian blur of `BIG_MM` 2.5 mm (in mm,

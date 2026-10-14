@@ -17,6 +17,8 @@ import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_
 import { kelvinToLinearRGB } from './kelvin.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
+// Linear grey the Relief view and Grey surface give the paint under the graze light.
+export const GRAZE_GREY = (0.3).toFixed(3);
 
 const B = Object.fromEntries(blendModes.map(([k], i) => [k, i]));
 
@@ -67,7 +69,7 @@ uniform float uHeightScale;
 uniform float uShadow;
 uniform float uAO;
 uniform float uExposure;
-uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original, 6 shadows
+uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original, 6 shadows, 7 relief (graze on grey)
 
 uniform int   uLayerCount;
 uniform int   uLayerMode[${MAX_LAYERS}];
@@ -90,6 +92,7 @@ uniform float uGrazeFine;       // share of the finer relief put back into its s
 uniform float uGrazeFill;       // soft room light under the graze light, so its shadows read as shadows
 uniform float uGrazeLift;       // Shadow lift under the graze light
 uniform float uGrazeLiftFall;   // its falloff with distance: 2 for a calibrated lamp, 0 (even) otherwise
+uniform float uGrazeGrey;       // 1 = the graze light falls on an even grey instead of the paint's colour
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -349,8 +352,12 @@ void main() {
     vec3 gN = normalize(mix(vec3(0.0, 0.0, 1.0), normalize(vec3(gxy * mask, gRaw.z)), uReliefAmount));
     float gNoV = max(dot(gN, V), 1e-4);
     float gAo = 1.0 - uAO * clamp(-gnh.a * mask * uReliefAmount * uAOScale, 0.0, 1.0);
+    // Relief only: an even grey surface, so only the relief shows (the conservator's
+    // raking-light image, Fontana et al.); GRAZE_GREY lands flat paint near mid-grey.
+    vec3 gAlb = mix(albedo, vec3(${GRAZE_GREY}), uGrazeGrey);
+    vec3 gF0 = mix(vec3(0.04 * uSpecular), clamp(gAlb, 0.0, 1.0), uMetallic);
     // Shadows always full strength and crisp here: that is the point of grazing light.
-    vec3 g = albedo * uAmbientColor * uGrazeFill * gAo;
+    vec3 g = gAlb * uAmbientColor * uGrazeFill * gAo;
     vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
     float dist = max(length(Lv), 1e-4);
     vec3 L = Lv / dist;
@@ -360,11 +367,13 @@ void main() {
     if (NoLw > 0.0) {
       float aSrc = min(1.0, a + uGrazeSize / (2.0 * dist));
       float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
-      g += brdf(gN, V, L, gNoV, NoLw, albedo, f0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
+      g += brdf(gN, V, L, gNoV, NoLw, gAlb, gF0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
     g *= exp2(uExposure);
     vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
     vec3 gs = liftShadows(clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeLift * poolShare(uGrazePos, dist, uGrazeLiftFall));
+    // On grey the light's and the room's tint go too: a neutral image, like a raking-light photograph in black and white.
+    gs = mix(gs, vec3(dot(gs, vec3(0.2126, 0.7152, 0.0722))), uGrazeGrey);
     relit = mix(relit, gs, uGrazeOpacity);
   }
   vec3 col = relit;
@@ -520,12 +529,14 @@ export class Shader {
       lSel[i * 4 + all.indexOf(l)] = 1;
     });
     const shown = state.exporting ? -1 : state.maskOverlay ?? -1;
+    // Relief view: no layers, the graze light alone on grey.
+    const reliefView = state.viewMode === 7;
     if (shown >= 0 && shown < MAX_LAYERS) overlay[shown] = 1;
     gl.uniform4fv(u.uLayerSel, lSel);
 
     // Graze effect: direction is where the light comes from, 0 deg = right, 90 = top.
     const g = state.graze;
-    const gOn = g && g.enabled && g.opacity > 0 && state.viewMode === 0 && !state.sweeping;
+    const gOn = reliefView ? !!g : g && g.enabled && g.opacity > 0 && state.viewMode === 0 && !state.sweeping;
     const gEl = (g?.elevation ?? 3) * Math.PI / 180, gDir = (g?.angle ?? 180) * Math.PI / 180;
     const gz = GRAZE_DISTANCE * Math.tan(gEl);
     let gPow = grazePower(Math.hypot(GRAZE_DISTANCE, gz), g?.elevation ?? 3);
@@ -541,7 +552,8 @@ export class Shader {
     // The plain graze light stands for a distant one, so its lift is even; a calibrated lamp's fades.
     gl.uniform1f(u.uGrazeLiftFall, g?.lamp ? 2 : 0);
     gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
-    gl.uniform1f(u.uGrazeOpacity, gOn ? g.opacity : 0);
+    gl.uniform1f(u.uGrazeOpacity, gOn ? (reliefView ? 1 : g.opacity) : 0);
+    gl.uniform1f(u.uGrazeGrey, reliefView ? 1 : Math.min(1, Math.max(0, g?.grey ?? 0)));
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading
     // contrast goes as slope / tan(elevation), so its weight goes as tan(elevation).
     const fineDeg = GRAZE_FINE_DEG * Math.PI / 180;
@@ -552,7 +564,7 @@ export class Shader {
     gl.uniform1f(u.uGrazeSize, grazeSize(g?.soft ?? 0));
     gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
     gl.uniform4fv(u.uMaskOverlay, overlay);
-    gl.uniform1i(u.uLayerCount, layers.length);
+    gl.uniform1i(u.uLayerCount, reliefView ? 0 : layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
     gl.uniform1iv(u.uLayerSource, lSrc);
     gl.uniform1fv(u.uLayerOpacity, lOp);
