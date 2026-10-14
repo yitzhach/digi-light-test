@@ -60,6 +60,7 @@ uniform float uHeightReach; // tallest rise worth marching for, same units as he
 uniform float uTexelGlobal; // one full-image texel, in painting widths
 uniform float uAOScale;
 uniform float uHeightView;
+uniform int   uHeightColour;   // Height view: 0 grey, 1 turbo colour ramp (a calibrated topographic map)
 uniform float uAmbient;
 uniform vec3  uAmbientColor;
 uniform float uRoughness;
@@ -203,6 +204,21 @@ vec3 blendLayer(int m, vec3 a, vec3 b) {
   return vec3(blend1(m, a.r, b.r), blend1(m, a.g, b.g), blend1(m, a.b, b.b));
 }
 
+// Turbo colour ramp (Mikhailov 2019, polynomial fit): perceptually ordered, unlike a
+// plain rainbow, and with more steps than viridis for fine relief.
+vec3 turbo(float t) {
+  const vec4 kR4 = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+  const vec4 kG4 = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+  const vec4 kB4 = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+  const vec2 kR2 = vec2(-152.94239396, 59.28637943);
+  const vec2 kG2 = vec2(4.27729857, 2.82956604);
+  const vec2 kB2 = vec2(-89.90310912, 27.34824973);
+  t = clamp(t, 0.0, 1.0);
+  vec4 v4 = vec4(1.0, t, t * t, t * t * t);
+  vec2 v2 = v4.zw * v4.z;
+  return clamp(vec3(dot(v4, kR4) + dot(v2, kR2), dot(v4, kG4) + dot(v2, kG2), dot(v4, kB4) + dot(v2, kB2)), 0.0, 1.0);
+}
+
 vec3 acesFilm(vec3 x) {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
@@ -247,7 +263,11 @@ void main() {
   float height = nh.a * mask * uReliefAmount;
 
   if (uViewMode == 1) { outColor = vec4(reliefN * 0.5 + 0.5, 1.0); return; }
-  if (uViewMode == 2) { float v = height * uHeightView + 0.5; outColor = vec4(vec3(v), 1.0); return; }
+  if (uViewMode == 2) {
+    // Calibrated heights are in units of their 2-98% spread, so -0.5..0.5 spans it.
+    float v = clamp(height * uHeightView + 0.5, 0.0, 1.0);
+    outColor = vec4(uHeightColour == 1 ? turbo(v) : vec3(v), 1.0); return;
+  }
   if (uViewMode == 3) { outColor = vec4(linearToSrgb(texture(uAlbedo, vUV).rgb), 1.0); return; }
   if (uViewMode == 4) { outColor = vec4(linearToSrgb(texture(uLin, vUV).rgb), 1.0); return; }
 
@@ -505,6 +525,7 @@ export class Shader {
     gl.uniform1f(u.uTexelGlobal, t.sx / Math.max(1, viewW));
     gl.uniform1f(u.uAOScale, state.calibrated ? state.aoScale ?? 2.5 : 6.0);
     gl.uniform1f(u.uHeightView, state.calibrated ? 1.0 : 8.0);
+    gl.uniform1i(u.uHeightColour, state.heightColour ? 1 : 0);
     gl.uniform1f(u.uAmbient, state.ambient);
     gl.uniform3fv(u.uAmbientColor, new Float32Array(state.ambientColor));
     gl.uniform1f(u.uRoughness, state.roughness);

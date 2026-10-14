@@ -90,7 +90,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
   (2) item 3 relief-only raking view + colour-over-relief preset — DONE on the branch; (3) items 1+2+19
-  profile probe + calibrated colour height map + ISO stats; (4) items 14–16 stroke
+  profile probe + calibrated colour height map + ISO stats — DONE on the branch; (4) items 14–16 stroke
   direction / Best raking direction, overexposure warning, glint mask. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
@@ -125,6 +125,7 @@ of a painting → estimate surface relief → relight with movable virtual light
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
 - `lampphotos.js` (maths) + `lampui.js` (section) — relief measured from lamp photos
+- `probe.js` — Profile · height map section: line profile, ISO roughness, colour height map scale bar
 - `texscore.js` — RL-Sq style texture contrast score + depth fit (Fit depth to photos)
 - `photometric.js`, `register.js`, `sphere.js` — multi-photo capture path (demo section)
 - `synth.js` — synthetic painting with known relief (tests); `measure.js` — image stats
@@ -165,6 +166,26 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-14 (branch `feature/metrology`): **Profile · height map** section (`src/probe.js`, after
+  Measure relief; doc items 1, 2, 19). **Draw a profile**: a drag on the painting (capture
+  listeners on `#paper`, so lights/brushes don't see it) draws a line (SVG `#probeOverlay`
+  in `#paper`, canvas-pixel viewBox, scales with zoom). Plot (`#probePlot`) of height in
+  µm/mm along it; line numbers (ISO 4287, best straight line removed): P-V Rz, RMS Rq, Ra,
+  Rsk, Rku; region in view (zoom picks it, 2% border cut; ISO 25178, best plane removed):
+  Sq, Sa, Sz (Sp, Sv), Ssk, Sku. Heights: measured relief × mm/px (true) when on;
+  otherwise app.js `readHeights()` (api `heights`, `__bench.heights`) = normal target's
+  alpha read back as floats (flipped to top-first; corr 1.0000 with the measured map)
+  × Texture depth × Relief amount, labelled "estimated". **Height map / Colour height map**
+  buttons: Height view with `state.heightColour` (shade.js `turbo()`), scale bar
+  `#heightBar` (bottom right of `#wrap`) labelled ±half the render's sampled 2–98% spread
+  (`state.heightStats.dir` × mm/px for measured: `info.depthMm` alone was 9% off,
+  heightStats samples 128² over the whole image). New event `digilight:views` makes
+  app.js redraw the view buttons. DSC_8382, measured relief, line across the figure at
+  62% height (20.3 cm): P-V 2.02 mm, RMS 303 µm, Ra 215 µm, Rsk −0.21, Rku 4.98; whole
+  painting: Sq 352 µm, Sa 275 µm, Sz 3.39 mm, Ssk +0.09, Sku 3.43; colour bar ±831 µm.
+  One-photo at 2.16 mm: same line P-V 2.64 mm, RMS 371 µm; painting Sq 294 µm, Sku 8.23
+  (spiky: grain on colour edges). Test in browser.cjs (sine/square-wave ISO values,
+  read-back orientation, dragged line = measured heights, scale bar).
 - 10-14 (branch `feature/metrology`): **Relief view + Relief only / Colour over relief**
   (doc item 3). `graze.grey` 0..1 (validated, in history/projects): shade.js uses an
   even grey albedo `GRAZE_GREY` 0.3 linear under the graze light (flat paint lands near

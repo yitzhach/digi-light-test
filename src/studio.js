@@ -1,5 +1,6 @@
 import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT } from './presets.js';
 import { initLampPhotos } from './lampui.js';
+import { initProbe } from './probe.js';
 import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
 import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
@@ -611,11 +612,13 @@ export function initStudio(api) {
   function usePhotoAzimuth(deg, share){calibrate();state.photoDiffuse=share;state.azimuthDeg=Math.round(deg)%360;state.albedoSuppress=0.5;api.dirty();syncQuick();}
   cal=initCalibrate({state,api,after:grazeBox,setGraze,renderGraze,syncQuick,checkpoint,usePhotoAzimuth,splitView:()=>$('splitView').click()});
   const lamp=initLampPhotos({state,api,after:$('calibrateSection'),cal,checkpoint,syncQuick,snapshot,restore,setBatching:v=>{batching=v;}});
+  // Profile · height map: height profiles, roughness numbers, colour height map (probe.js).
+  const probe=initProbe({state,api,after:$('lampSection')});
   // Batch preview: rate several looks, export the chosen ones (batch.js).
   initBatch({state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
     userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT,
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
     listProjects:()=>list()});
-  window.__studio={calibrate:cal,lamp,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={calibrate:cal,lamp,probe,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 }

@@ -334,6 +334,32 @@ const strip=j=>{const o=JSON.parse(j);delete o.textureDepthMm;delete o.physical;
 assert.match(await page.locator('#lampFitResult').textContent(),/^Texture depth [\d.]+ mm: the renders match .*Each lamp alone: 1: ((under|over) )?[\d.]+ mm · 2: ((under|over) )?[\d.]+ mm · 3: ((under|over) )?[\d.]+ mm/,JSON.stringify(f.per));
 await page.click('#undo');await settle();assert.equal(await setting('textureDepthMm'),JSON.parse(f.before).textureDepthMm);await page.click('#redo');await settle();assert.equal(await setting('textureDepthMm'),f.depth);
 console.log('PASS texture contrast score and Fit depth to photos',JSON.stringify({...u,depth:f.depth,lamps:f.lamps.map(d=>d&&+d.toFixed(2)),photo:f.photo.map(p=>+p.toFixed(4)),tries:f.samples.length}));}
+// Profile · height map (probe.js): ISO roughness numbers on known surfaces; the render's
+// heights read back the right way up; a dragged line gives the measured relief's profile
+// in mm; the colour height map has a scale bar in mm/µm.
+{const k=await page.evaluate(async()=>{const {areaStats,lineStats,profile}=await import('/src/probe.js');
+  const W=200,H=100,A=0.3,Z=new Float32Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)Z[y*W+x]=A*Math.sin(2*Math.PI*x/20)+0.002*x-0.001*y+5;
+  const a=areaStats(Z,W,H);const sq=new Float32Array(400).map((_,i)=>(Math.floor(i/10)%2?A:-A)+0.01*i),d=new Float32Array(400).map((_,i)=>i*0.1);const l=lineStats(d,sq);
+  const p=profile(Z,W,H,10,50,110,50,0.5);return {Sq:a.Sq,Sa:a.Sa,Ssk:a.Ssk,Sku:a.Sku,Rz:l.Rz,Rq:l.Rq,len:p.d.at(-1),z0:p.z[0]};});
+assert.ok(Math.abs(k.Sq-0.3/Math.SQRT2)<0.003&&Math.abs(k.Sa-0.6/Math.PI)<0.003&&Math.abs(k.Ssk)<0.02&&Math.abs(k.Sku-1.5)<0.04,'sine surface '+JSON.stringify(k));
+assert.ok(Math.abs(k.Rz-0.6)<0.06&&Math.abs(k.Rq-0.3)<0.01&&Math.abs(k.len-50)<1e-6,'square line '+JSON.stringify(k));
+const rb=await page.evaluate(()=>{const m=__bench.measured(),r=__bench.heights();let sa=0,sb=0,saa=0,sbb=0,sab=0;const n=r.a.length;for(let i=0;i<n;i++){const a=r.a[i],b=m.height[i];sa+=a;sb+=b;saa+=a*a;sbb+=b*b;sab+=a*b;}
+  return {w:r.w,h:r.h,corr:(sab/n-sa/n*sb/n)/Math.sqrt((saa/n-(sa/n)**2)*(sbb/n-(sb/n)**2))};});
+assert.ok(rb.w===W&&rb.h===H&&rb.corr>0.999,'heights read back the right way up '+JSON.stringify(rb));
+await page.locator('#probeSection').evaluate(e=>e.open=true);const lights=JSON.stringify(await setting('lights')),strokes=(await setting('strokes')).length;
+await page.click('#probeLine');const gb=await page.locator('#gl').boundingBox();
+await page.mouse.move(gb.x+gb.width*.2,gb.y+gb.height*.5);await page.mouse.down();await page.mouse.move(gb.x+gb.width*.8,gb.y+gb.height*.5,{steps:6});await page.mouse.up();await settle();
+assert.equal(JSON.stringify(await setting('lights')),lights);assert.equal((await setting('strokes')).length,strokes);
+assert.match(await page.locator('#probeLineStats').textContent(),/^Line [\d.]+ mm: P-V \(Rz\) [\d.]+ (µm|mm), RMS \(Rq\) [\d.]+ (µm|mm)/);
+assert.match(await page.locator('#probeArea').textContent(),/Region in view .*measured relief .*Sq [\d.]+ (µm|mm), Sa .*Ssk -?[\d.]+, Sku [\d.]+/);assert.equal(await page.locator('#probePlot').isHidden(),false);
+const pr=await page.evaluate(()=>{const r=__studio.probe.measure(),m=__bench.measured(),mm=__bench.state.paintingWidthCm*10/m.w,[x0,y0,x1,y1]=r.line,i=r.profile.z.length>>1;
+  const x=Math.round((x0+x1)/2-0.5),y=Math.round((y0+y1)/2-0.5);return {source:r.source,len:r.lineStats.length,want:Math.hypot(x1-x0,y1-y0)*mm,mid:r.profile.z[i],truth:m.height[y*m.w+x]*mm,Sq:r.area.Sq};});
+assert.equal(pr.source,'measured');assert.ok(Math.abs(pr.len-pr.want)<1e-3&&Math.abs(pr.len-0.6*widthCm*10)<0.03*widthCm*10,'line length '+JSON.stringify(pr));assert.ok(Math.abs(pr.mid-pr.truth)<0.02*pr.Sq*10+1e-3,'profile reads the measured heights '+JSON.stringify(pr));
+await page.click('#probeLine');const grey=(await page.click('#probeMapGrey'),await settle(),await pixels());assert.equal(await setting('viewMode'),2);assert.equal(await page.locator('#heightBar').isVisible(),true);
+await page.click('#probeMapColour');await settle();assert.equal(await setting('heightColour'),1);assert.notEqual(await pixels(),grey);
+assert.match(await page.locator('#heightBar').textContent(),/^Height, measured .*-[\d.]+ (µm|mm)0[\d.]+ (µm|mm)$/);assert.equal(await page.locator('#views button.on').textContent(),'Height');
+await page.evaluate(()=>{__bench.state.viewMode=0;__bench.state.heightColour=0;document.dispatchEvent(new Event('digilight:views'));__bench.render();});await settle();assert.equal(await page.locator('#heightBar').isHidden(),true);
+console.log('PASS profile probe, ISO roughness and colour height map',JSON.stringify({sine:{Sq:+k.Sq.toFixed(4),Sku:+k.Sku.toFixed(3)},readback:+rb.corr.toFixed(5),line:+pr.len.toFixed(1),Sq:+pr.Sq.toFixed(3)}));}
 await page.locator('#file').setInputFiles({name:'other.png',mimeType:'image/png',buffer:buf(png.shots[1])});await page.waitForFunction(()=>document.querySelector('#lampUse').disabled);
 assert.equal(await page.locator('#lampUse').isChecked(),false);assert.equal(await page.locator('.lampRow').count(),3);
 console.log('PASS lamp photos: measured relief matches the truth',JSON.stringify({corr:+r.corr.toFixed(3),depth:+r.depth.toFixed(2),trueMm:+r.trueMm.toFixed(2),check:r.check.map(c=>+c.toFixed(2)),exportDiff:+par.toFixed(3)}));}

@@ -3,7 +3,7 @@
 // expensive half and it only reruns when a surface control moves, which is what
 // keeps light dragging at frame rate.
 
-import { createGL } from './gl.js';
+import { createGL, bindTarget } from './gl.js';
 import { GBuffer } from './gbuffer.js';
 import { Shader, MAX_LIGHTS } from './shade.js';
 import { kelvinToLinearRGB, hexToLinearRGB, linearRGBToHex } from './kelvin.js';
@@ -753,6 +753,8 @@ const VIEWS = [
     + 'depth or lower a light\'s angle and they lengthen; a diffused light softens their edges.'],
 ];
 
+// Another module switched the view (probe.js's height map buttons).
+document.addEventListener('digilight:views', () => rebuildViews());
 function rebuildViews() {
   const v = $('views');
   v.innerHTML = '';
@@ -768,6 +770,25 @@ function rebuildViews() {
 }
 
 // ---------------------------------------------------------------- render
+
+/**
+ * The relief the render uses, read back from the normal target's height channel:
+ * {a: Float32Array, w, h}, rows top first, in units of the relief's 2-98% spread
+ * when calibrated (so mm = a × Texture depth × relief amount). Null for a capture or
+ * when the targets are not float. The relief brush mask is not applied.
+ */
+function readHeights() {
+  if (state.mode !== 'single' || !srcTex) return null;
+  if (dirtySurface || !targets) renderNow();
+  const t = targets?.normal;
+  if (!t?.float || !t.fbo) return null;
+  const gl = glctx.gl, px = new Float32Array(t.w * t.h * 4);
+  bindTarget(gl, t); gl.readPixels(0, 0, t.w, t.h, gl.RGBA, gl.FLOAT, px); bindTarget(gl, null);
+  // The source was uploaded flipped: the framebuffer's first row is the photo's bottom.
+  const a = new Float32Array(t.w * t.h);
+  for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) a[(t.h - 1 - y) * t.w + x] = px[(y * t.w + x) * 4 + 3];
+  return { a, w: t.w, h: t.h };
+}
 
 // Height from the Poisson solve is measured in texels, so it grows with
 // resolution; normalising against a reference width keeps a capture looking the
@@ -1144,6 +1165,7 @@ async function boot() {
       comparing: () => !!compareTex,
     },
     sample: () => currentSample,
+    heights: readHeights,
     exportFull: () => exportImage({ mode: 'single', source: fullSource }, null, { viewMode: 0 }),
     // The relit painting whole at outW px wide (at most the photo's own width), drawn from
     // the full photo like the sharp zoom, for previews that stay sharp when zoomed.
@@ -1174,6 +1196,7 @@ async function boot() {
     // --- diagnostics used by the test harness
     shots: () => shots,
     measured: () => measured && { on: measured.on, w: measured.w, h: measured.h, height: measured.height, info: measured.info },
+    heights: readHeights,
     gbuf, glctx,
     dirty: () => { dirtySurface = true; },
     measureFit: () => photo.measureResidual(imgW, imgH, residualExclusion()),
