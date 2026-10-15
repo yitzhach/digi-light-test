@@ -95,7 +95,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,
+- Last code change on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 11 whole looks
+- Before that: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,
   Room light colour, Stroke definition + Stroke size; lighting preset "Gallery spot, upper right"
 - Before that: (2026-10-14) Measure relief fits Texture depth to the lamp photos
 - Before that: (2026-10-14) Light like this sets room light 0.25
@@ -176,6 +177,19 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): AI-match batches on the painting sample (scratch export script, full
+  res via __bench.exportFullRes; gallery artifact YDRAaxqTrahptwwoy3pQw8). Round 1 (01–10, base:
+  lamp 1.22/0.75/0.45 4300 K, room 0.06, rolloff 1, exp +0.35, greys 60, vib 40, strokes 50):
+  tone p10/50/90 0.06/0.24/0.60 vs AI 0.05/0.22/0.61. **User picked 05 (graze 25°), 07 (brighter),
+  09 (lower lamp)**; still prefers the AI for "more natural texture (less fine texture) and a bit
+  more depth". Round 2 (11–18, picks combined: z 0.3, exp +0.55, graze 30%, Texture size 8, Fine
+  texture 0.2, strokes 60–80%): De-light albedo 0.8–0.9 brings fine-grain contrast to 0.69–0.77
+  of the photo's (AI 0.71); costs some stroke contrast and leaves a few smudged patches where
+  baked grain is removed. Texture size 8 + Fine 0.2 alone: grain 0.94, strokes 1.27. User asked for
+  these as presets → `looks` in presets.js (05, 07, 09 and 11–18 by name), **Matched looks**
+  select at the top of Colour & strokes (studio.js `useLook`): sets lights, LOOK_KEYS (room,
+  rolloff, exposure, Texture size, Fine texture, De-light, colour & strokes) and the graze light
+  (off when the look has none), undoable. Test in browser.cjs. Waiting on the user's round 2 picks.
 - 10-14 (pushed to `main`; user: "incorporate this as you see fit"): the user showed an AI-relit
   image of the red panel (`samples/painting.jpg`) they found very realistic. Measured vs the
   photo (aligned, 1000 px): same frame, but the AI REDREW all texture under ~2–3% of the width

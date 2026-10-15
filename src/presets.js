@@ -203,6 +203,32 @@ export const lighting = {
     lights: [L(1.22, 0.75, 0.45, 4, 4300, 0, 0.5, 0.02)] },
 };
 
+// Matched looks: whole looks (lamp, graze light, exposure and tone, Colour & strokes,
+// and the texture settings) tuned to an AI-relit image of the red panel the user liked
+// (10-14/15, see HANDOFF). Unlike a lighting scene, a look sets everything it names and
+// turns the graze light off when it has none, so applying one always gives the same image.
+// Texture: reliefScale (Texture size), fineRelief (Fine texture), albedoSuppress (De-light).
+const SPOT = (z = 0.45, power = 4) => [L(1.22, 0.75, z, power, 4300, 0, 0.5, 0.02)];
+const RAKE25 = (opacity = 0.3) => ({ enabled: true, angle: 25, elevation: 3, opacity });
+const ROUND1 = { ambient: 0.06, highlightRolloff: 1, exposure: 0.35, neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, strokeSize: 0.01,
+  roomKelvin: ROOM_NEUTRAL_K, reliefScale: 3, fineRelief: 0.65, albedoSuppress: 0.7, graze: null, lights: SPOT() };
+const ROUND2 = { ...ROUND1, exposure: 0.55, strokeDef: 0.6, strokeSize: 0.015, reliefScale: 8, fineRelief: 0.2, graze: RAKE25(), lights: SPOT(0.3, 3.5) };
+const SOFT = { ...ROUND2, albedoSuppress: 0.8, strokeDef: 0.8 };
+export const LOOK_KEYS = ['ambient', 'highlightRolloff', 'exposure', 'reliefScale', 'fineRelief', 'albedoSuppress', ...Object.keys(LOOK_NEUTRAL)];
+export const looks = {
+  'Raking graze (05)':             { ...ROUND1, graze: RAKE25() },
+  'Brighter (07)':                 { ...ROUND1, exposure: 0.6 },
+  'Lower lamp (09)':               { ...ROUND1, lights: SPOT(0.3, 3.5) },
+  'Bigger strokes, less grain':    ROUND2,
+  'Softer photo grain':            { ...ROUND2, albedoSuppress: 0.8 },
+  'Soft grain, deeper strokes':    SOFT,
+  'Soft grain, broad strokes':     { ...SOFT, strokeSize: 0.022 },
+  'Smoothest grain':               { ...SOFT, albedoSuppress: 0.9, reliefScale: 5 },
+  'Darker, closer to AI tone':     { ...SOFT, exposure: 0.3 },
+  'Silver greys, cool room':       { ...SOFT, roomKelvin: 7500, ambient: 0.09 },
+  'More raking':                   { ...SOFT, graze: RAKE25(0.4), lights: SPOT(0.22, 3) },
+};
+
 export class History {
   constructor(limit = 40) { this.limit = limit; this.entries = []; this.index = -1; }
   reset(value) { this.entries = [JSON.stringify(value)]; this.index = 0; }

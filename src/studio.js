@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, LOOK_NEUTRAL, ROOM_NEUTRAL_K, STROKE_SIZE_MIN, STROKE_SIZE_MAX } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, LOOK_NEUTRAL, ROOM_NEUTRAL_K, STROKE_SIZE_MIN, STROKE_SIZE_MAX, looks, LOOK_KEYS } from './presets.js';
 import { initLampPhotos } from './lampui.js';
 import { initProbe } from './probe.js';
 import { strokeDirection, nearerSide } from './photocheck.js';
@@ -410,6 +410,11 @@ export function initStudio(api) {
     $('lookControls').append(row);
   }
   {const n=document.createElement('p');n.className='note';n.textContent='Keep greys neutral with a little Vibrance keeps white paint white under warm light while the colours stay rich. Hover a slider for what it does.';$('lookControls').append(n);}
+  // Matched looks: a whole look in one pick (presets.js looks), undoable like any change.
+  {const l=document.createElement('label');l.className='selectRow';l.textContent='Matched looks';const sel=document.createElement('select');sel.id='lookPreset';sel.add(new Option('Choose a look…',''));for(const name of Object.keys(looks))sel.add(new Option(name,name));l.append(sel);$('lookControls').prepend(l);
+   sel.onchange=()=>{if(looks[sel.value]){useLook(sel.value);sync();}};}
+  function useLook(name){stopSweep();const k=looks[name];state.lights=k.lights.map(makeLight);state.selected=0;for(const key of LOOK_KEYS)if(key in k)state[key]=k[key];
+    if(k.graze){Object.assign(state.graze,k.graze);delete state.graze.lamp;}else state.graze.enabled=false;refresh();}
   function syncLook(){for(const [key,,,,,fmt] of lookControls){const i=$(key);if(!i)continue;i.closest('.row').querySelector('output').textContent=fmt(+i.value);}}
   syncLook();
   $('paintingWidthCm').addEventListener('input',syncLook);   // Stroke size reads in mm
