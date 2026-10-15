@@ -176,8 +176,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-15 (handoff only, no code change): **AI-match round S** sent to the user
-  (see Test rounds). **Next chat: the user's picks from round S (Stroke direction sheet and the
+- Last updated: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
+  ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
+  tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
+  round S** sent to the user (see Test rounds). **Next chat: the user's picks from round S (Stroke direction sheet and the
   6-look combo sheet), then put the winning Stroke direction / Fine detail into the matched looks
   (or a new matched look); still pending from the user: shadow style pick (Phase 5), MCP setup on
   their computer (Phase 4b), R1 raking picks.**
@@ -251,6 +253,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `app.js` — main bench: load image, build G-buffer, re-shade on interaction (largest file)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
 - `toolrail.js` — tool rail / phone tool strip: tags each panel block with a tool, shows one at a time
+- `touchsliders.js` — phone sliders: drag from anywhere along the slider, tap to jump, vertical drags scroll
 - `automation.js` — `window.digilight` API, URL params, `?bridge` postMessage (docs/automation.md;
   CLI tools/digilight-cli.cjs, MCP server tools/digilight-mcp.cjs, both on tools/digilight-headless.cjs)
 - `auto.js` — Auto section: Analyze (readout, depth fit, raking direction), one-tap looks, Strength mix
@@ -302,6 +305,20 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **iPhone page zoom + finicky sliders** (user: the screen often zooms
+  in a bit when selecting tools or after a double tap, then needs a pinch out; sliders "not as
+  responsive as they could be"). Zoom: `html { touch-action: manipulation }` (no double-tap zoom;
+  pinch still works; #wrap stays none) and, on `pointer:coarse`, every text field / select at
+  16px (iOS zooms into a focused field under 16px: tool search, sample and preset menus, number
+  boxes). No `maximum-scale` in the viewport (it would stop pinch zoom on Android). Sliders
+  (`src/touchsliders.js`, `initTouchSliders` from studio.js after the tool rail): touch only,
+  document capture listeners; a sideways drag anywhere on a slider moves the value by the
+  finger's travel (no jump on taking hold), an up-or-down drag scrolls and puts back any value
+  the browser changed on touch, a tap off the knob jumps there; `change` fires at the end (one
+  undo step). CSS on coarse pointers: `touch-action: pan-y`, 36 px tall, 4 px track, 26 px
+  knob (THUMB). Rendering was already one frame per rAF; relief sliders still rebuild the
+  G-buffer per step, which can lag on a phone. Test: "phone: 16px fields …" in browser.cjs
+  (fails without the handler: Chromium jumps the value to the finger).
 - 10-15 (pushed to `main`): **Shade shapes** (Phase 5 follow-up). Shade light fields `shape`
   ('pool' default | 'window' | 'blinds' | 'leaves', presets.js SHADE_SHAPES), `patternSize`
   0.25–4, `patternRot` 0–360°; `size` blurs the shape ("Pattern blur"). Shader `shadeShape`:

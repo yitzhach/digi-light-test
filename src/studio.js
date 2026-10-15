@@ -9,6 +9,7 @@ import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 import { initBatch } from './batch.js';
 import { initAuto } from './auto.js';
 import { initToolRail } from './toolrail.js';
+import { initTouchSliders } from './touchsliders.js';
 import { initAutomation } from './automation.js';
 import { adjustDefaults, validateAdjust, buildAdjustUI, eyeButton } from './adjust.js';
 import { overlayDefaults, validateOverlays, buildOverlayUI } from './overlays.js';
@@ -793,6 +794,7 @@ export function initStudio(api) {
   buildSaveExport();
   // One section at a time: bottom tool strip on phones, vertical rail on desktop (toolrail.js).
   const tools=initToolRail({panel:$('panel')});
+  initTouchSliders();   // fingers take a slider anywhere along it (touchsliders.js)
   buildSearch();
   // window.digilight: the same app for scripts and AI agents (automation.js, docs/automation.md).
   const presetTables={lighting:{names:Object.keys(lighting),apply:n=>{useLighting(n);sync();}},graze:{names:Object.keys(grazePresets),apply:n=>{stopSweep();setGraze({...grazePresets[n]});sync();}},

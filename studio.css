@@ -211,10 +211,20 @@ body { grid-template-columns:minmax(0,1fr) 62px 320px; }
   #studioToolbar strong { margin-right:4px; font-size:15px; }
   #studioToolbar small { display:none; }
 }
+/* No double-tap zoom anywhere (a quick second tap on a tool zoomed the iPhone page); pinch still zooms. */
+html { touch-action:manipulation; }
 /* Fingers: bigger targets wherever the pointer is coarse (phones, tablets) */
 @media(pointer:coarse) {
   #panel button, #panel select, #studioToolbar button, #splitControl button { min-height:40px; }
-  #panel input[type=range], #splitControl input[type=range] { height:32px; }
+  /* iPhone zooms the page into any text field or menu whose text is under 16px */
+  input:not([type=range]):not([type=checkbox]):not([type=radio]):not([type=color]), select, textarea { font-size:16px!important; }
+  /* Sliders: a big knob of fixed size (touchsliders.js THUMB) and sideways drags left to
+     the page, which takes them anywhere along the slider; up-and-down still scrolls. */
+  input[type=range] { -webkit-appearance:none; appearance:none; touch-action:pan-y; height:36px; margin:0; background:transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:#9aa2b166; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; box-sizing:border-box; width:26px; height:26px; margin-top:-11px; border-radius:50%; background:var(--accent); border:2px solid #e8eaee; box-shadow:0 1px 3px #0009; }
+  input[type=range]::-moz-range-track { height:4px; border-radius:2px; background:#9aa2b166; }
+  input[type=range]::-moz-range-thumb { box-sizing:border-box; width:26px; height:26px; border-radius:50%; background:var(--accent); border:2px solid #e8eaee; box-shadow:0 1px 3px #0009; }
   #panel input[type=checkbox] { width:20px; height:20px; }
   .sectionDetails>summary { padding:15px 14px; }
   .row { margin:4px 0; }

@@ -677,7 +677,28 @@ await m.click('#fullView');await m.waitForTimeout(200);assert.ok(await m.locator
 const st=await m.locator('#stage').boundingBox();assert.ok(st.width>=389&&st.height>=843,'stage fills the screen '+JSON.stringify(st));
 b=await m.locator('#gl').boundingBox();await pinch([b.x+b.width/2,b.y+b.height/2],60,150);assert.ok(await z()>2,'pinch in full screen '+await z());
 await m.click('#fullFit');assert.equal(await z(),1);await m.click('#fullExit');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isVisible()&&await m.locator('#fullExit').isHidden());
-await ctx.close();console.log('PASS phone pinch zoom, one-finger pan, pinch cancels stroke, full screen view');}
+await ctx.close();console.log('PASS phone pinch zoom, one-finger pan, pinch cancels stroke, full screen view');
+// Phone: no page zoom on a field's focus or a double tap; sliders taken anywhere along them (touchsliders.js).
+{const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));
+await m.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);
+const css=await m.evaluate(()=>({html:getComputedStyle(document.documentElement).touchAction,search:getComputedStyle(document.querySelector('#toolSearchInput')).fontSize,sel:getComputedStyle(document.querySelector('#samplePick')).fontSize}));
+assert.deepEqual(css,{html:'manipulation',search:'16px',sel:'16px'},'no iPhone zoom on focus or double tap '+JSON.stringify(css));
+const cdp=await ctx.newCDPSession(m),touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts.map(([x,y],id)=>({x,y,id}))});
+await m.tap('#toolRail [data-tool=colour]');const sel='#lookControls input[type=range]';const sl=m.locator(sel).first();await sl.scrollIntoViewIfNeeded();
+const id=await sl.evaluate(el=>{el.id||=(el.id='touchTestSlider');return el.id;});const S=m.locator('#'+id);
+const info=()=>S.evaluate(el=>({v:+el.value,min:+el.min,max:+el.max,step:+el.step||1}));
+const setV=v=>S.evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));},v);
+const drag=async(x0,y0,dx,dy)=>{await touch('touchStart',[[x0,y0]]);for(let i=1;i<=8;i++)await touch('touchMove',[[x0+dx*i/8,y0+dy*i/8]]);await touch('touchEnd',[]);await m.waitForTimeout(50);};
+const I=await info();const mid=I.min+(I.max-I.min)/2;await setV(mid);let r=await S.boundingBox();const span=r.width-26,cy=r.y+r.height/2;
+// a sideways drag that starts well off the knob moves the value by the finger's travel, without jumping first
+await drag(r.x+r.width*0.15,cy,60,2);let v=(await info()).v,want=mid+60/span*(I.max-I.min);
+assert.ok(Math.abs(v-want)<=Math.max(I.step,(I.max-I.min)*0.03),'relative drag '+JSON.stringify({v,want,I}));
+// an up-or-down drag that starts on a slider scrolls and leaves the value alone
+await setV(mid);r=await S.boundingBox();await drag(r.x+r.width*0.8,r.y+r.height/2,3,-60);assert.ok(Math.abs((await info()).v-mid)<=I.step/2,'vertical drag leaves it '+(await info()).v);
+// a tap on the track jumps there
+r=await S.boundingBox();await touch('touchStart',[[r.x+13+span*0.85,r.y+r.height/2]]);await touch('touchEnd',[]);await m.waitForTimeout(50);v=(await info()).v;want=I.min+0.85*(I.max-I.min);
+assert.ok(Math.abs(v-want)<=Math.max(I.step,(I.max-I.min)*0.03),'tap jumps '+JSON.stringify({v,want}));
+await ctx.close();console.log('PASS phone: 16px fields and no double-tap zoom; sliders drag from anywhere, scroll leaves them, tap jumps');}}
 // Automation API (window.digilight, docs/automation.md): set by name is one undo step and checked like an import,
 // render/export as data URL or Blob, project round trip, fixed presets, ?set= on open, postMessage bridge with ?bridge.
 {const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
