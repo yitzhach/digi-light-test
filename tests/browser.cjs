@@ -497,11 +497,11 @@ assert.equal(v.now.strokeDef,1);assert.deepEqual([v.old.neutralWB,v.old.vibrance
 await page.selectOption('#lightingPreset','Gallery spot, upper right');await settle();
 const g=await page.evaluate(()=>{const s=__bench.state;return {wb:s.neutralWB,vib:s.vibrance,sd:s.strokeDef,x:s.lights[0].x,n:s.lights.length,out:document.querySelector('#neutralWB').closest('.row').querySelector('output').textContent};});
 assert.ok(g.wb>0&&g.vib>0&&g.sd>0&&g.x>1&&g.n===1&&g.out===`${Math.round(g.wb*100)}%`,JSON.stringify(g));
-await page.selectOption('#lookPreset','More raking');await settle();
+await page.selectOption('#lookPreset','Raking graze (05)');await settle();
 const lk=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,op:s.graze.opacity,z:s.lights[0].z,rs:s.reliefScale,al:s.albedoSuppress,sd:s.strokeDef,exp:s.exposure};});
-assert.deepEqual(lk,{g:true,op:.4,z:.22,rs:8,al:.8,sd:.8,exp:.55},'matched look '+JSON.stringify(lk));
+assert.deepEqual(lk,{g:true,op:.3,z:.45,rs:3,al:.7,sd:.5,exp:.35},'matched look '+JSON.stringify(lk));
 await page.selectOption('#lookPreset','Brighter (07)');await settle();assert.equal(await page.evaluate(()=>__bench.state.graze.enabled),false);assert.equal(await setting('exposure'),.6);
-await page.click('#undo');await settle();assert.equal(await setting('exposure'),.55);
+await page.click('#undo');await settle();assert.equal(await setting('exposure'),.35);
 await page.evaluate(()=>Object.assign(__bench.state,{neutralWB:0,vibrance:0,roomKelvin:6500,strokeDef:0,strokeSize:.01}));await page.evaluate(()=>document.dispatchEvent(new Event('digilight:settings')));await settle();
 console.log('PASS colour & strokes: no-op when neutral, greys neutral, vibrance spares greys, room light colour, stroke definition exports as previewed, saved and validated, Gallery spot preset, matched looks',JSON.stringify({cast:[+cast(s0).toFixed(2),+cast(s1).toFixed(2)],sat:[+s1.red.sat.toFixed(3),+s2.red.sat.toFixed(3)],sd:[+s0.grey.sd.toFixed(1),+k1.grey.sd.toFixed(1)],export:+ex.mean.toFixed(3),tiled:+tiledEx.toFixed(3)}));}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that

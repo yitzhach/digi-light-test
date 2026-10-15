@@ -95,7 +95,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 11 whole looks
+- Last code change on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 4 whole looks
+  (05 Raking graze, 06 Softer lamp, 07 Brighter, 09 Lower lamp); round 2 looks removed
 - Before that: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,
   Room light colour, Stroke definition + Stroke size; lighting preset "Gallery spot, upper right"
 - Before that: (2026-10-14) Measure relief fits Texture depth to the lamp photos
@@ -186,10 +187,13 @@ To judge it on a real painting, by eye:
   texture 0.2, strokes 60–80%): De-light albedo 0.8–0.9 brings fine-grain contrast to 0.69–0.77
   of the photo's (AI 0.71); costs some stroke contrast and leaves a few smudged patches where
   baked grain is removed. Texture size 8 + Fine 0.2 alone: grain 0.94, strokes 1.27. User asked for
-  these as presets → `looks` in presets.js (05, 07, 09 and 11–18 by name), **Matched looks**
-  select at the top of Colour & strokes (studio.js `useLook`): sets lights, LOOK_KEYS (room,
-  rolloff, exposure, Texture size, Fine texture, De-light, colour & strokes) and the graze light
-  (off when the look has none), undoable. Test in browser.cjs. Waiting on the user's round 2 picks.
+  these as presets → `looks` in presets.js, **Matched looks** select at the top of Colour &
+  strokes (studio.js `useLook`): sets lights, LOOK_KEYS (room, rolloff, exposure, Texture size,
+  Fine texture, De-light, colour & strokes) and the graze light (off when the look has none),
+  undoable; test in browser.cjs. **User's verdict: round 1 05, 06, 07 are best; round 2 (11–18)
+  "not at all usable, kind of blurry and very unnatural texture"** → round 2 looks removed; looks
+  kept: 05, 06, 07, 09. Lesson: do NOT soften grain via De-light albedo / Texture size 8 /
+  Fine 0.2; the AI's "less fine texture" was re-synthesised detail we can't fake by blurring.
 - 10-14 (pushed to `main`; user: "incorporate this as you see fit"): the user showed an AI-relit
   image of the red panel (`samples/painting.jpg`) they found very realistic. Measured vs the
   photo (aligned, 1000 px): same frame, but the AI REDREW all texture under ~2–3% of the width
@@ -552,6 +556,17 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+-4. NEXT CHAT STARTS HERE (10-15): the AI-match work. The user's favourite remains the AI image
+   (`samples/painting.jpg` relit by a generative model; the user can re-upload it): "more
+   natural texture (a little less fine texture) and a bit more depth". Best DigiLight looks:
+   Matched looks 05 / 06 / 07 (round 1 base: lamp 1.22/0.75/0.45 4300 K, room 0.06, rolloff 1,
+   exp +0.35, greys 60, vibrance 40, strokes 50%). Tone and colour already match the AI; what's
+   left is texture and depth. Ideas that do not blur: make Stroke definition directional (lit
+   crest edges facing the key, darker far side, like the AI's rims); a little more depth via
+   graze + lower lamp combined (05 + 09); reduce glitter from the one-photo fine band in the
+   SHADING only (not in the albedo, which is what made round 2 smudgy). Gallery of both rounds:
+   artifact YDRAaxqTrahptwwoy3pQw8. Scoring scripts were scratch-only (aligned AI vs photo,
+   band contrast, colour shares); rebuild if needed.
 -3. Colour & strokes (10-14): ask the user how "Gallery spot, upper right" and the new section
    look on their own photos (phone too). Ideas: make Stroke definition directional (weight
    creases by the key light's direction, so it follows real lamp shadows and keeps logRMS);
