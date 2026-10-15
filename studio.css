@@ -158,3 +158,11 @@ body.batchOpen { overflow:hidden; }
 .subTabs { display:flex; flex-wrap:wrap; gap:5px; padding:4px 14px 10px; }
 .subPane[hidden] { display:none; }
 #originalTopLayer .layerHead { display:flex; gap:8px; align-items:baseline; }
+/* Blend mode list with hover preview */
+.lyModeWrap { position:relative; display:inline-flex; }
+.lyModeWrap select.lyMode { position:absolute; inset:0; opacity:0; pointer-events:none; }
+.blendMenu { position:fixed; z-index:40; margin:0; padding:4px; list-style:none; background:var(--panel2); border:1px solid var(--line); border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,.55); min-width:140px; }
+.blendMenu li { padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; }
+.blendMenu li.applied { font-weight:600; }
+.blendMenu li.applied::after { content:' ✓'; color:var(--dim); }
+.blendMenu li.on, .blendMenu li:hover { background:var(--accent); color:#fff; }

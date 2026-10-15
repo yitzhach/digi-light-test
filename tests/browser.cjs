@@ -136,7 +136,10 @@ await page.getByText('Layers · blend effects',{exact:true}).click();const noLay
 let layers=await setting('layers');assert.deepEqual(layers,[{mode:'pinLight',source:'original',opacity:.35,enabled:true}]);const pin=await pixels();assert.notEqual(pin,noLayer);
 await page.locator('.lyOpacity').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});await settle();assert.equal(await pixels(),noLayer);
 await page.click('#undo');await settle();assert.equal((await setting('layers'))[0].opacity,.35);assert.equal(await pixels(),pin);
-await page.selectOption('.lyMode','multiply');await settle();const mult=await pixels();assert.notEqual(mult,pin);await page.click('.lyVis');await settle();assert.equal(await pixels(),noLayer);await page.click('.lyVis');
+await page.selectOption('.lyMode','multiply');await settle();const mult=await pixels();assert.notEqual(mult,pin);{await page.click('.lyModeBtn');await page.hover('.blendMenu li[data-mode=screen]');await settle();const prev=await pixels();assert.notEqual(prev,mult);assert.equal((await setting('layers'))[0].mode,'screen');
+await page.mouse.click(5,300);await settle();assert.equal(await page.locator('.blendMenu').count(),0);assert.equal((await setting('layers'))[0].mode,'multiply');assert.equal(await pixels(),mult);
+await page.click('.lyModeBtn');await page.click('.blendMenu li[data-mode=screen]');await settle();assert.equal((await setting('layers'))[0].mode,'screen');assert.equal(await pixels(),prev);assert.ok((await page.locator('.lyModeBtn').textContent()).startsWith('Screen'));
+await page.selectOption('.lyMode','multiply');await settle();assert.equal(await pixels(),mult);console.log('PASS blend mode hover preview, click outside restores, click applies');}await page.click('.lyVis');await settle();assert.equal(await pixels(),noLayer);await page.click('.lyVis');
 await page.click('#compare');await settle();assert.notEqual(await pixels(),mult);await page.click('#compare');
 await page.click('.lyDup');await settle();assert.equal((await setting('layers')).length,2);await page.click('#undo');await settle();assert.equal((await setting('layers')).length,1);
 await page.selectOption('.lyMode','pinLight');await settle();assert.equal(await pixels(),pin);

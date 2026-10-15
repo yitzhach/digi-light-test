@@ -5,7 +5,8 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 ## NEXT SESSION STARTS HERE: upgrade phases (user's plan, 10-15)
 One phase per chat. Each phase: build, run tests/browser.cjs (add tests), push to `main`,
 update this file (mark the phase DONE, note what the next chat needs).
-- Phase 0 — DONE (10-15): Original-on-top layer, tool search, Save & export tab, Before export = original.
+- Phase 0 — DONE (10-15, on `main`): Original-on-top layer, tool search, Save & export tab, Before export =
+  original, blend-mode list with hover preview (Photoshop style). **Next chat: start Phase 1.**
 - Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -109,7 +110,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-14
+- Last updated: 2026-10-15
 - **Branch `feature/metrology` merged into `main` (2026-10-14, user asked).** It was:
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
@@ -119,12 +120,14 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change (2026-10-15, branch `claude/relaxed-euler-k2vuj7`, not yet on `main`): **Original on top**
+- Last code change on `main` (2026-10-15): **Original on top**
   layer (Layers section, `state.originalTop`, shader `uOriginalTop`, mixes the untouched photo over everything);
   **tool search** box at the top of the panel (`/` key, autocomplete over sections, labels and buttons; Enter
   opens the section/sub-tab and scrolls to it); **Save & export** section with sub-tabs Save image / Projects /
   Presets / Batch / Testing (built last in studio.js `buildSaveExport`, moves the existing groups);
-  Export while Before is showing downloads the original photo (`original-WxH`) with no effects.
+  Export while Before is showing downloads the original photo (`original-WxH`) with no effects;
+  layer Blend button opens a list (`modeMenu`): hover previews a mode, click applies, outside/Esc restores
+  (the hidden `.lyMode` select stays for keyboard and tests).
 - Before that, on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 4 whole looks
   (05 Raking graze, 06 Softer lamp, 07 Brighter, 09 Lower lamp); round 2 looks removed
 - Before that: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,

@@ -311,13 +311,14 @@ export function initStudio(api) {
     for (let i=layers.length-1;i>=0;i--) {
       const L=layers[i], row=document.createElement('div'); row.className='layer'+(L.enabled?'':' off');
       const opt=(items,v)=>items.map(([k,label])=>`<option value="${k}"${k===v?' selected':''}>${label}</option>`).join('');
-      row.innerHTML=`<div class="layerHead"><button class="lyVis${L.enabled?' on':''}" title="Show or hide this layer">${L.enabled?'Visible':'Hidden'}</button><select class="lyMode" aria-label="Blend mode">${opt(blendModes,L.mode)}</select><select class="lySrc" aria-label="Layer image">${opt(layerSources,L.source)}</select></div>
+      row.innerHTML=`<div class="layerHead"><button class="lyVis${L.enabled?' on':''}" title="Show or hide this layer">${L.enabled?'Visible':'Hidden'}</button><span class="lyModeWrap"><button type="button" class="lyModeBtn" aria-haspopup="listbox" title="Blend mode: hover a mode to preview it, click to apply">${blendModes.find(([k])=>k===L.mode)?.[1]||L.mode} ▾</button><select class="lyMode" aria-label="Blend mode" tabindex="-1">${opt(blendModes,L.mode)}</select></span><select class="lySrc" aria-label="Layer image">${opt(layerSources,L.source)}</select></div>
         <div class="row"><label>Opacity</label><input class="lyOpacity" type="range" min="0" max="1" step="0.01" value="${L.opacity}" aria-label="Layer opacity"><output data-own>${Math.round(L.opacity*100)}%</output></div>
         <div class="layerTools"><button class="lyUp" title="Move up"${i===layers.length-1?' disabled':''}>↑</button><button class="lyDown" title="Move down"${i===0?' disabled':''}>↓</button><button class="lyDup" title="Duplicate"${layers.length>=MAX_LAYERS?' disabled':''}>Duplicate</button><button class="lyDel">Delete</button></div>
         <div class="layerMask"><span>Mask</span><button class="lyHide${brush==='maskHide'&&maskLayer===i?' on':''}" title="Brush on the painting to hide this layer there">Paint hide</button><button class="lyShow${brush==='maskShow'&&maskLayer===i?' on':''}" title="Brush on the painting to show this layer there">Paint show</button><button class="lyHideAll" title="Hide this layer everywhere, then Paint show where you want it">Hide all</button><button class="lyReset" title="Remove the mask: the layer applies everywhere"${L.mask?'':' disabled'}>Reset</button></div>`;
       const q=c=>row.querySelector(c);
       q('.lyVis').onclick=()=>{L.enabled=!L.enabled;renderLayers();render();};
-      q('.lyMode').onchange=e=>{L.mode=e.target.value;render();};
+      q('.lyMode').onchange=e=>{L.mode=e.target.value;q('.lyModeBtn').textContent=(blendModes.find(([k])=>k===L.mode)?.[1]||L.mode)+' ▾';render();};
+      q('.lyModeBtn').onclick=e=>{e.stopPropagation();modeMenu(L,e.currentTarget);};
       q('.lySrc').onchange=e=>{L.source=e.target.value;render();};
       q('.lyOpacity').oninput=e=>{L.opacity=+e.target.value;q('output').textContent=`${Math.round(L.opacity*100)}%`;render();};
       const move=d=>{layers.splice(i,1);layers.splice(i+d,0,L);if(maskLayer===i)maskLayer=i+d;else if(maskLayer===i+d)maskLayer=i;renderLayers();render();};
@@ -334,6 +335,30 @@ export function initStudio(api) {
     if(maskLayer>=layers.length&&brush.startsWith('mask'))setBrush('');
     state.maskOverlay=brush.startsWith('mask')?maskLayer:-1;
     rebuildLayerMasks();
+  }
+  // Blend mode list like Photoshop's: hovering a mode previews it on the painting,
+  // a click applies it, clicking anywhere else (or Esc) goes back to the applied mode.
+  let menu=null;
+  function closeMenu(apply){if(!menu)return;const m=menu;menu=null;if(!apply){m.L.mode=m.saved;render();}m.el.remove();document.removeEventListener('pointerdown',m.outside,true);document.removeEventListener('keydown',m.key,true);}
+  function modeMenu(L,btn){
+    if(menu){const same=menu.L===L;closeMenu(false);if(same)return;}
+    const el=document.createElement('ul');el.className='blendMenu';el.setAttribute('role','listbox');
+    const m={L,saved:L.mode,el};menu=m;
+    for(const [k,label] of blendModes){
+      const li=document.createElement('li');li.textContent=label;li.dataset.mode=k;li.setAttribute('role','option');
+      if(k===m.saved)li.classList.add('applied');
+      li.onpointerenter=()=>{for(const o of el.children)o.classList.toggle('on',o===li);if(L.mode!==k){L.mode=k;render();}};
+      li.onclick=e=>{e.stopPropagation();L.mode=k;closeMenu(true);renderLayers();render();checkpoint();};
+      el.append(li);
+    }
+    el.onpointerleave=()=>{for(const o of el.children)o.classList.remove('on');if(L.mode!==m.saved){L.mode=m.saved;render();}};
+    m.outside=e=>{if(!el.contains(e.target)){closeMenu(false);if(e.target===btn)e.stopPropagation();}};
+    m.key=e=>{if(e.key==='Escape'){e.preventDefault();closeMenu(false);}};
+    document.body.append(el);
+    const r=btn.getBoundingClientRect(),h=el.offsetHeight;
+    el.style.left=Math.min(r.left,innerWidth-el.offsetWidth-8)+'px';
+    el.style.top=Math.max(8,r.bottom+h+8>innerHeight?r.top-h-4:r.bottom+4)+'px';
+    setTimeout(()=>{document.addEventListener('pointerdown',m.outside,true);document.addEventListener('keydown',m.key,true);},0);
   }
   $('originalTop').addEventListener('input',e=>{state.originalTop=+e.target.value;e.target.nextElementSibling.textContent=Math.round(e.target.value*100)+'%';render();});
   $('originalTop').addEventListener('change',()=>checkpoint());
