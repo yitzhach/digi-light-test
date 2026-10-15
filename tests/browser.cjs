@@ -713,5 +713,35 @@ const br=await a.evaluate(async(u)=>{const f=document.createElement('iframe');f.
 assert.deepEqual(br.s.result,{exposure:0.25});assert.equal(br.state,0.25);assert.ok(br.i.result.preview.width>0);assert.match(br.bad.error,/Unknown method/);assert.match(br.err.error,/Invalid graze light/);assert.ok(br.note,'bridge notice shown');
 await a.goto(base+'/?synth');await a.waitForFunction(()=>window.digilight);assert.equal(await a.evaluate(()=>!!document.getElementById('bridgeNote')),false,'no bridge without ?bridge');
 await ctx.close();console.log('PASS automation API: set by name (one undo step, validated), render/export, project round trip, presets, ?set=, postMessage bridge');}
+// Shadow light (+ Shadow): a Shade darkens a soft pool where its dot is and leaves the rest alone; Darkness 0 is no change;
+// Negative light also darkens there; kind and darkness are validated, saved in projects, and reachable by the API.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={};
+ const luma=async()=>{const im=new Image();im.src=await d.render();await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const g=c.getContext('2d');g.drawImage(im,0,0);
+  const at=(fx,fy)=>{const w=Math.round(im.width*.08),h=Math.round(im.height*.08),D=g.getImageData(Math.round(im.width*fx-w/2),Math.round(im.height*fy-h/2),w,h).data;let s=0;for(let i=0;i<D.length;i+=4)s+=.2126*D[i]+.7152*D[i+1]+.0722*D[i+2];return s/(D.length/4);};
+  return {near:at(.3,.3),far:at(.8,.8),url:im.src};};
+ const L0=await luma();
+ document.querySelector('#addShadow').click();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ const l=__bench.state.lights[1];out.kind=l.kind;out.n=__bench.state.lights.length;out.tab=[...document.querySelectorAll('#tabs button')].map(b=>b.textContent);
+ out.dot=document.querySelectorAll('.handle.shadow').length;out.panel=[...document.querySelectorAll('#lightPanel label')].map(x=>x.textContent);
+ const L1=await luma();out.shade=[L1.near/L0.near,L1.far/L0.far];
+ await d.set('lights.1.dark',0);out.zero=(await luma()).url===L0.url;await d.set('lights.1.dark',0.6);
+ document.querySelector('#lightPanel [data-kind=negative]').click();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));out.neg=__bench.state.lights[1].kind;
+ const L2=await luma();out.negative=[L2.near/L0.near,L2.far/L0.far];
+ for(const [k,v] of [['lights.1.kind','cloud'],['lights.1.dark',2]])try{await d.set(k,v);out[k]='no error';}catch(e){out[k]=e.message;}
+ const proj=await d.getProject();out.saved=[proj.settings.lights[1].kind,proj.settings.lights[1].dark,proj.settings.lights[0].kind];
+ await d.set('lights.1.kind','shade');await d.setProject(proj);out.reopened=__bench.state.lights[1].kind;
+ const added=await d.addLight('shade',{x:.7,y:.3,aimX:.7,aimY:.3,dark:.4});out.added=[added.index,added.light.kind,added.light.dark];
+ try{await d.addLight('cloud');}catch(e){out.badAdd=e.message;}
+ out.removed=(await d.removeLight(2)).lights;return out;});
+assert.equal(r.kind,'shade');assert.equal(r.n,2);assert.deepEqual(r.tab.slice(0,2),['Light 1','Shadow 2']);assert.ok(r.tab.includes('+ Shadow'));assert.equal(r.dot,1);
+assert.ok(r.panel.includes('Darkness')&&r.panel.includes('Tint')&&!r.panel.includes('Shadow lift'),JSON.stringify(r.panel));
+assert.ok(r.shade[0]<0.8&&Math.abs(r.shade[1]-1)<0.03,'shade darkens its pool only '+JSON.stringify(r.shade));assert.ok(r.zero,'Darkness 0 changes nothing');
+assert.equal(r.neg,'negative');assert.ok(r.negative[0]<0.85&&Math.abs(r.negative[1]-1)<0.03,'negative light darkens near it '+JSON.stringify(r.negative));
+assert.match(r['lights.1.kind'],/Invalid light kind/);assert.match(r['lights.1.dark'],/Invalid shadow darkness/);
+assert.deepEqual(r.saved,['negative',0.6,undefined]);assert.equal(r.reopened,'negative');
+assert.deepEqual(r.added,[2,'shade',0.4]);assert.match(r.badAdd,/kind is light, shade or negative/);assert.equal(r.removed,2);
+await ctx.close();console.log('PASS Shadow light: Shade pool and Negative light darken where they fall, validated, saved, API',JSON.stringify({shade:r.shade.map(v=>+v.toFixed(2)),negative:r.negative.map(v=>+v.toFixed(2))}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

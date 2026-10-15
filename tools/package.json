@@ -1,0 +1,18 @@
+{
+  "name": "digilight-tools",
+  "private": true,
+  "description": "DigiLight headless tools: command line (digilight-cli.cjs) and MCP server (digilight-mcp.cjs). See docs/automation.md.",
+  "bin": {
+    "digilight": "digilight-cli.cjs",
+    "digilight-mcp": "digilight-mcp.cjs"
+  },
+  "scripts": {
+    "mcp": "node digilight-mcp.cjs",
+    "test": "node ../tests/mcp.cjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "playwright": "^1.56.1",
+    "zod": "^3.25.76"
+  }
+}

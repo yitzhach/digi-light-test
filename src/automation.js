@@ -20,7 +20,8 @@ const MIME = { png: 'image/png', jpeg: 'image/jpeg', jpg: 'image/jpeg', webp: 'i
 // Per-light fields and their ranges, as studio.js validate checks them.
 const LIGHT_FIELDS = [['x', 'Across (painting widths, 0 left … 1 right)'], ['y', 'Up (0 bottom … 1 top)'], ['z', 'Height out from the wall'],
   ['power', 'Power'], ['kelvin', 'Colour temperature (K), with useKelvin 1'], ['cone', 'Beam cone'], ['softness', 'Softness'], ['falloff', 'Falloff'],
-  ['aimX', 'Aim across'], ['aimY', 'Aim up'], ['size', 'Lamp size'], ['lift', 'Shadow lift (−1 … 1)'], ['enabled', 'On (true/false)'], ['useKelvin', 'Use colour temperature'], ['hex', 'Colour (#rrggbb)']];
+  ['aimX', 'Aim across'], ['aimY', 'Aim up'], ['size', 'Lamp size'], ['lift', 'Shadow lift (−1 … 1)'], ['enabled', 'On (true/false)'], ['useKelvin', 'Use colour temperature'], ['hex', 'Colour (#rrggbb)'],
+  ['kind', 'Kind: light, shade (a soft shadow: less light where it falls) or negative (a lamp in reverse)'], ['dark', 'Darkness of a shade (0–1)']];
 const GRAZE_FIELDS = [['enabled', 'Visible', 'grazeVis'], ['angle', 'Direction (0° from the right, 90° top)', null, 0, 359.9], ['elevation', 'Angle to wall', 'grazeElevation'],
   ['opacity', 'Opacity', 'grazeOpacity'], ['detail', 'Detail', 'grazeDetail'], ['fine', 'Fine', 'grazeFine'], ['reach', 'Shadow length', 'grazeReach'],
   ['clean', 'Clean shadows', 'grazeClean'], ['soft', 'Softness', 'grazeSoft'], ['lift', 'Shadow lift', 'grazeLift'], ['fill', 'Room light', null, 0, null], ['grey', 'Grey surface', null, 0, 1]];
@@ -106,6 +107,25 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     try { apply(s); } catch (e) { throw new Error(`${e.message.replace(/\.$/, '')}: nothing changed (asked ${JSON.stringify(changes)}; digilight.describe() lists the ranges).`); }
     return Object.fromEntries(Object.keys(changes).map((p) => [p, getPath(snapshot(), p)]));
   }
+  // + Light / + Shadow: a new light (kind 'light') or Shadow light ('shade', 'negative'), with any fields changed.
+  function addLight(kind = 'light', props = {}) {
+    if (!['light', 'shade', 'negative'].includes(kind)) throw new Error('kind is light, shade or negative.');
+    const s = settings();
+    if (s.lights.length >= 8) throw new Error('There are 8 lights already, the most there can be.');
+    const l = { ...api.makeLight(kind), ...props };
+    delete l.rgb;
+    s.lights.push(l); s.selected = s.lights.length - 1;
+    try { apply(s); } catch (e) { throw new Error(`${e.message.replace(/\.$/, '')}: no light added.`); }
+    return { index: s.lights.length - 1, light: clone(snapshot().lights[s.lights.length - 1]) };
+  }
+  function removeLight(index) {
+    const s = settings();
+    if (!(index >= 0 && index < s.lights.length)) throw new Error(`No light ${index}; there are ${s.lights.length} (from 0).`);
+    if (s.lights.length <= 1) throw new Error('The last light cannot be removed; turn it off with lights.0.enabled = false.');
+    s.lights.splice(index, 1); s.selected = Math.min(s.selected, s.lights.length - 1);
+    apply(s);
+    return { lights: s.lights.length };
+  }
   // What can be set: name, label, range (where the panel has one) and current value.
   function describe() {
     const now = snapshot(), out = [];
@@ -118,7 +138,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       out.push({ path: k, label: label(id), ...range(id), value: v });
     }
     for (const [k, l, id, min, max] of GRAZE_FIELDS) out.push({ path: `graze.${k}`, label: l, ...range(id), ...(min != null ? { min } : {}), ...(max != null ? { max } : {}), value: now.graze?.[k] ?? null });
-    now.lights.forEach((L, i) => { for (const [k, l] of LIGHT_FIELDS) out.push({ path: `lights.${i}.${k}`, label: `Light ${i + 1} · ${l}`, value: L[k] }); });
+    now.lights.forEach((L, i) => { for (const [k, l] of LIGHT_FIELDS) out.push({ path: `lights.${i}.${k}`, label: `Light ${i + 1} · ${l}`, value: L[k] ?? (k === 'kind' ? 'light' : null) }); });
     for (const A of ADJUSTMENTS) {
       out.push({ path: `adjust.${A.key}.on`, label: `${A.name} · on`, value: now.adjust?.[A.key]?.on });
       for (const [k, l, min, max, step] of A.fields) out.push({ path: `adjust.${A.key}.${k}`, label: `${A.name} · ${l}`, min, max, step, value: now.adjust?.[A.key]?.[k] });
@@ -217,6 +237,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     load: serial(load), set: serial(async (p, v) => set(p, v)), setSettings: serial(async (s) => { apply({ ...settings(), ...s }); return settings(); }),
     analyze: serial(analyze), looks, applyLook: serial(applyLook),
     presets: () => Object.fromEntries(Object.entries(presets).map(([k, t]) => [k, [...t.names]])), applyPreset: serial(async (k, n) => applyPreset(k, n)),
+    addLight: serial(async (k, p) => addLight(k, p)), removeLight: serial(async (i) => removeLight(i)),
     undo: serial(async () => step('undo')), redo: serial(async () => step('redo')),
     render: serial(render), export: serial(exportImage),
     getProject: serial(getProject), setProject: serial(setProject),

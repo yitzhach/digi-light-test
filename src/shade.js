@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, isLamp } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
 import { ADJUST_GLSL, setAdjustUniforms, curveLUT } from './adjust.js';
 import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
@@ -52,6 +52,11 @@ uniform vec2 uLightAim[${MAX_LIGHTS}];
 uniform float uLightSize[${MAX_LIGHTS}];     // source radius, in painting widths
 uniform float uLightReach[${MAX_LIGHTS}];    // share of uShadowDist this light's shadows may run
 uniform float uLightLift[${MAX_LIGHTS}];     // Shadow lift: how far this light raises the dark tones it falls on
+// Shadow lights take light away where their beam falls: 1 = Shade (a flag or a cloud off the
+// frame: the light there is cut by Darkness and what is left takes the tint, uLightColor),
+// 2 = Negative light (shaded like a lamp, subtracted from the lamps). 0 = an ordinary light.
+uniform int   uLightKind[${MAX_LIGHTS}];
+uniform float uLightDark[${MAX_LIGHTS}];
 uniform sampler2D uShadowRelief;             // relief for the main lights' shadows: grain smoothed out
 
 uniform float uAspect;
@@ -333,6 +338,7 @@ void main() {
   vec3 acc = vec3(0.0);
   float litShare = 0.0, allShare = 0.0;   // for the Shadows view
   float lift = 0.0;                        // Shadow lift, summed over the lights reaching here
+  vec3 shade = vec3(1.0), taken = vec3(0.0); // Shadow lights: Shade multiplies, Negative light subtracts
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= uLightCount) break;
     if (uLightEnabled[i] < 0.5) continue;
@@ -363,13 +369,22 @@ void main() {
     vec3 aim = normalize(vec3(uLightAim[i].x - lp.x, (uLightAim[i].y - lp.y) * uAspect, -lp.z));
     float spot = cone < 0.01 ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
     if (spot <= 0.0) continue;
+    if (uLightKind[i] == 1) {
+      // Cast by something between the lamps and the painting: no relief of its own,
+      // just a soft pool of less light, densest nearest it (its Falloff) and tinted.
+      float b = spot * poolShare(lp, dist, uLightFalloff[i]);
+      // The tint comes in with the darkness (full from 50%), so Darkness 0 is no shadow at all.
+      float dk = uLightDark[i];
+      shade *= max(mix(vec3(1.0), (1.0 - dk) * mix(vec3(1.0), uLightColor[i], min(1.0, 2.0 * dk)), b), 0.0);
+      continue;
+    }
     // Shadow lift goes wherever the beam lands, cast shadows and facets turned away included.
-    lift += uLightLift[i] * spot * poolShare(lp, dist, uLightFalloff[i]);
+    if (uLightKind[i] == 0) lift += uLightLift[i] * spot * poolShare(lp, dist, uLightFalloff[i]);
 
     // Shadows view: everything inside the beam counts, and a facet turned away from
     // the light is in (attached) shadow just as much as one a ridge blocks.
     vec3 incoming = uLightColor[i] * uLightPower[i] * atten * spot;
-    float weight = dot(incoming, vec3(0.2126, 0.7152, 0.0722));
+    float weight = uLightKind[i] == 0 ? dot(incoming, vec3(0.2126, 0.7152, 0.0722)) : 0.0;
     allShare += weight;
     if (NoLw <= 0.0) continue;
 
@@ -381,7 +396,9 @@ void main() {
     // representative-point term). D stays normalised, so the energy is spread
     // rather than added.
     float aSrc = min(1.0, a + uLightSize[i] / (2.0 * dist));
-    acc += brdf(N, V, L, NoV, NoLw, albedo, f0, aSrc) * incoming * shadow;
+    vec3 lit = brdf(N, V, L, NoV, NoLw, albedo, f0, aSrc) * incoming * shadow;
+    if (uLightKind[i] == 2) { taken += lit; continue; }
+    acc += lit;
     litShare += weight * shadow * smoothstep(0.0, 0.1, NoLw);
   }
 
@@ -397,7 +414,10 @@ void main() {
   // local-mean-zero signal, so a negative height *is* a pit and pits catch less
   // of the sky term.
   float ao = 1.0 - uAO * clamp(-height * uAOScale, 0.0, 1.0);
+  // A negative light only takes away what the lamps gave; the room light stays.
+  acc = max(acc - taken, 0.0);
   acc += albedo * uAmbientColor * uAmbient * ao;
+  acc *= shade;
 
   float strokes = strokeShade(mask);
   acc *= strokes / uWhiteBalance;
@@ -434,7 +454,7 @@ void main() {
       float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
       g += brdf(gN, V, L, gNoV, NoLw, gAlb, gF0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
     }
-    g *= strokes / uGrazeWhiteBalance;
+    g *= shade * strokes / uGrazeWhiteBalance;
     g *= exp2(uExposure);
     vec3 gm = mix(clamp(g, 0.0, 1.0), acesFilm(g), uHighlightRolloff);
     vec3 gs = liftShadows(clamp(linearToSrgb(gm), 0.0, 1.0), uGrazeLift * poolShare(uGrazePos, dist, uGrazeLiftFall));
@@ -549,6 +569,7 @@ export class Shader {
     const aim = new Float32Array(MAX_LIGHTS * 2);
     const size = new Float32Array(MAX_LIGHTS);
     const lift = new Float32Array(MAX_LIGHTS);
+    const kind = new Int32Array(MAX_LIGHTS), dark = new Float32Array(MAX_LIGHTS);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
@@ -561,6 +582,15 @@ export class Shader {
       aim[i * 2 + 1] = l.aimY ?? l.y;
       size[i] = l.size ?? 0.03;
       lift[i] = l.lift ?? 0;
+      kind[i] = LIGHT_KINDS.indexOf(l.kind ?? 'light');
+      dark[i] = l.dark ?? 0.6;
+      // A Shade tints what it leaves (its colour at unit luminance, so the tint never
+      // brightens); a Negative light takes away half the opposite tint, so a cool one leaves
+      // the remaining light a little cooler (the whole opposite turned pale paint cyan).
+      if (kind[i] > 0) {
+        const lum = Math.max(1e-4, 0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]);
+        for (let c = 0; c < 3; c++) { const t = l.rgb[c] / lum; col[i * 3 + c] = kind[i] === 1 ? t : Math.max(0, 1.5 - 0.5 * t); }
+      }
     });
     // Long shadows belong to the key light. Each extra light marches a share of the
     // reach set by its strength relative to the strongest one, so fills add light
@@ -580,6 +610,8 @@ export class Shader {
     gl.uniform1fv(u.uLightSize, size);
     gl.uniform1fv(u.uLightReach, reach);
     gl.uniform1fv(u.uLightLift, lift);
+    gl.uniform1iv(u.uLightKind, kind);
+    gl.uniform1fv(u.uLightDark, dark);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
@@ -702,7 +734,7 @@ const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1
 export function sceneWhite(lights, aspect, ambient) {
   const sum = [...ambient];
   for (const l of lights) {
-    if (!l.enabled) continue;
+    if (!l.enabled || !isLamp(l)) continue;
     const cone = Math.min(1, Math.max(0, l.cone ?? 0));
     const cosOuter = 0.02 + (0.985 - 0.02) * cone, cosInner = cosOuter + 0.001 + (1 - cosOuter - 0.001) * (l.softness ?? 0.5);
     let ax = (l.aimX ?? l.x) - l.x, ay = ((l.aimY ?? l.y) - l.y) * aspect, az = -l.z;
@@ -730,8 +762,8 @@ export function sceneWhite(lights, aspect, ambient) {
 export const MIN_REACH = 0.15;
 export function lightReach(lights) {
   const out = new Float32Array(MAX_LIGHTS);
-  const w = lights.map((l) => l.enabled ? l.power * (0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]) : 0);
-  const key = Math.max(0, ...w);
+  const w = lights.map((l) => l.enabled && l.kind !== 'shade' ? l.power * (0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]) : 0);
+  const key = Math.max(0, ...w.filter((v, i) => isLamp(lights[i])));
   w.forEach((v, i) => { out[i] = key > 0 ? Math.max(MIN_REACH, Math.min(1, v / key)) : 1; });
   return out;
 }

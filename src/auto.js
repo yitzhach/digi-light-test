@@ -33,7 +33,7 @@ const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength',
 // Belong to the photo, not to a look: a saved preset or project never changes them here.
 const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes'];
 const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden'];
-const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff'];
+const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff', 'dark'];
 const GRAZE_NUM = ['elevation', 'opacity', 'detail', 'fine', 'reach', 'clean', 'soft', 'lift', 'fill', 'grey'];
 const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
 const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
@@ -59,8 +59,8 @@ export function mixSettings(a, b, s, applyColor = () => {}) {
     const p = A[i], q = B[i];
     let l;
     if (p && q) { l = clone(q); for (const k of LIGHT_NUM) { const x = p[k] ?? q[k], y = q[k] ?? p[k]; if (typeof x === 'number' && typeof y === 'number') l[k] = x + (y - x) * s; } }
-    else if (q) l = { ...clone(q), power: q.power * s };
-    else l = { ...clone(p), power: p.power * (1 - s) };
+    else if (q) l = { ...clone(q), power: q.power * s, ...(q.dark != null ? { dark: q.dark * s } : {}) };
+    else l = { ...clone(p), power: p.power * (1 - s), ...(p.dark != null ? { dark: p.dark * (1 - s) } : {}) };
     applyColor(l); out.lights.push(l);
   }
   out.selected = 0;
@@ -104,7 +104,9 @@ export function lightPool(rgba, w, h) {
  *  ('left' / 'right'); `null` leaves them as they are. Returns whether it mirrored. */
 export function keySide(lights, side) {
   if (!side || !lights.length) return false;
-  const key = lights.reduce((a, b) => (b.power > a.power ? b : a));
+  const lamps = lights.filter((l) => !l.kind || l.kind === 'light');
+  if (!lamps.length) return false;
+  const key = lamps.reduce((a, b) => (b.power > a.power ? b : a));
   const off = key.x - 0.5;
   if (Math.abs(off) < 0.05 || (side === 'right') === (off > 0)) return false;
   for (const l of lights) { l.x = 1 - l.x; if (l.aimX != null) l.aimX = 1 - l.aimX; }

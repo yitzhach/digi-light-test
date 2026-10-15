@@ -150,6 +150,15 @@ function newLight(i) {
 }
 state.lights.push(newLight(0));
 
+// A Shadow light: a soft pool of less light where its dot is (straight on), cool-tinted,
+// as if a flag or a cloud off the frame blocked part of the lamps (shade.js uLightKind).
+function newShadow(i) {
+  const p = [[0.3, 0.7], [0.7, 0.3], [0.5, 0.5]][i % 3];
+  return { kind: 'shade', x: p[0], y: p[1], z: 0.5, aimX: p[0], aimY: p[1], kelvin: 9000, useKelvin: true, hex: '#ffffff',
+    rgb: kelvinToLinearRGB(9000), power: 2.2, dark: 0.6, cone: 0.8, softness: 0.85, size: 0.3, falloff: 0, lift: 0, enabled: true };
+}
+const isShadow = (l) => !!l && !!l.kind && l.kind !== 'light';
+
 function fail(e) {
   const box = $('err');
   box.style.display = 'block';
@@ -514,8 +523,8 @@ function rebuildTabs() {
   tabs.innerHTML = '';
   state.lights.forEach((l, i) => {
     const b = document.createElement('button');
-    b.textContent = `Light ${i + 1}`;
-    if (i === state.selected) b.className = 'on';
+    b.textContent = `${isShadow(l) ? 'Shadow' : 'Light'} ${i + 1}`;
+    b.className = (i === state.selected ? 'on' : '') + (isShadow(l) ? ' shadowTab' : '');
     b.onclick = () => { state.selected = i; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); };
     tabs.appendChild(b);
   });
@@ -526,11 +535,21 @@ function rebuildTabs() {
     // height, beam, softness, shadow lift) so it matches the look; only its place differs.
     add.onclick = () => {
       const from = state.lights[state.selected], spot = newLight(state.lights.length);
-      state.lights.push(from ? { ...from, rgb: [...from.rgb], x: spot.x, y: spot.y, aimX: 0.5, aimY: 0.5, enabled: true } : spot);
+      state.lights.push(from && !isShadow(from) ? { ...from, rgb: [...from.rgb], x: spot.x, y: spot.y, aimX: 0.5, aimY: 0.5, enabled: true } : spot);
       state.selected = state.lights.length - 1;
       rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
     };
     tabs.appendChild(add);
+    const shadow = document.createElement('button');
+    shadow.textContent = '+ Shadow';
+    shadow.id = 'addShadow';
+    shadow.title = 'A light in reverse: takes light away where it falls, like a flag or a cloud between the lamps and the painting';
+    shadow.onclick = () => {
+      state.lights.push(newShadow(state.lights.filter(isShadow).length));
+      state.selected = state.lights.length - 1;
+      rebuildTabs(); rebuildLightPanel(); rebuildHandles(); render();
+    };
+    tabs.appendChild(shadow);
   }
 }
 
@@ -634,6 +653,7 @@ function rebuildLightPanel() {
   };
   head.append(eye, dup, mirror, del);
   p.appendChild(head);
+  if (isShadow(l)) { shadowPanel(p, l); return; }
 
   // Light type: one click from bare spot to window light.
   const types = document.createElement('div');
@@ -706,6 +726,50 @@ function rebuildLightPanel() {
   p.appendChild(note);
 }
 
+// A Shadow light's controls. Two styles to compare (Phase 5): Shade multiplies the light
+// where it falls (no relief of its own); Negative light is a lamp in reverse, shaded over
+// the relief, so ridges facing it darken most.
+function shadowPanel(p, l) {
+  const styles = document.createElement('div');
+  styles.className = 'lightTypes';
+  for (const [kind, name, tip] of [['shade', 'Shade', 'A soft shadow cast by something off the frame: less of every light where it falls'],
+    ['negative', 'Negative light', 'A lamp in reverse: takes light away, shading the relief, so paint facing it goes darker']]) {
+    const b = document.createElement('button');
+    b.textContent = name; b.title = tip; b.dataset.kind = kind;
+    if (l.kind === kind) b.className = 'on';
+    b.onclick = () => { l.kind = kind; rebuildTabs(); rebuildLightPanel(); render(); };
+    styles.appendChild(b);
+  }
+  p.appendChild(styles);
+  if (l.kind === 'shade') p.appendChild(slider('Darkness', 0, 1, 0.01, () => l.dark ?? 0.6, (v) => { l.dark = v; }, (v) => `${Math.round(v * 100)}%`));
+  else p.appendChild(slider('Strength', -3, Math.log2(POWER_MAX), 0.02, () => Math.log2(Math.max(l.power, 0.125)),
+    (v) => { l.power = 2 ** v; }, (v) => { const w = 2 ** v; return w < 10 ? w.toFixed(2) : w.toFixed(0); }));
+  // Cone 0.4 … 0.985: the pool's size where the shadow sits straight on; Edge is the beam's.
+  p.appendChild(slider('Size', 0, 1, 0.01, () => clamp((0.985 - l.cone) / 0.585, 0, 1), (v) => { l.cone = 0.985 - 0.585 * v; rebuildHandles(); },
+    (v) => `${Math.round(v * 100)}%`));
+  p.appendChild(slider('Edge', 0, 1, 0.02, () => l.softness ?? 0.5, (v) => { l.softness = v; }, (v) => (v < 0.15 ? 'hard' : v > 0.85 ? 'very soft' : `${Math.round(v * 100)}%`)));
+  p.appendChild(slider('Angle to wall', 1, 90, 0.5, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
+    (v) => (v < 10 ? `${v.toFixed(1)}°` : `${Math.round(v)}°`)));
+  p.appendChild(slider('Distance', LIGHT_Z_MIN, 2.5, 0.005, () => l.z, (v) => { l.z = v; rebuildHandles(); }, fmtLength));
+  p.appendChild(slider('Tint', 1800, 10000, 50, () => l.kelvin, (v) => { l.kelvin = v; l.useKelvin = true; applyColor(l); rebuildHandles(); },
+    (v) => (Math.abs(v - 6500) < 200 ? 'neutral' : v > 6500 ? `cool ${v | 0}K` : `warm ${v | 0}K`)));
+  const more = document.createElement('details');
+  more.className = 'moreLight';
+  more.open = !!state.moreLightOpen;
+  more.ontoggle = () => { state.moreLightOpen = more.open; };
+  more.innerHTML = '<summary>More shadow controls</summary>';
+  more.appendChild(slider('Falloff', 0, 2, 0.05, () => l.falloff ?? 2, (v) => { l.falloff = v; }));
+  more.appendChild(slider('Aim X', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.aimX ?? l.x, (v) => { l.aimX = v; }));
+  more.appendChild(slider('Aim Y', LIGHT_MIN, LIGHT_MAX, 0.01, () => l.aimY ?? l.y, (v) => { l.aimY = v; }));
+  if (l.kind === 'negative') more.appendChild(slider('Source size', 0, 1.5, 0.005, () => l.size ?? 0.03, (v) => { l.size = v; }, fmtLength));
+  p.appendChild(more);
+  const note = document.createElement('p');
+  note.className = 'note';
+  note.textContent = 'Drag the dot to move the shadow. Tint is the colour of the light left in it (cool, like daylight in shade, or warm). '
+    + 'Shade: a soft pool of less light, the paint keeps its texture. Negative light: a lamp in reverse; lower its Angle to wall to darken the paint facing it.';
+  p.appendChild(note);
+}
+
 const fmtLift = (v) => (Math.abs(v) < 0.005 ? 'off' : `${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * 100)}%`);
 
 function applyColor(l) {
@@ -734,7 +798,7 @@ function rebuildHandles() {
   wrap.querySelectorAll('.handle').forEach((h) => h.remove());
   state.lights.forEach((l, i) => {
     const d = document.createElement('div');
-    d.className = 'handle' + (i === state.selected ? ' sel' : '') + (l.enabled ? '' : ' off');
+    d.className = 'handle' + (i === state.selected ? ' sel' : '') + (l.enabled ? '' : ' off') + (isShadow(l) ? ' shadow' : '');
     d.style.background = l.useKelvin ? linearRGBToHex(l.rgb) : l.hex;
     // Handle size previews the light's reach, so the canvas shows Z as well as X/Y.
     const px = 18 + l.z * 26;
@@ -1226,6 +1290,8 @@ async function boot() {
       return exportImage({ mode: 'single', source: fullSource, width, height }, null, { viewMode: 0 });
     },
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
+    // A new light, as + Light / + Shadow make it ('light', 'shade' or 'negative').
+    makeLight: (kind = 'light') => (kind === 'light' ? newLight(state.lights.length) : { ...newShadow(state.lights.filter(isShadow).length), kind }),
     refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
     openSource: async image => {
       state.mode = 'single'; $('src').value = 'upload';

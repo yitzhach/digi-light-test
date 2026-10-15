@@ -270,7 +270,9 @@ use more than four shots with varied elevation when fitting ambient.
 Scripts and AI agents can drive the app: `window.digilight` in the page (load a photo,
 Analyze, apply a look, set any setting by name, render or export, project get/set),
 URL parameters (`?image=`, `?set=`, `?look=`), a `postMessage` bridge (`?bridge`) and
-a headless command line, `tools/digilight-cli.cjs`. See `docs/automation.md`.
+a headless command line, `tools/digilight-cli.cjs`, and an MCP server,
+`tools/digilight-mcp.cjs`, so an AI assistant can relight a painting while you chat.
+See `docs/automation.md`.
 
 ## Automatic deploys
 `wrangler.jsonc` tells Cloudflare Workers Builds to publish this folder as a static

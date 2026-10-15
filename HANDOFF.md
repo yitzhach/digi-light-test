@@ -14,7 +14,7 @@ update this file (mark the phase DONE, note what the next chat needs).
   Setup with Analyze showing (done in Phase 3).
 - Phase 3 — DONE (10-15, on `main`; see Done recently): overlays + the user's notes (Colour tool
   adjustments with eyes and Opacity, eyes on Fine-tune / Layers / Graze, Auto Opacity, crisper
-  built-in looks, opens on Setup + Analyze). **Next chat: start Phase 4.** Open questions for
+  built-in looks, opens on Setup + Analyze). Open questions for
   the user: do the fixed looks (Gallery, Raking texture, Long shadows, Soft window, Museum spot)
   still read blurry on their phone; are the overlay defaults (grain 35%, vignette 50%) sensible.
 - Phase 3b — user's notes after Phase 3 (10-15), done in this order:
@@ -51,33 +51,20 @@ update this file (mark the phase DONE, note what the next chat needs).
   warm glow, soft window light gradient, spotlight pool) each with opacity + blend mode,
   stored in `state.overlays`, saved in projects/presets.
 - Phase 4 — DONE (10-15, on `main`; see Done recently): `window.digilight` (src/automation.js),
-  URL params + `?bridge` postMessage, `docs/automation.md`, `tools/digilight-cli.cjs`. Not built:
-  the optional MCP server wrapping the CLI. User (10-15): **wants it** → Phase 4b below.
-- Phase 4b — **MCP server** (user asked 10-15; next chat does this FIRST, then Phase 5). Goal: an AI
-  assistant (Claude desktop app / Claude Code on the user's own computer) can relight paintings by
-  chatting. Build `tools/digilight-mcp.cjs` (stdio MCP server, `@modelcontextprotocol/sdk`): keep ONE
-  headless browser page open (reuse the CLI's static server + Playwright launch; refactor shared
-  parts of tools/digilight-cli.cjs into a module) and expose tools mapping to window.digilight:
-  open_image (path / URL / sample), open_project, analyze, list_looks, apply_look (name, strength),
-  list_presets / apply_preset, describe_settings, get_settings, set_settings ({path: value}), undo,
-  render_preview (return the image as MCP image content, small, so the assistant can see it),
-  export_image (write a file path; width/format), save_project. Errors → tool errors with the
-  validate message. Add a package.json (deps: playwright, @modelcontextprotocol/sdk) if needed,
-  setup steps for the user in docs/automation.md (Claude desktop `claude_desktop_config.json`
-  entry, `claude mcp add` for Claude Code; needs Node + `npx playwright install chromium` on their
-  machine — they are on iPhone mostly, so ask what computer they have: Mac/Windows). Test: a Node
-  script that spawns the server, lists tools, calls open_image sample:painting + set + render.
-  Explain to the user in plain words (they asked "what is this"; non-technical).
-- Phase 5 — (after 4b, same chat if time) **Shadow light** (user asked 10-15: "experiment with a 'shadow' light tool … that can in
-  a sense have an opposite effect to a light"): a light type that takes light away where it falls,
-  like a flag/gobo or a dark cloud over part of the painting. Ideas to try: (a) negative power
-  through the same shading path (the beam, cone, softness, falloff all still apply; clamp the
-  result at 0; its relief shading inverts, so ridges facing it go darker, test whether that looks
-  natural or wrong); (b) a "shade" that multiplies the other lights by 1 − k·beam(x), no own
-  relief term (a soft shadow cast by something off-frame, the more likely look); (c) a cast-shadow
-  shape (blurred ellipse / window-bar gobo) projected along the light. Dot on the painting like
-  other lights, own colour (a cool shadow tint), saved in lights/projects. Try (a) and (b) as a
-  batch, show the user, keep what reads as natural.
+  URL params + `?bridge` postMessage, `docs/automation.md`, `tools/digilight-cli.cjs`. The MCP server
+  came after, in Phase 4b.
+- Phase 4b — DONE (10-15, on `main`; see Done recently): MCP server `tools/digilight-mcp.cjs`.
+  **Ask the user** what computer they have (Mac / Windows) and walk them through docs/automation.md
+  › MCP server › Set it up (Node, download the repo, `cd tools && npm install && npx playwright
+  install chromium`, the Claude desktop config entry). Not tried on a real Mac/Windows yet; whether
+  `DIGILIGHT_GPU=1` works there is untested.
+- Phase 5 — DONE as an experiment (10-15, on `main`; see Done recently): **Shadow light** (`+ Shadow`
+  in Lights). Both ideas built as two styles of one light: **Shade** (idea b, default: multiplies
+  all light where its beam falls, tinted, no relief of its own) and **Negative light** (idea a: a
+  lamp in reverse, shaded over the relief, subtracted from the lamps, floor = room light). Idea (c)
+  (gobo / window-bar shape) not built. Comparison sent to the user (6 frames, sample painting,
+  Gallery track). **Ask the user which reads natural**; drop the other or keep both. Next chat:
+  their answer, then the R1 raking picks and any new notes.
 
 ## Earlier plan: automated test rounds (user's plan, 10-14)
 The user wants Claude to run the tests, not them. Each round:
@@ -171,9 +158,12 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
-  CLI, docs/automation.md) and **Broad size from 0%**. Raking round R1 still waiting on picks.
-  **Next chat: Phase 4b (MCP server), then Phase 5 (Shadow light); ask for the R1 picks.**
+- Last code change on `main` (2026-10-15): **Phase 4b, MCP server** (`tools/digilight-mcp.cjs`,
+  shared `tools/digilight-headless.cjs`, `tools/package.json`, tests/mcp.cjs) and **Phase 5,
+  Shadow light** (Shade / Negative light). **Next chat: the user's pick of shadow style, help them
+  set up the MCP server on their computer, the R1 raking picks.**
+- Before that (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
+  CLI, docs/automation.md) and **Broad size from 0%**.
 - Before that (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail, Broad form, Broad size).
 - Before that (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
   search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks).
@@ -239,7 +229,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
 - `toolrail.js` — tool rail / phone tool strip: tags each panel block with a tool, shows one at a time
 - `automation.js` — `window.digilight` API, URL params, `?bridge` postMessage (docs/automation.md;
-  CLI tools/digilight-cli.cjs)
+  CLI tools/digilight-cli.cjs, MCP server tools/digilight-mcp.cjs, both on tools/digilight-headless.cjs)
 - `auto.js` — Auto section: Analyze (readout, depth fit, raking direction), one-tap looks, Strength mix
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
@@ -256,6 +246,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 ## Run / test
 - `python3 -m http.server 8766` then open http://localhost:8766
 - `node tests/browser.cjs` (needs Playwright; Chromium at /opt/pw-browsers in cloud sessions)
+- `cd tools && npm install` once, then `node tests/mcp.cjs` (the MCP server end to end)
 
 ## Test bundles from the user (next session starts here)
 The user sends a `*-test-YYYYMMDDHHMM.zip` from **Export for testing** (Projects).
@@ -288,6 +279,34 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Phase 5 — Shadow light.** A light with `kind` 'shade' or 'negative'
+  (presets.js `LIGHT_KINDS`, `isLamp`; absent = 'light'), `dark` 0–1 (Shade's Darkness). Shader
+  (shade.js): `uLightKind`, `uLightDark`; Shade: `shade *= mix(1, (1-dark)·mix(1, tint, min(1,
+  2·dark)), spot·poolShare)` applied to lamps + room light and to the graze pass (Darkness 0 = no
+  change); Negative: same BRDF + cast shadow as a lamp, summed into `taken`, `acc = max(acc − taken,
+  0)` before the room light; tint = colour/luminance for Shade, `1.5 − 0.5·t` for Negative (the full
+  opposite turned pale paint cyan). Shadow lights skip Shadow lift, the Shadows view, white balance
+  (`sceneWhite`) and are never the key in `lightReach` / `keySide`. UI (app.js `newShadow`,
+  `shadowPanel`): `#addShadow` "+ Shadow" beside "+ Light" (dot at 0.3, 0.7 straight on, cone
+  0.8, edge 0.85, 9000 K, Darkness 60%), tab "Shadow N", dark ringed dot (`.handle.shadow`),
+  panel: Shade / Negative light, Darkness (or Strength = power), Size (cone 0.985…0.4), Edge,
+  Angle to wall, Distance, Tint (K); More: Falloff, Aim, Source size. Validate checks kind/dark;
+  mixSettings fades `dark` too. API: `digilight.addLight(kind, fields)`, `removeLight(i)`;
+  MCP `add_light` / `remove_light`. Measured on the sample (Gallery track): Shade 60% → ×0.56 at
+  the pool centre, ×1.00 far; test "Shadow light" in browser.cjs.
+- 10-15 (pushed to `main`): **Phase 4b — MCP server.** `tools/digilight-mcp.cjs` (stdio,
+  `@modelcontextprotocol/sdk` 1.32 + zod 3, deps in `tools/package.json`, `cd tools && npm
+  install`). One headless page per session, opened on first tool call (`digilight-headless.cjs`
+  `launch`: own static server or `DIGILIGHT_URL`, SwiftShader unless `DIGILIGHT_GPU=1`), reopened
+  if the browser dies. Tools: open_image (path / URL / project / sample:), open_project, info,
+  analyze, list_looks, apply_look, list_presets, apply_preset, describe_settings (filter),
+  get_settings, set_settings (object or "a=1;b=2"), add_light, remove_light, undo, redo,
+  render_preview (JPEG image content, max_size default 800), export_image (path, width, quality;
+  format from extension), save_project. Errors → `isError` results; page errors appended;
+  progress notifications every 5 s when the client sends a progressToken (Analyze ≈ 8 min in
+  SwiftShader here, 94 beats). Starts on the synthetic painting (?synth) until open_image. CLI
+  refactored onto the shared module. `node tests/mcp.cjs` (≈ 1.5 min; `--full` adds analyze).
+  Setup for the Claude desktop app / Claude Code in docs/automation.md (plain words).
 - 10-15 (pushed to `main`): **Phase 4 — automation.** `src/automation.js` (`initAutomation` from
   studio.js, after Auto; `window.digilight`, API_VERSION 1). Calls (all queued one at a time, each
   a Promise): ready, info, load(URL | data URL | Blob | {sample}), settings, get(path),

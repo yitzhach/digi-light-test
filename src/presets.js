@@ -88,6 +88,10 @@ export function characterOf(l) {
 // light can stand back from the painting; zoom the view out to see its dot.
 export const LIGHT_MIN = -1.5, LIGHT_MAX = 2.5, LIGHT_Z_MIN = 0.01;
 export const POWER_MAX = 1024;
+// light.kind: an ordinary light, or a Shadow light that takes light away where it falls:
+// 'shade' (a flag or a cloud between the lamps and the painting) or 'negative' (a lamp in reverse).
+export const LIGHT_KINDS = ['light', 'shade', 'negative'];
+export const isLamp = (l) => !l.kind || l.kind === 'light';
 
 /**
  * Grazing light: the lamp almost in the painting's own plane, a painting width out

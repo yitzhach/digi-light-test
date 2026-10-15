@@ -44,6 +44,9 @@ input[type=range]:disabled { opacity:.35; }
 .zoomGroup { display:inline-flex; gap:2px; }
 .zoomGroup button { min-width:30px; }
 .handle.pinned { border-style:dashed; }
+/* Shadow lights: a dark dot ringed in its tint */
+.handle.shadow { background-image:radial-gradient(circle,#0b0d12 0 52%,transparent 56%)!important; }
+#tabs .shadowTab { font-style:italic; }
 /* Touch is handled in app.js (pinch zoom, one-finger pan when zoomed), so the browser
    must not pan or zoom the page from anywhere in the frame */
 #wrap, #wrap * { touch-action:none; }
