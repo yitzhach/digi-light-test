@@ -158,16 +158,33 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   .006 fine 1 · 07 detail .015 clean .6 fine .6 · 08 Long shadows clean (1°, detail .012,
   fine .5, soft .15). Picks: PENDING.
 
+- AI-match round S (10-15, sent; picks PENDING). Scratch scripts (Playwright + `digilight`
+  API: `applyPreset('looks', …)`, `set`, `export` at full size 1932×2576, ~45–60 s each in
+  SwiftShader). **Set strokeDir and adjust.relief.fine explicitly on every render**: a matched
+  look only sets the keys it names, so both carry over from the previous render (by design,
+  looks keep the user's Colour tool settings). Sheet A: looks 05 / 06 / 07 × Stroke direction
+  0 / 70 / 100% (robe + red crops); mean |Δ| luma vs 0: 70% ≈ 4.8, 100% ≈ 6.9, mean unchanged.
+  Sheet B (whole + robe crop): 1 = 07 as now · 2 = 07 + dir 70% + Fine detail 50% · 3 = 05 +
+  dir 70% + Fine 50% · 4 = 09 as now · 5 = 09 + 05's graze (angle 25, el 3, opacity 0.3) ·
+  6 = 5 + dir 70% + Fine 50%. Band contrast, std of the band / the photo's (<3 / 3–9 / 9–27 px
+  DoG at full size; not the same measure as the AI's "detail kept" above, so not comparable): 1 0.70/0.62/0.68 · 2 0.57/0.54/0.67 · 3 0.64/0.56/0.64 · 4 0.70/0.57/0.60
+  · 5 0.86/0.62/0.60 · 6 0.65/0.55/0.61. **The "shading-only glitter cut" already exists as
+  Relief (3D) › Fine detail** (shading only, albedo untouched): on 07, Fine 100 / 50 / 0% →
+  <3 px 0.70 / 0.57 / 0.50, mean luma 85 → 88; 50% calms the sand and keeps grooves sharp, 0%
+  reads soft and blotchy. So no new control was built; candidates are dir ~70% + Fine ~50%.
+
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- Last updated: 2026-10-15
+- Last updated: 2026-10-15 (handoff only, no code change): **AI-match round S** sent to the user
+  (see Test rounds). **Next chat: the user's picks from round S (Stroke direction sheet and the
+  6-look combo sheet), then put the winning Stroke direction / Fine detail into the matched looks
+  (or a new matched look); still pending from the user: shadow style pick (Phase 5), MCP setup on
+  their computer (Phase 4b), R1 raking picks.**
 - Last code change on `main` (2026-10-15): **Phase 4b, MCP server** (`tools/digilight-mcp.cjs`,
   shared `tools/digilight-headless.cjs`, `tools/package.json`, tests/mcp.cjs) and **Phase 5,
   Shadow light** (Shade / Negative light), then **Stroke direction** (first step of the AI-match
-  work). **Next chat: the user's pick of shadow style, help them set up the MCP server on their
-  computer, the R1 raking picks; then continue the AI-match work (Next up −4: show Stroke
-  direction on the matched looks, then the shading-only glitter cut).**
+  work) and **Shade shapes**.
 - Before that (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
   CLI, docs/automation.md) and **Broad size from 0%**.
 - Before that (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail, Broad form, Broad size).
@@ -860,7 +877,8 @@ To judge it on a real painting, by eye:
    SHADING only (not in the albedo, which is what made round 2 smudgy). Gallery of both rounds:
    artifact YDRAaxqTrahptwwoy3pQw8. Scoring scripts were scratch-only (aligned AI vs photo,
    band contrast, colour shares); rebuild if needed. (10-15: directional Stroke definition DONE as
-   the Stroke direction slider, see Done recently; next: the shading-only glitter cut, 05 + 09.)
+   the Stroke direction slider, see Done recently. 10-15: glitter cut = existing Fine detail
+   slider, 05 + 09 rendered; round S sent, see Test rounds; next: the user's picks.)
 -3. Colour & strokes (10-14): ask the user how "Gallery spot, upper right" and the new section
    look on their own photos (phone too). Ideas: make Stroke definition directional (weight
    creases by the key light's direction, so it follows real lamp shadows and keeps logRMS);
