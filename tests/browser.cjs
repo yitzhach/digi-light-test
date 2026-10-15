@@ -743,5 +743,17 @@ assert.match(r['lights.1.kind'],/Invalid light kind/);assert.match(r['lights.1.d
 assert.deepEqual(r.saved,['negative',0.6,undefined]);assert.equal(r.reopened,'negative');
 assert.deepEqual(r.added,[2,'shade',0.4]);assert.match(r.badAdd,/kind is light, shade or negative/);assert.equal(r.removed,2);
 await ctx.close();console.log('PASS Shadow light: Shade pool and Negative light darken where they fall, validated, saved, API',JSON.stringify({shade:r.shade.map(v=>+v.toFixed(2)),negative:r.negative.map(v=>+v.toFixed(2))}));}
+// Stroke direction: with Stroke definition on, 0 renders as before, more lights each stroke from the main lamp's side; off without Stroke definition; validated.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={};
+ await d.set({strokeDef:0,strokeDir:1});const off=await d.render();await d.set('strokeDir',0);out.offSame=(await d.render())===off;
+ await d.set('strokeDef',0.6);const iso=await d.render();await d.set('strokeDir',1);const dir=await d.render();out.changed=dir!==iso;
+ await d.set('lights.0.x',1-d.get('lights.0.x'));const flip=await d.render();out.followsLamp=flip!==dir;
+ await d.set('strokeDir',0);out.isoBack=(await d.render())!==dir;
+ try{await d.set('strokeDir',2);out.bad='no error';}catch(e){out.bad=e.message;}
+ out.slider=!!document.querySelector('#strokeDir');return out;});
+assert.ok(r.offSame,'no effect without Stroke definition');assert.ok(r.changed&&r.followsLamp&&r.isoBack,JSON.stringify(r));assert.match(r.bad,/nothing changed/);assert.ok(r.slider);
+await ctx.close();console.log('PASS Stroke direction follows the main lamp, off at 0 and without Stroke definition, validated');}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

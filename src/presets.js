@@ -66,7 +66,7 @@ export const SHADOW_DETAIL = 0.004;
 // mostly grain, and darkening it reads as grit, not as strokes.
 export const ROOM_NEUTRAL_K = 6500;
 export const STROKE_SIZE = 0.01, STROKE_SIZE_MIN = 0.002, STROKE_SIZE_MAX = 0.04, STROKE_STOPS = 3, STROKE_FINE = 0.25;
-export const LOOK_NEUTRAL = { neutralWB: 0, vibrance: 0, roomKelvin: ROOM_NEUTRAL_K, strokeDef: 0, strokeSize: STROKE_SIZE };
+export const LOOK_NEUTRAL = { neutralWB: 0, vibrance: 0, roomKelvin: ROOM_NEUTRAL_K, strokeDef: 0, strokeSize: STROKE_SIZE, strokeDir: 0 };
 
 /**
  * One dial from spotlight to diffused light. Sets the three things that make the

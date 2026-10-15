@@ -29,7 +29,7 @@ export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
-  'neutralize', 'photoDiffuse', 'textureDepthMm', 'paintingWidthCm', 'physical', 'heightScale', 'reliefAmount', 'shadowDetail', 'strokeDef', 'strokeSize'];
+  'neutralize', 'photoDiffuse', 'textureDepthMm', 'paintingWidthCm', 'physical', 'heightScale', 'reliefAmount', 'shadowDetail', 'strokeDef', 'strokeSize', 'strokeDir'];
 // Belong to the photo, not to a look: a saved preset or project never changes them here.
 const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes'];
 const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden'];

@@ -43,7 +43,7 @@ Paths are dotted names into `settings()`. The common ones:
 
 - Light and tone: `exposure`, `ambient`, `shadow`, `shadowSoftness`, `highlightRolloff`
 - Surface: `textureDepthMm`, `paintingWidthCm`, `photoDiffuse` (0 lit from a side, 1 even), `azimuthDeg`, `albedoSuppress` (De-light)
-- Colour & strokes: `neutralWB` (Keep greys neutral), `vibrance`, `roomKelvin`, `strokeDef`, `strokeSize`
+- Colour & strokes: `neutralWB` (Keep greys neutral), `vibrance`, `roomKelvin`, `strokeDef`, `strokeSize`, `strokeDir` (Stroke direction)
 - Lights: `lights.N.x|y|z|power|kelvin|cone|softness|falloff|aimX|aimY|size|lift|enabled|useKelvin|hex` (N from 0; `x`, `y` in painting widths, 0,0 bottom left)
 - Shadow lights (lights with `kind` `shade` or `negative`): `lights.N.kind`, `lights.N.dark` (a shade's Darkness, 0–1); `kelvin` is the tint of the light left in the shadow
 - Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill`

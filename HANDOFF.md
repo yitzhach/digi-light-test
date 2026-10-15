@@ -160,8 +160,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 - Last updated: 2026-10-15
 - Last code change on `main` (2026-10-15): **Phase 4b, MCP server** (`tools/digilight-mcp.cjs`,
   shared `tools/digilight-headless.cjs`, `tools/package.json`, tests/mcp.cjs) and **Phase 5,
-  Shadow light** (Shade / Negative light). **Next chat: the user's pick of shadow style, help them
-  set up the MCP server on their computer, the R1 raking picks.**
+  Shadow light** (Shade / Negative light), then **Stroke direction** (first step of the AI-match
+  work). **Next chat: the user's pick of shadow style, help them set up the MCP server on their
+  computer, the R1 raking picks; then continue the AI-match work (Next up −4: show Stroke
+  direction on the matched looks, then the shading-only glitter cut).**
 - Before that (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
   CLI, docs/automation.md) and **Broad size from 0%**.
 - Before that (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail, Broad form, Broad size).
@@ -279,6 +281,16 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Stroke direction** (Colour › Light colour & strokes, `strokeDir` 0–1,
+  default 0 = as before; LOOK_NEUTRAL, auto.js SURFACE). Stroke definition's band (strokeFine −
+  stroke heights) is also sampled a Stroke size (strokeSigmaPx texels) either side toward the
+  strongest lamp (shade.js `strokeLamp`: direction from the painting centre, `share` = 0 overhead
+  … 1 in the wall plane); `c = mix(c, 0.75·(lo − hi)·k, strokeDir·share)`: paint rising toward the
+  lamp darkens, the facing side lifts, so creases are dark on one side only. Off when Stroke
+  definition is 0. On the sample with matched look 07: mean unchanged, fine (<2 px) contrast
+  −8%, stroke band (2–8 px) −6% at 100%. **Not yet shown to the user**, and no look uses it yet:
+  ask whether it reads more like the AI image; if yes, put ~0.7 in the matched looks / CRISP.
+  Test "Stroke direction" in browser.cjs.
 - 10-15 (pushed to `main`): **Phase 5 — Shadow light.** A light with `kind` 'shade' or 'negative'
   (presets.js `LIGHT_KINDS`, `isLamp`; absent = 'light'), `dark` 0–1 (Shade's Darkness). Shader
   (shade.js): `uLightKind`, `uLightDark`; Shade: `shade *= mix(1, (1-dark)·mix(1, tint, min(1,
@@ -833,7 +845,8 @@ To judge it on a real painting, by eye:
    graze + lower lamp combined (05 + 09); reduce glitter from the one-photo fine band in the
    SHADING only (not in the albedo, which is what made round 2 smudgy). Gallery of both rounds:
    artifact YDRAaxqTrahptwwoy3pQw8. Scoring scripts were scratch-only (aligned AI vs photo,
-   band contrast, colour shares); rebuild if needed.
+   band contrast, colour shares); rebuild if needed. (10-15: directional Stroke definition DONE as
+   the Stroke direction slider, see Done recently; next: the shading-only glitter cut, 05 + 09.)
 -3. Colour & strokes (10-14): ask the user how "Gallery spot, upper right" and the new section
    look on their own photos (phone too). Ideas: make Stroke definition directional (weight
    creases by the key light's direction, so it follows real lamp shadows and keeps logRMS);

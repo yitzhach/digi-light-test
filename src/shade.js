@@ -110,6 +110,8 @@ uniform sampler2D uStrokeRelief; // the relief smoothed to Stroke size: rgb norm
 uniform sampler2D uStrokeFine;   // and to STROKE_FINE of it, the band's fine edge
 uniform float uStrokeDef;       // Stroke definition, 0..1
 uniform float uStrokeGain;      // 1 / the 2-98% spread of that band
+uniform vec2  uStrokeStep;      // Stroke direction: the band's Stroke size, in texels, toward the main lamp
+uniform float uStrokeDir;       // and how much of it (Stroke direction x the lamp's share off straight-on)
 
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
@@ -286,7 +288,17 @@ ${OVERLAY_GLSL}
 // a multiplier on all the light, so it never touches the paint's colour.
 float strokeShade(float mask) {
   if (uStrokeDef <= 0.0) return 1.0;
-  float c = (texture(uStrokeFine, vUV).a - texture(uStrokeRelief, vUV).a) * mask * uReliefAmount * uStrokeGain;
+  float k = mask * uReliefAmount * uStrokeGain;
+  float c = (texture(uStrokeFine, vUV).a - texture(uStrokeRelief, vUV).a) * k;
+  if (uStrokeDir > 0.0) {
+    // Directional: the band's slope toward the main lamp, a Stroke size either side.
+    // Paint rising toward the lamp faces away from it and darkens; the side facing it
+    // lifts. So creases are dark on one side only, as under a real lamp.
+    vec2 o = uStrokeStep / vec2(textureSize(uStrokeRelief, 0));
+    float lo = texture(uStrokeFine, vUV - o).a - texture(uStrokeRelief, vUV - o).a;
+    float hi = texture(uStrokeFine, vUV + o).a - texture(uStrokeRelief, vUV + o).a;
+    c = mix(c, 0.75 * (lo - hi) * k, uStrokeDir);
+  }
   c = clamp(c, -1.0, 1.0);
   return exp2(uStrokeDef * ${STROKE_STOPS.toFixed(1)} * (c < 0.0 ? c : 0.5 * c));
 }
@@ -712,6 +724,9 @@ export class Shader {
     const strokeOn = state.viewMode === 0 || state.viewMode === 7;
     gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) * colourShare : 0);
     gl.uniform1f(u.uStrokeGain, state.strokeSpread > 0 ? 1 / state.strokeSpread : 0);
+    const sd = strokeLamp(lights, aspect);
+    gl.uniform2f(u.uStrokeStep, sd.x * (state.strokeSigmaPx || 0), sd.y * (state.strokeSigmaPx || 0));
+    gl.uniform1f(u.uStrokeDir, Math.min(1, Math.max(0, state.strokeDir ?? 0)) * sd.share);
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, reliefView ? 0 : layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
@@ -760,6 +775,21 @@ export function sceneWhite(lights, aspect, ambient) {
  * below MIN_REACH so a fill still shades the deepest grooves.
  */
 export const MIN_REACH = 0.15;
+/** Stroke direction's lamp: the strongest lamp, as a unit direction across the painting
+ *  from its centre (y up) and its share off straight-on (0 overhead, 1 in the wall's plane). */
+export function strokeLamp(lights, aspect) {
+  let best = null, bw = 0;
+  for (const l of lights) {
+    if (!l.enabled || !isLamp(l)) continue;
+    const w = l.power * (0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]);
+    if (w > bw) { bw = w; best = l; }
+  }
+  if (!best) return { x: 0, y: 0, share: 0 };
+  const dx = best.x - 0.5, dy = (best.y - 0.5) * aspect, h = Math.hypot(dx, dy);
+  if (h < 1e-6) return { x: 0, y: 0, share: 0 };
+  return { x: dx / h, y: dy / h, share: h / Math.hypot(h, best.z) };
+}
+
 export function lightReach(lights) {
   const out = new Float32Array(MAX_LIGHTS);
   const w = lights.map((l) => l.enabled && l.kind !== 'shade' ? l.power * (0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]) : 0);

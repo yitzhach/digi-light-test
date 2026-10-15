@@ -465,6 +465,7 @@ export function initStudio(api) {
     ['roomKelvin','Room light colour',1800,10000,50,v=>v===ROOM_NEUTRAL_K?'White':`${v} K`,`Colour of the soft room light under the lamps. ${ROOM_NEUTRAL_K} K is plain white; lower is warmer, higher cooler.`],
     ['strokeDef','Stroke definition',0,1,0.05,v=>`${Math.round(v*100)}%`,'Darkens the creases between brush strokes and lifts their crests, from the relief. Only light changes: no detail is added.'],
     ['strokeSize','Stroke size',STROKE_SIZE_MIN,STROKE_SIZE_MAX,0.001,v=>`${(v*state.paintingWidthCm*10).toFixed(1)} mm`,'Width of the strokes Stroke definition works on, on the painting.'],
+    ['strokeDir','Stroke direction',0,1,0.05,v=>`${Math.round(v*100)}%`,'0: every crease darkens all round. 100%: each stroke is lit on the side facing the main lamp and shaded on the far side, like real lamp light. Works with Stroke definition.'],
   ];
   for (const [key,label,min,max,step,fmt,title] of lookControls) {
     if (key === 'vibrance') continue;   // in the Vibrance adjustment below
