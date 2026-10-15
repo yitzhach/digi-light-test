@@ -52,8 +52,23 @@ update this file (mark the phase DONE, note what the next chat needs).
   stored in `state.overlays`, saved in projects/presets.
 - Phase 4 — DONE (10-15, on `main`; see Done recently): `window.digilight` (src/automation.js),
   URL params + `?bridge` postMessage, `docs/automation.md`, `tools/digilight-cli.cjs`. Not built:
-  the optional MCP server wrapping the CLI (ask the user if they want it). **Next chat: Phase 5.**
-- Phase 5 — **Shadow light** (user asked 10-15: "experiment with a 'shadow' light tool … that can in
+  the optional MCP server wrapping the CLI. User (10-15): **wants it** → Phase 4b below.
+- Phase 4b — **MCP server** (user asked 10-15; next chat does this FIRST, then Phase 5). Goal: an AI
+  assistant (Claude desktop app / Claude Code on the user's own computer) can relight paintings by
+  chatting. Build `tools/digilight-mcp.cjs` (stdio MCP server, `@modelcontextprotocol/sdk`): keep ONE
+  headless browser page open (reuse the CLI's static server + Playwright launch; refactor shared
+  parts of tools/digilight-cli.cjs into a module) and expose tools mapping to window.digilight:
+  open_image (path / URL / sample), open_project, analyze, list_looks, apply_look (name, strength),
+  list_presets / apply_preset, describe_settings, get_settings, set_settings ({path: value}), undo,
+  render_preview (return the image as MCP image content, small, so the assistant can see it),
+  export_image (write a file path; width/format), save_project. Errors → tool errors with the
+  validate message. Add a package.json (deps: playwright, @modelcontextprotocol/sdk) if needed,
+  setup steps for the user in docs/automation.md (Claude desktop `claude_desktop_config.json`
+  entry, `claude mcp add` for Claude Code; needs Node + `npx playwright install chromium` on their
+  machine — they are on iPhone mostly, so ask what computer they have: Mac/Windows). Test: a Node
+  script that spawns the server, lists tools, calls open_image sample:painting + set + render.
+  Explain to the user in plain words (they asked "what is this"; non-technical).
+- Phase 5 — (after 4b, same chat if time) **Shadow light** (user asked 10-15: "experiment with a 'shadow' light tool … that can in
   a sense have an opposite effect to a light"): a light type that takes light away where it falls,
   like a flag/gobo or a dark cloud over part of the painting. Ideas to try: (a) negative power
   through the same shading path (the beam, cone, softness, falloff all still apply; clamp the
@@ -158,7 +173,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 - Last updated: 2026-10-15
 - Last code change on `main` (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
   CLI, docs/automation.md) and **Broad size from 0%**. Raking round R1 still waiting on picks.
-  **Next chat: the R1 picks if the user has them (set the default graze), then Phase 5 (Shadow light).**
+  **Next chat: Phase 4b (MCP server), then Phase 5 (Shadow light); ask for the R1 picks.**
 - Before that (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail, Broad form, Broad size).
 - Before that (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
   search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks).
