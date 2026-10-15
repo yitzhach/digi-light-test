@@ -6,8 +6,11 @@ Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 One phase per chat. Each phase: build, run tests/browser.cjs (add tests), push to `main`,
 update this file (mark the phase DONE, note what the next chat needs).
 - Phase 0 — DONE (10-15, on `main`): Original-on-top layer, tool search, Save & export tab, Before export =
-  original, blend-mode list with hover preview (Photoshop style). **Next chat: start Phase 1.**
-- Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
+  original, blend-mode list with hover preview (Photoshop style).
+- Phase 1 — DONE (10-15, on `main`; see Done recently). **Next chat: start Phase 2.** Open
+  questions for the user: are the 8 built-in looks the right set, and is "Strength 0 = the
+  settings before the look" the mix they meant (vs mixing toward the plain photo)?
+- (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
   analysis: depth from texture score, graze across stroke direction, exposure from mean luma).
@@ -26,6 +29,16 @@ update this file (mark the phase DONE, note what the next chat needs).
   get/set) + a URL/postMessage bridge, `docs/automation.md`, and a headless Node CLI
   (`tools/digilight-cli.cjs`, Playwright) so an agent can run `analyze`, `apply look`, `export`.
   Optionally an MCP server wrapping the CLI.
+- Phase 5 — **Shadow light** (user asked 10-15: "experiment with a 'shadow' light tool … that can in
+  a sense have an opposite effect to a light"): a light type that takes light away where it falls,
+  like a flag/gobo or a dark cloud over part of the painting. Ideas to try: (a) negative power
+  through the same shading path (the beam, cone, softness, falloff all still apply; clamp the
+  result at 0; its relief shading inverts, so ridges facing it go darker, test whether that looks
+  natural or wrong); (b) a "shade" that multiplies the other lights by 1 − k·beam(x), no own
+  relief term (a soft shadow cast by something off-frame, the more likely look); (c) a cast-shadow
+  shape (blurred ellipse / window-bar gobo) projected along the light. Dot on the painting like
+  other lights, own colour (a cool shadow tint), saved in lights/projects. Try (a) and (b) as a
+  batch, show the user, keep what reads as natural.
 
 ## Earlier plan: automated test rounds (user's plan, 10-14)
 The user wants Claude to run the tests, not them. Each round:
@@ -111,6 +124,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
+- Last code change on `main` (2026-10-15): **Phase 1, Auto section** (`src/auto.js`, top of the
+  panel): Analyze → readout + one-tap looks for this photo + Strength + Undo. See Done recently.
 - **Branch `feature/metrology` merged into `main` (2026-10-14, user asked).** It was:
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
@@ -164,6 +179,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 ## Map (src/)
 - `app.js` — main bench: load image, build G-buffer, re-shade on interaction (largest file)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
+- `auto.js` — Auto section: Analyze (readout, depth fit, raking direction), one-tap looks, Strength mix
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
 - `export.js` — full-res tiled export; `gl.js` — WebGL2 scaffolding; `kelvin.js` — colour temp
@@ -211,6 +227,39 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Phase 1 — Auto** (`src/auto.js`, `initAuto` from studio.js, section
+  `#autoSection` above Quick setup, open by default; `__studio.auto` {analyze, pick, analysis,
+  active, setStrength}). **Analyze** (one history-free pass, settings restored after; batching on):
+  readout lines Tone (p5/p50/p95 luma, clipping via photocheck `clippingOf`, saturation), Light
+  (Photo was lit if set; else "taken as evenly lit" + the brightness plane, `lightPool`, shown
+  only: on both samples it followed the paint, red panel 85% brighter lower right, DSC_8382 57%
+  right, so it does NOT pick the key side), Strokes (texscore of the photo; studio `findRaking`
+  = the old bestRaking search without applying, from the key side), Depth, Looks. **Depth fit**
+  (not with measured relief, which keeps its own): under plain Gallery track the depth where the
+  render's stroke contrast is `RELIEF_GAIN` 1.21× the same render at 0.25 mm (texscore
+  `fitDepth`, clamped 0.3–6 mm). Calibrated on the depths the user settled on: painting 3.3 mm
+  → 1.21×, DSC_8382 2.1 mm (lamp fit) → 1.24×; render/photo contrast alone was 0.90 vs 1.53
+  there, useless as a target. Result: painting 3.70 mm, DSC_8382 1.75 mm. **Looks** (8 built-in:
+  Gallery, Gallery spot, Matched (07), Matched + raking (05, graze at the raking angle), Raking
+  texture (Classic 50%), Long shadows (clean, 60%), Soft window, Museum spot), lights mirrored
+  left↔right (`keySide`) only when Photo was lit names a side; graze at the found angle.
+  **Exposure**: each built-in look fits the render's mean linear luma to photo mean × 2^bias,
+  `LOOK_BIAS` measured on the painting so each lands at its approved exposure there (Gallery 0,
+  07 +0.6, 05 +0.35, rest 0; fits within ~0.1 stop); DSC_8382 lands at about the same exposures
+  since the render's brightness already follows the photo's. **User presets (up to 8) and saved
+  projects (6 newest, not the open one)** become looks too: their settings, with the photo's own
+  keys kept (width, Photo was lit, azimuth, brush corrections), fitted depth, graze at the found
+  angle, masks dropped, exposure = their own + the Gallery look's fitted shift here. Tiles: 240 px
+  thumbnails (the exposure fit's last render). **Pick** = one undo step; **Strength** 0–100%
+  (`mixSettings`: numbers linear, lights paired by place, unmatched ones fade by power, graze
+  angle on the short arc, layers switch at 50%, brush corrections kept; 0 = exactly the previous
+  settings); built-in looks keep the user's layers and Original on top. A pick after a hand
+  edit mixes with the edited settings. New photo clears the looks. Cost: ~110–150 s per Analyze
+  in headless SwiftShader at 1050–1380 px (a G-buffer build ≈ 6 s, a render read back ≈ 3 s
+  there); a real GPU is milliseconds per render. Looks are made in an order that shares G-buffer
+  builds. Test in browser.cjs (240×300 fixture). Test lesson: a test that saves a preset must delete it
+  again: the later preset test waits on the status text starting "Saved", and a stale one let it race
+  a running save (`loading` blocks the next checkpoint, so its undo step went missing).
 - 10-15 (pushed to `main`): AI-match batches on the painting sample (scratch export script, full
   res via __bench.exportFullRes; gallery artifact YDRAaxqTrahptwwoy3pQw8). Round 1 (01–10, base:
   lamp 1.22/0.75/0.45 4300 K, room 0.06, rolloff 1, exp +0.35, greys 60, vib 40, strokes 50):

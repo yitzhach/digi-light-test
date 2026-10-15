@@ -5,7 +5,15 @@ render targets; graphics acceleration must be enabled.
 
 ## Use
 Creative Studio starts each uploaded photograph with a restrained look: brushy oil
-about 1 mm deep, photographed in even light. **Quick setup** is the everyday path:
+about 1 mm deep, photographed in even light. **Auto** (top of the panel) is the
+fastest path: **Analyze** reads the photo (tone, clipping, colour, stroke contrast and
+direction), fits a texture depth (where the relief adds about 21% stroke contrast under
+a gallery light), finds the raking direction that shows the strokes most, and makes a
+grid of one-tap looks for this photo: gallery, spot, the matched looks, raking and long
+shadows, window, museum spot, plus your saved presets and projects adapted to it (the
+fitted depth, the graze across the strokes, the key light on the side Photo was lit
+names, exposure moved by this photo's brightness). **Strength** mixes the picked look with
+the settings it replaced; Undo steps back. **Quick setup** is the hands-on path:
 
 - **Paint texture** — glazes, canvas weave, brushy oil, thick brushwork, palette-knife
   or sculptural impasto, texture paste, plaster. Each sets a typical depth and scale.

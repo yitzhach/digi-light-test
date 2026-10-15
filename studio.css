@@ -166,3 +166,15 @@ body.batchOpen { overflow:hidden; }
 .blendMenu li.applied { font-weight:600; }
 .blendMenu li.applied::after { content:' ✓'; color:var(--dim); }
 .blendMenu li.on, .blendMenu li:hover { background:var(--accent); color:#fff; }
+/* Auto: analyze and one-tap looks */
+#autoSection .views button { flex:1 1 auto; }
+#autoAnalyze { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+#autoReadout { line-height:1.45; }
+.autoLine { display:block; } .autoLine b { color:var(--ink); font-weight:600; }
+.autoLooks { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px; margin:8px 0; }
+.autoLooks:empty { display:none; }
+.autoLook { display:flex; flex-direction:column; gap:4px; padding:4px; border-radius:6px; text-align:left; min-height:44px; }
+.autoLook canvas { width:100%; height:auto; aspect-ratio:4/5; object-fit:cover; border-radius:3px; display:block; background:#000; }
+.autoLook span { font-size:11px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.autoLook.mine span::before { content:'★ '; color:var(--dim); }
+.autoLook.on { outline:2px solid var(--accent); outline-offset:1px; }

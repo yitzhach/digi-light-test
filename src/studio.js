@@ -7,6 +7,7 @@ import { initCalibrate } from './calibrate.js';
 import { exportTestBundle } from './testbundle.js';
 import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 import { initBatch } from './batch.js';
+import { initAuto } from './auto.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -267,13 +268,19 @@ export function initStudio(api) {
       return textureScore(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height, state.paintingWidthCm * 10 / c.width).score;
     } finally { Object.assign(state, keep); for (const k of Object.keys(state.graze)) delete state.graze[k]; Object.assign(state.graze, g); }
   }
-  function bestRaking() {
+  // The strongest of the four directions, each from the side nearer `was`; changes nothing.
+  function findRaking(was = state.graze.angle) {
     const hm = probe.heights();
-    if (!hm) { $('grazeBestNote').textContent = 'No relief to read the strokes from.'; return null; }
-    const d = strokeDirection(hm.H, hm.w, hm.h), was = state.graze.angle;
+    if (!hm) return null;
+    const d = strokeDirection(hm.H, hm.w, hm.h);
     const tries = [['across the strokes', 0], ['diagonal', 45], ['along the strokes', 90], ['diagonal', 135]]
       .map(([name, off]) => { const from = Math.round(nearerSide(d.acrossDeg + off, was) * 2) / 2 % 360; return { name, from, score: grazeScore(from) }; });
-    const best = tries.reduce((a, b) => (b.score > a.score ? b : a)), across = tries[0], along = tries[2];
+    return { ...d, hm, tries, best: tries.reduce((a, b) => (b.score > a.score ? b : a)) };
+  }
+  function bestRaking() {
+    const r = findRaking();
+    if (!r) { $('grazeBestNote').textContent = 'No relief to read the strokes from.'; return null; }
+    const { hm, tries, best, ...d } = r, across = tries[0], along = tries[2];
     setGraze({ angle: best.from, lamp: null }); checkpoint();
     const how = d.coherence < 0.1 ? 'hardly (they run every way)' : d.coherence < 0.3 ? 'somewhat' : 'strongly';
     const pct = (v) => `${(v * 100).toFixed(1)}%`;
@@ -712,9 +719,13 @@ export function initStudio(api) {
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
     listProjects:()=>list()});
+  // Auto: Analyze, then one-tap looks made for this photo (auto.js).
+  const auto=initAuto({state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
+    findRaking,userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,
+    userProjects:()=>storage('projects','readonly',s=>s.getAll()),projectSettings:p=>validate(p),currentProject:()=>projectId,unmasked});
   buildSaveExport();
   buildSearch();
-  window.__studio={calibrate:cal,lamp,probe,bestRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={calibrate:cal,lamp,probe,auto,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 
   // Save & export: every way out of the app in one section, one sub-tab at a time.
   function buildSaveExport(){

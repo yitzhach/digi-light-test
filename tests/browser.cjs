@@ -19,6 +19,37 @@ await page.locator('#saveSection .subTabs [data-pane=image]').click();console.lo
 const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');for(let y=0;y<300;y++)for(let a=0;a<240;a++){const v=120+40*Math.sin(a*.35)+25*Math.cos(y*.19);x.fillStyle=`rgb(${v},${v*.7},${v*.5})`;x.fillRect(a,y,1,1);}return c.toDataURL().split(',')[1];});
 await page.locator('#file').setInputFiles({name:'painting.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.canvas.width===240);await settle();
 console.log('PASS uploaded image automatic setup');
+// Auto: Analyze makes looks for this photo without changing it; a look applies in one undoable step,
+// Strength mixes it with the settings it replaced (0 = exactly those), a saved preset is adapted.
+{await page.evaluate(()=>{const s=__bench.state;s.textureDepthMm=9;s.graze.enabled=true;s.graze.angle=10;document.querySelector('#presetName').value='Auto test preset';document.querySelector('#savePreset').click();});
+await page.waitForFunction(()=>[...document.querySelectorAll('#userPresetList option')].some(o=>o.textContent.includes('Auto test preset')));
+await page.evaluate(()=>{const s=__bench.state;s.textureDepthMm=1;s.graze.enabled=false;s.graze.angle=180;__studio.restore(__studio.snapshot());__studio.checkpoint();});await settle();
+const pre=await page.evaluate(()=>JSON.stringify(__studio.snapshot())),hist=await page.evaluate(()=>__studio.history.index),px0=await pixels();
+await page.click('#autoAnalyze');await page.waitForFunction(()=>__studio.auto.analysis&&!document.querySelector('#autoAnalyze').disabled,null,{timeout:600000});await settle();
+const A=await page.evaluate(()=>{const A=__studio.auto.analysis;return {depth:A.depth,rake:A.rake,n:A.items.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:document.querySelector('#autoLooks canvas').width,
+  lines:document.querySelectorAll('#autoReadout .autoLine').length,items:A.items.map(i=>({name:i.name,kind:i.kind,exp:i.settings.exposure,depth:i.settings.textureDepthMm,g:i.settings.graze.enabled,angle:i.settings.graze.angle,width:i.settings.paintingWidthCm}))};});
+assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),pre,'Analyze leaves the settings as they were');assert.equal(await page.evaluate(()=>__studio.history.index),hist);assert.equal(await pixels(),px0);
+assert.ok(A.n>=9&&A.tiles===A.n&&A.thumbW===240&&A.lines===5,JSON.stringify(A));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
+const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
+const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
+await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
+const on=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,angle:s.graze.angle,depth:s.textureDepthMm,exp:s.exposure,op:s.graze.opacity,tile:document.querySelector('.autoLook.on span').textContent};});
+assert.ok(on.g&&on.angle===A.rake&&on.depth===A.depth&&on.exp===rk.exp&&on.tile==='Raking texture',JSON.stringify(on));assert.notEqual(await pixels(),px0);
+await slider('autoStrength',0);assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),pre,'Strength 0 is the settings before the look');assert.equal(await pixels(),px0);
+await slider('autoStrength',.5);const half=await page.evaluate(()=>({exp:__bench.state.exposure,op:__bench.state.graze.opacity,depth:__bench.state.textureDepthMm}));const P=JSON.parse(pre);
+assert.ok(Math.abs(half.exp-(P.exposure+rk.exp)/2)<1e-9&&Math.abs(half.op-on.op/2)<1e-9&&Math.abs(half.depth-(P.textureDepthMm+A.depth)/2)<1e-9,JSON.stringify(half));
+await slider('autoStrength',1);assert.equal(await setting('exposure'),rk.exp);
+await page.click('#autoUndo');await settle();assert.ok(Math.abs(await setting('exposure')-half.exp)<1e-9,'Undo goes back to Strength 50%');
+await slider('exposure',1.5);await slider('paintingWidthCm',80);await page.locator('.autoLook',{hasText:/^Gallery$/}).click();await settle();assert.ok(await page.evaluate(()=>__bench.state.graze.enabled)===false);
+assert.equal(await setting('paintingWidthCm'),80,'a look keeps the photo\'s current width');assert.equal(await setting('textureDepthMm'),A.depth);
+await slider('autoStrength',0);assert.equal(await setting('exposure'),1.5,'a look picked after a hand change mixes with the changed settings');
+const mix=await page.evaluate(async()=>{const {mixSettings}=await import('/src/auto.js');const L=(x,p)=>({x,y:.5,z:1,power:p,kelvin:4000,cone:0,softness:.5,size:.02});
+  const a={exposure:0,lights:[L(0,2)],graze:{enabled:false,angle:350,opacity:.5},layers:[],strokes:[1]},b={exposure:1,lights:[L(1,4),L(1,8)],graze:{enabled:true,angle:10,opacity:.8},layers:[{mode:'normal'}],strokes:[]};
+  const m=mixSettings(a,b,.5);return {n:m.lights.length,x:m.lights[0].x,p:[m.lights[0].power,m.lights[1].power],g:[m.graze.angle,m.graze.opacity],layers:m.layers.length,strokes:m.strokes.length,
+  angle:mixSettings({...a,graze:{...a.graze,enabled:true}},b,.5).graze.angle};});
+assert.deepEqual(mix,{n:2,x:.5,p:[3,4],g:[10,.4],layers:1,strokes:1,angle:0},JSON.stringify(mix));
+await page.evaluate(p=>{__studio.restore(JSON.parse(p));__studio.checkpoint();},pre);await settle();
+console.log('PASS Auto: Analyze leaves settings, looks for this photo, pick, Strength mix, Undo, saved preset adapted',JSON.stringify({depth:A.depth,rake:A.rake,looks:A.n}));}
 await page.selectOption('#lightingPreset','Raking light');await settle();const after=await pixels();
 await page.click('#compare');await settle();const before=await pixels();assert.notEqual(after,before);assert.equal(await setting('viewMode'),4);
 await page.click('#compare');await settle();assert.equal(await pixels(),after);
