@@ -1,0 +1,122 @@
+# Automating DigiLight
+
+DigiLight can be driven by a script or an AI agent in three ways, all on the same API:
+
+1. **`window.digilight`** in the page (browser console, Playwright, an extension).
+2. **Bridges**: URL parameters on open, and `postMessage` from a page that frames or opens DigiLight.
+3. **`tools/digilight-cli.cjs`**: a command-line tool that runs the app headless.
+
+Every change goes through the same checks as importing a project, so a script cannot
+put the app in a state the panel could not reach. Each call that changes settings is
+one undo step. Calls run one at a time, in order; each returns a Promise.
+
+## `window.digilight`
+
+| Call | Returns |
+| --- | --- |
+| `ready()` | `info()` once the app has settled |
+| `info()` | `{version, photo {width, height}, preview {width, height}, sample, mode, measuredRelief, undo, redo}` |
+| `load(src)` | opens a photo. `src` is a URL (CORS-enabled), a data URL, a `Blob`/`File`, or `{sample: 'painting' \| 'dsc8382'}`. Auto setup runs, as for an upload. Returns `info()` |
+| `settings()` | every setting, the same object a project saves |
+| `get(path)` | one setting by path, e.g. `get('graze.opacity')`; no path = `settings()` |
+| `set(path, value)` / `set({path: value, ...})` | changes settings in one undo step; returns the new values. Throws, changing nothing, on an unknown name or a value out of range |
+| `setSettings(obj)` | replaces top-level settings (missing ones keep their values) |
+| `describe()` | `[{path, label, min, max, step, value}]` for every setting that can be set |
+| `presets()` | `{lighting: [...], graze: [...], looks: [...]}` names |
+| `applyPreset(kind, name)` | a lighting scene, a graze (raking) preset or a matched look. No Analyze needed |
+| `analyze()` | Analyze (Auto section): `{tone, light, strokes, rakeDeg, depthMm, depthWhy, looks}`. Slow in software GL (1–3 min); milliseconds per render on a real GPU |
+| `looks()` | the looks from the last Analyze: `[{index, name, kind, note, exposure}]` |
+| `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
+| `undo()` / `redo()` | `true` if there was a step |
+| `render({format, quality, as})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp |
+| `export({width, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide |
+| `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
+| `setProject(objOrJSON)` | opens a project |
+
+### Setting paths
+
+Paths are dotted names into `settings()`. The common ones:
+
+- Light and tone: `exposure`, `ambient`, `shadow`, `shadowSoftness`, `highlightRolloff`
+- Surface: `textureDepthMm`, `paintingWidthCm`, `photoDiffuse` (0 lit from a side, 1 even), `azimuthDeg`, `albedoSuppress` (De-light)
+- Colour & strokes: `neutralWB` (Keep greys neutral), `vibrance`, `roomKelvin`, `strokeDef`, `strokeSize`
+- Lights: `lights.N.x|y|z|power|kelvin|cone|softness|falloff|aimX|aimY|size|lift|enabled|useKelvin|hex` (N from 0; `x`, `y` in painting widths, 0,0 bottom left)
+- Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill`
+- Colour tool: `adjust.on`, `adjust.opacity`, `adjust.<name>.<field>`, e.g. `adjust.relief.amount`, `adjust.relief.form` (Broad form), `adjust.relief.formSize` (Broad size, 0–400%), `adjust.exposure.exposure`, `adjust.hueSat.saturation`; `adjust.curves.rgb` is a list of `[x, y]` points (0–1)
+- Overlays: `overlays.<grain|vignette|leak|window|pool>.on|opacity|...`
+- Layers: `layers` (a list of `{mode, source, opacity, enabled}`), `layersOn`, `originalTop`
+
+`describe()` lists all of them with the panel's labels and ranges.
+
+### Example
+
+```js
+await digilight.load('https://example.org/painting.jpg');
+const a = await digilight.analyze();          // a.looks: the looks made for this photo
+await digilight.applyLook('Matched + raking', { strength: 0.8 });
+await digilight.set({ 'adjust.relief.form': 1.5, 'adjust.relief.formSize': 0.6 });
+const png = await digilight.export({ format: 'png' });   // data URL, full size
+```
+
+## Bridges
+
+### URL parameters (run once on open)
+
+- `?image=URL` opens a photo, `?project=URL` a `.digilight.json`, `?sample=dsc8382` a sample
+- `?set=exposure=0.3;graze.opacity=0.5` (or URL-encoded JSON `{"exposure":0.3}`)
+- `?analyze` runs Analyze; `?look=Name&strength=0.8` runs Analyze and applies that look
+
+Example: `https://digi-light-test.bobdylan2000.workers.dev/?sample=painting&look=Gallery`
+
+An error is shown in the hint box at the top of the painting.
+
+### postMessage
+
+Open DigiLight with `?bridge` in an iframe or with `window.open`. Only the framing or
+opening page can call it, and the page shows a notice while the bridge is on.
+
+```js
+const f = document.querySelector('iframe');           // src: .../?bridge
+let n = 0;
+const call = (method, ...args) => new Promise((resolve, reject) => {
+  const id = ++n;
+  addEventListener('message', function on(e) {
+    if (e.source !== f.contentWindow || e.data?.digilight !== id) return;
+    removeEventListener('message', on);
+    'error' in e.data ? reject(new Error(e.data.error)) : resolve(e.data.result);
+  });
+  f.contentWindow.postMessage({ digilight: id, method, args }, '*');
+});
+// DigiLight posts {digilight: 'ready', version} to the parent/opener once it can take calls.
+await call('load', { sample: 'painting' });
+await call('set', 'exposure', 0.25);
+const jpeg = await call('render', { format: 'jpeg' });
+```
+
+## Command line: `tools/digilight-cli.cjs`
+
+Needs Node and Playwright (`npm i playwright`); in cloud sessions set
+`DIGILIGHT_BROWSER=/opt/pw-browsers/chromium`. It serves the repository itself.
+
+```
+node tools/digilight-cli.cjs <command> <input> [options]
+```
+
+- **input**: a photo path or http(s) URL, a `.digilight.json` project, or `sample:painting` / `sample:dsc8382`
+- **commands**: `info`, `analyze` (JSON readout and looks), `describe` (settable paths),
+  `get` (settings after the options; `--path a.b` for one), `render` (writes `--out`)
+- **options**, applied in this order: `--preset kind:name` (repeatable), `--set "a=1;b.c=2"` or
+  JSON (repeatable), `--look NAME|N --strength 0..1`; output: `--out FILE.png|.jpg|.webp`,
+  `--width N` (else full size), `--preview` (the preview size), `--quality`, `--save-project FILE`
+
+```
+node tools/digilight-cli.cjs analyze photo.jpg
+node tools/digilight-cli.cjs render photo.jpg --look "Matched + raking" --strength 0.8 --set "adjust.relief.form=1.5" --out relit.png
+node tools/digilight-cli.cjs render project.digilight.json --preset "graze:Classic raking" --width 2000 --out raking.jpg
+```
+
+Prints JSON on stdout; on an error prints it on stderr and exits 1. Full-size exports and
+Analyze are slow in software GL (no GPU): about a minute to start and render, 2–3 minutes
+for Analyze on a 2000 px photo.
+
+Not built yet: an MCP server wrapping the CLI (each tool would map to one command).

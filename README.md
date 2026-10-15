@@ -266,6 +266,12 @@ can resemble relief, and flat copy lighting suppresses texture information.
 Photometric mode supports matching photos with varied, known light directions;
 use more than four shots with varied elevation when fitting ambient.
 
+## Automation
+Scripts and AI agents can drive the app: `window.digilight` in the page (load a photo,
+Analyze, apply a look, set any setting by name, render or export, project get/set),
+URL parameters (`?image=`, `?set=`, `?look=`), a `postMessage` bridge (`?bridge`) and
+a headless command line, `tools/digilight-cli.cjs`. See `docs/automation.md`.
+
 ## Automatic deploys
 `wrangler.jsonc` tells Cloudflare Workers Builds to publish this folder as a static
 site on every push (no build step); `.assetsignore` keeps tests and notes out of it.

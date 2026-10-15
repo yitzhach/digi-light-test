@@ -9,6 +9,7 @@ import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 import { initBatch } from './batch.js';
 import { initAuto } from './auto.js';
 import { initToolRail } from './toolrail.js';
+import { initAutomation } from './automation.js';
 import { adjustDefaults, validateAdjust, buildAdjustUI, eyeButton } from './adjust.js';
 import { overlayDefaults, validateOverlays, buildOverlayUI } from './overlays.js';
 
@@ -791,6 +792,11 @@ export function initStudio(api) {
   // One section at a time: bottom tool strip on phones, vertical rail on desktop (toolrail.js).
   const tools=initToolRail({panel:$('panel')});
   buildSearch();
+  // window.digilight: the same app for scripts and AI agents (automation.js, docs/automation.md).
+  const presetTables={lighting:{names:Object.keys(lighting),apply:n=>{useLighting(n);sync();}},graze:{names:Object.keys(grazePresets),apply:n=>{stopSweep();setGraze({...grazePresets[n]});sync();}},
+    looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}}};
+  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,
+    openProject:p=>{const run=queue.then(async()=>{loading=true;try{await open(p);}finally{loading=false;}});queue=run.catch(()=>{});return run;}});
   window.__studio={calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 
   // Save & export: every way out of the app in one section, one sub-tab at a time.

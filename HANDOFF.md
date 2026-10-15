@@ -33,8 +33,9 @@ update this file (mark the phase DONE, note what the next chat needs).
   (e) DONE (10-15): **Relief (3D) bands** — user: "too much granular tiny detail … like tons of
   little sand bumps versus true 3-D dimensionality". Added Fine detail / Mid detail (0–300%,
   default 100%), Broad form (0–300%, default 0 = none) and Broad size (25–400%). See Done recently.
-  Ask the user: is Broad form 100% the right strength, and do Fine 30% + Broad form 100–200%
-  give the "true 3D" they meant (try it on the AI-match look, Next up −4)?
+  User (10-15): "Broad form is helping"; asked for Broad size to go down to 0% (was 25%) → DONE:
+  range 0–400%, 0% = none (its swells are as tall as they are wide, so they fade out smoothly;
+  gbuffer.js skips the form blurs at 0). Still ask: is Broad form 100% the right strength?
 - (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -49,11 +50,9 @@ update this file (mark the phase DONE, note what the next chat needs).
   shader so it is resolution-correct in tiled export), then lighting overlays (vignette, light leak /
   warm glow, soft window light gradient, spotlight pool) each with opacity + blend mode,
   stored in `state.overlays`, saved in projects/presets.
-- Phase 4 — **AI automation**: a documented JS API `window.digilight` (load image from URL/dataURL,
-  analyze, list/apply looks, set any setting by name, render/export to dataURL/blob, project
-  get/set) + a URL/postMessage bridge, `docs/automation.md`, and a headless Node CLI
-  (`tools/digilight-cli.cjs`, Playwright) so an agent can run `analyze`, `apply look`, `export`.
-  Optionally an MCP server wrapping the CLI.
+- Phase 4 — DONE (10-15, on `main`; see Done recently): `window.digilight` (src/automation.js),
+  URL params + `?bridge` postMessage, `docs/automation.md`, `tools/digilight-cli.cjs`. Not built:
+  the optional MCP server wrapping the CLI (ask the user if they want it). **Next chat: Phase 5.**
 - Phase 5 — **Shadow light** (user asked 10-15: "experiment with a 'shadow' light tool … that can in
   a sense have an opposite effect to a light"): a light type that takes light away where it falls,
   like a flag/gobo or a dark cloud over part of the painting. Ideas to try: (a) negative power
@@ -157,9 +156,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail,
-  Broad form, Broad size). Raking round R1 still waiting on picks. **Next chat: the user's
-  verdict on the bands, the R1 picks (set the default graze), then Phase 4.**
+- Last code change on `main` (2026-10-15): **Phase 4, automation** (`window.digilight`, bridges,
+  CLI, docs/automation.md) and **Broad size from 0%**. Raking round R1 still waiting on picks.
+  **Next chat: the R1 picks if the user has them (set the default graze), then Phase 5 (Shadow light).**
+- Before that (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail, Broad form, Broad size).
 - Before that (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
   search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks).
 - Before that (2026-10-15): **Phase 3** — Colour tool adjustments (`src/adjust.js`),
@@ -223,6 +223,8 @@ of a painting → estimate surface relief → relight with movable virtual light
 - `app.js` — main bench: load image, build G-buffer, re-shade on interaction (largest file)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
 - `toolrail.js` — tool rail / phone tool strip: tags each panel block with a tool, shows one at a time
+- `automation.js` — `window.digilight` API, URL params, `?bridge` postMessage (docs/automation.md;
+  CLI tools/digilight-cli.cjs)
 - `auto.js` — Auto section: Analyze (readout, depth fit, raking direction), one-tap looks, Strength mix
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
@@ -271,6 +273,29 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Phase 4 — automation.** `src/automation.js` (`initAutomation` from
+  studio.js, after Auto; `window.digilight`, API_VERSION 1). Calls (all queued one at a time, each
+  a Promise): ready, info, load(URL | data URL | Blob | {sample}), settings, get(path),
+  set(path, value | {path: value}) — dotted paths into the snapshot (`lights.0.power`,
+  `adjust.relief.form`); the whole changed snapshot goes through studio `validate` (as an
+  imported project), then restore + one checkpoint; a bad value throws "<validate message>:
+  nothing changed (asked …)" and changes nothing; unknown names throw — setSettings, describe
+  ([{path, label, min, max, step, value}] from the panel's sliders, graze, lights, ADJUSTMENTS,
+  OVERLAYS), presets / applyPreset(kind lighting|graze|looks, name) (studio `presetTables`),
+  analyze (auto.analyze → JSON summary + looks), looks, applyLook(name|index, {strength}),
+  undo, redo, render (preview) / export ({width} → api.renderAt, else exportFull) as data URL
+  or `as: 'blob'`, getProject / setProject (studio `project()` / `open()` under its storage
+  queue with `loading` set). **Bridges**: URL params once on open (`?image= | ?project= |
+  ?sample=`, then `?set=a=1;b.c=2` or JSON, then `?look=Name&strength=` or `?analyze`; errors
+  go to `#hint`); `?bridge` = postMessage `{digilight: id, method, args}` → `{digilight: id,
+  result | error}`, only from window.parent / window.opener, notice `#bridgeNote`, posts
+  `{digilight: 'ready'}` on start. **CLI** `tools/digilight-cli.cjs` (own static server, ?synth
+  start, Playwright): info / analyze / describe / get / render; --preset kind:name, --set,
+  --look --strength, --out, --width, --preview, --save-project. Start + preview render ≈ 45 s in
+  SwiftShader. Test "automation API" in browser.cjs (own context: set/validate/undo, project
+  round trip pixel-identical, presets, export width, Blob, ?set=, iframe bridge).
+  **Broad size** (user, 10-15): range now 0–400% (was 25–400%); 0% = none (formOn needs
+  formSize > 0; formScale ∝ size so it fades out smoothly); test checks 10% differs, 0% = base.
 - 10-15 (pushed to `main`): **Relief (3D) bands.** `adjust.relief` gains `fine`, `mid` (multipliers
   on the one-photo relief's fine band and on its medium + broad bands; slope shader `uBands`),
   `form` (0 = none) and `formSize`. app.js `reliefBands(st, W)` fades them by the Colour

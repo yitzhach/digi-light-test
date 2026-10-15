@@ -351,7 +351,7 @@ export class GBuffer {
 
     // Relief (3D)'s bands (app.js reliefBands); none passed is the relief as estimated.
     const bands = opts.reliefBands || { fine: 1, mid: 1, form: 0, formSize: 1 };
-    const formOn = bands.form > 0 && !opts.measured;
+    const formOn = bands.form > 0 && bands.formSize > 0 && !opts.measured;
     const broadSigma = reliefScale * 4;
     const blurs = [[T.fine, Math.max(0.5, reliefScale * 0.4)], [T.broad, broadSigma]];
     // Broad form's wide blurs start from the broad band's: a wide kernel samples with a

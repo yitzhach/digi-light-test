@@ -611,10 +611,12 @@ await ev(()=>{__bench.state.adjust.curves.rgb=[[0,0],[1,1]];});await slider('adj
    let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});
  assert.ok(d<1,'Broad form tile difference '+d);
  await page.click('#adj-relief .eye');await settle();await same(base,'Relief eye hides the bands');await page.click('#adj-relief .eye');await settle();
+ await slider('adj-relief-formSize',0.1);const sm=await pixels();assert.notEqual(sm,base,'Broad size 10%');assert.ok(await ev(()=>__bench.state.reliefBands.formScale>0));
+ await slider('adj-relief-formSize',0);await settle();await same(base,'Broad size 0 is none');assert.equal(await ev(()=>__bench.state.reliefBands.formScale),0);
  await slider('adj-relief-formSize',1);await slider('adj-relief-form',0);await settle();await same(base,'Broad form 0 is none');
  const v=await ev(()=>{const t=r=>{const s=__studio.snapshot();s.adjust={relief:r};try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).adjust.relief;}catch{return null;}};
-   return {old:t({on:1,amount:2}),bad:t({form:4}),badSize:t({formSize:0})};});
- assert.deepEqual(v.old,{on:1,amount:2,fine:1,mid:1,form:0,formSize:1},'older saves open with the bands neutral');assert.equal(v.bad,null);assert.equal(v.badSize,null);
+   return {old:t({on:1,amount:2}),bad:t({form:4}),badSize:t({formSize:-0.05}),zeroSize:t({formSize:0})};});
+ assert.deepEqual(v.old,{on:1,amount:2,fine:1,mid:1,form:0,formSize:1},'older saves open with the bands neutral');assert.equal(v.bad,null);assert.equal(v.badSize,null);assert.equal(v.zeroSize?.formSize,0,'Broad size 0 saves');
  console.log('PASS Relief (3D) bands: fine, mid, broad form and size, tiled export, eye, validate');}
 // Overlays: grain adds texture to the painting and exports at the size it previews; vignette darkens corners; the master eye hides all.
 await page.click('#ov-grain .eye');await settle();const gr=await pixels();assert.notEqual(gr,base);const tg=await tone();assert.ok(tg.centre.sd>t0.centre.sd+1,'grain '+JSON.stringify([t0.centre.sd,tg.centre.sd]));
@@ -676,5 +678,40 @@ const st=await m.locator('#stage').boundingBox();assert.ok(st.width>=389&&st.hei
 b=await m.locator('#gl').boundingBox();await pinch([b.x+b.width/2,b.y+b.height/2],60,150);assert.ok(await z()>2,'pinch in full screen '+await z());
 await m.click('#fullFit');assert.equal(await z(),1);await m.click('#fullExit');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isVisible()&&await m.locator('#fullExit').isHidden());
 await ctx.close();console.log('PASS phone pinch zoom, one-finger pan, pinch cancels stroke, full screen view');}
+// Automation API (window.digilight, docs/automation.md): set by name is one undo step and checked like an import,
+// render/export as data URL or Blob, project round trip, fixed presets, ?set= on open, postMessage bridge with ?bridge.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+const base='http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766);
+await a.goto(base+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={};
+ out.info=await d.ready();const desc=d.describe();out.formSize=desc.find(x=>x.path==='adjust.relief.formSize');out.exposure=desc.find(x=>x.path==='exposure');
+ const p0=await d.render(),u0=__studio.history.index;
+ out.set=await d.set({exposure:0.5,'graze.opacity':0.4,'lights.0.power':3});out.steps=__studio.history.index-u0;const p1=await d.render();out.changed=p0!==p1;
+ for(const [k,v] of [['graze.opacity',2],['nope',1],['lights.5.power',1]])try{await d.set(k,v);out[k]='no error';}catch(e){out[k]=e.message;}
+ out.kept=[d.get('graze.opacity'),__studio.history.index-u0];
+ await d.undo();out.undone=d.get('exposure');await d.redo();out.redone=d.get('exposure');
+ const proj=await d.getProject({name:'API test'});out.projName=proj.name;await d.set('exposure',-1);await d.setProject(JSON.stringify(proj));out.reopened=d.get('exposure');out.sameAfterReopen=(await d.render())===p1;
+ out.presets=d.presets();await d.applyPreset('graze','Classic raking');out.graze=d.get('graze');
+ try{await d.applyPreset('graze','Nope');}catch(e){out.badPreset=e.message;}
+ const e1=await d.export({width:100,format:'jpeg'});out.exp=e1.slice(0,23);const im=new Image();await new Promise(res=>{im.onload=res;im.src=e1;});out.expW=im.width;
+ out.blob=(await d.render({as:'blob',format:'webp'})).type;out.looks=d.looks().length;return out;});
+assert.ok(r.info.photo&&r.info.preview.width>0&&r.info.mode==='single',JSON.stringify(r.info));
+assert.equal(r.formSize.min,0);assert.equal(typeof r.exposure.label,'string');assert.ok(r.exposure.max>r.exposure.min);
+assert.deepEqual(r.set,{exposure:0.5,'graze.opacity':0.4,'lights.0.power':3});assert.equal(r.steps,1,'one undo step');assert.ok(r.changed);
+assert.match(r['graze.opacity'],/Invalid graze light: nothing changed/);assert.match(r.nope,/Unknown setting "nope"/);assert.match(r['lights.5.power'],/Unknown setting/);
+assert.deepEqual(r.kept,[0.4,1],'a rejected set changes nothing');assert.equal(r.undone,0);assert.equal(r.redone,0.5);
+assert.equal(r.projName,'API test');assert.equal(r.reopened,0.5);assert.ok(r.sameAfterReopen,'project round trip renders the same');
+assert.ok(r.presets.lighting.length&&r.presets.graze.includes('Classic raking')&&r.presets.looks.length);assert.ok(r.graze.enabled&&r.graze.elevation===3,JSON.stringify(r.graze));assert.match(r.badPreset,/No graze preset/);
+assert.equal(r.exp,'data:image/jpeg;base64,');assert.equal(r.expW,100);assert.equal(r.blob,'image/webp');assert.equal(r.looks,0,'no looks before Analyze');
+await a.goto(base+'/?synth&set='+encodeURIComponent('exposure=0.3;graze.opacity=0.2'));await a.waitForFunction(()=>window.digilight&&__bench.state.exposure===0.3,null,{timeout:30000});
+assert.equal(await a.evaluate(()=>__bench.state.graze.opacity),0.2,'?set= on open');
+const br=await a.evaluate(async(u)=>{const f=document.createElement('iframe');f.style.cssText='width:900px;height:700px';document.body.append(f);
+ const replies={};let ready;const isReady=new Promise(r=>{ready=r;});addEventListener('message',e=>{if(e.source!==f.contentWindow)return;if(e.data.digilight==='ready')ready();else replies[e.data.digilight]?.(e.data);});
+ f.src=u;await isReady;const call=(id,method,...args)=>new Promise(r=>{replies[id]=r;f.contentWindow.postMessage({digilight:id,method,args},'*');});
+ const s=await call(1,'set','exposure',0.25),i=await call(2,'info'),bad=await call(3,'nope'),err=await call(4,'set','graze.opacity',5);
+ return {s,i,bad,err,state:f.contentWindow.__bench.state.exposure,note:!!f.contentDocument.getElementById('bridgeNote')};},base+'/?synth&bridge');
+assert.deepEqual(br.s.result,{exposure:0.25});assert.equal(br.state,0.25);assert.ok(br.i.result.preview.width>0);assert.match(br.bad.error,/Unknown method/);assert.match(br.err.error,/Invalid graze light/);assert.ok(br.note,'bridge notice shown');
+await a.goto(base+'/?synth');await a.waitForFunction(()=>window.digilight);assert.equal(await a.evaluate(()=>!!document.getElementById('bridgeNote')),false,'no bridge without ?bridge');
+await ctx.close();console.log('PASS automation API: set by name (one undo step, validated), render/export, project round trip, presets, ?set=, postMessage bridge');}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
