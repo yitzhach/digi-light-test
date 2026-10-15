@@ -12,6 +12,9 @@ const pixels=()=>page.evaluate(()=>{__bench.render();return __bench.canvas.toDat
 const setting=k=>page.evaluate(k=>__bench.state[k],k);
 const slider=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
 await page.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await page.waitForFunction(()=>window.__bench&&window.__studio);await settle();assert.equal(await page.locator('#err').textContent(),'');console.log('PASS boot and shader compilation');
+// Opens on Setup with Auto's Analyze; the desktop tests below use All (every section).
+assert.equal(await page.evaluate(()=>__studio.tools.current),'setup');assert.ok(await page.locator('#autoAnalyze').isVisible()&&await page.locator('#quickSetup').isVisible()&&await page.locator('#openPhoto').isVisible()&&await page.locator('#layersSection').isHidden(),'opens on Setup with Analyze');
+await page.click('#toolRail .railAll');console.log('PASS opens on Setup with Analyze');
 {const relit=await pixels();await page.evaluate(()=>{document.querySelector('#layersSection').open=true;});await slider('originalTop',1);assert.equal(await setting('originalTop'),1);await page.click('#compare');const orig=await pixels();await page.click('#compare');await settle();assert.equal(await pixels(),orig);await slider('originalTop',.5);const half=await pixels();assert.notEqual(half,relit);assert.notEqual(half,orig);await slider('originalTop',0);await settle();assert.equal(await pixels(),relit);await page.evaluate(()=>{document.querySelector('#layersSection').open=false;});console.log('PASS Original on top layer opacity');}
 {await page.fill('#toolSearchInput','batch');await settle();assert.ok(await page.locator('#toolSearchList li').count()>0);await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#saveSection').open&&!document.querySelector('[data-pane=batch]').hidden));
 await page.fill('#toolSearchInput','graze opac');await settle();await page.fill('#toolSearchInput','Shadow lift');await settle();await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#grazeSection').open||[...document.querySelectorAll('details')].some(d=>d.open)));
@@ -546,13 +549,79 @@ assert.equal(v.now.strokeDef,1);assert.deepEqual([v.old.neutralWB,v.old.vibrance
 await page.selectOption('#lightingPreset','Gallery spot, upper right');await settle();
 const g=await page.evaluate(()=>{const s=__bench.state;return {wb:s.neutralWB,vib:s.vibrance,sd:s.strokeDef,x:s.lights[0].x,n:s.lights.length,out:document.querySelector('#neutralWB').closest('.row').querySelector('output').textContent};});
 assert.ok(g.wb>0&&g.vib>0&&g.sd>0&&g.x>1&&g.n===1&&g.out===`${Math.round(g.wb*100)}%`,JSON.stringify(g));
-await page.selectOption('#lookPreset','Raking graze (05)');await settle();
+await page.evaluate(()=>{document.querySelector('#colourSection').open=true;});await page.selectOption('#lookPreset','Raking graze (05)');await settle();
 const lk=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,op:s.graze.opacity,z:s.lights[0].z,rs:s.reliefScale,al:s.albedoSuppress,sd:s.strokeDef,exp:s.exposure};});
 assert.deepEqual(lk,{g:true,op:.3,z:.45,rs:3,al:.7,sd:.5,exp:.35},'matched look '+JSON.stringify(lk));
 await page.selectOption('#lookPreset','Brighter (07)');await settle();assert.equal(await page.evaluate(()=>__bench.state.graze.enabled),false);assert.equal(await setting('exposure'),.6);
 await page.click('#undo');await settle();assert.equal(await setting('exposure'),.35);
 await page.evaluate(()=>Object.assign(__bench.state,{neutralWB:0,vibrance:0,roomKelvin:6500,strokeDef:0,strokeSize:.01}));await page.evaluate(()=>document.dispatchEvent(new Event('digilight:settings')));await settle();
 console.log('PASS colour & strokes: no-op when neutral, greys neutral, vibrance spares greys, room light colour, stroke definition exports as previewed, saved and validated, Gallery spot preset, matched looks',JSON.stringify({cast:[+cast(s0).toFixed(2),+cast(s1).toFixed(2)],sat:[+s1.red.sat.toFixed(3),+s2.red.sat.toFixed(3)],sd:[+s0.grey.sd.toFixed(1),+k1.grey.sd.toFixed(1)],export:+ex.mean.toFixed(3),tiled:+tiledEx.toFixed(3)}));}
+// Phase 3 — Colour tool adjustments, eyes, Opacity; overlays (grain, vignette, …); Fine-tune and
+// Layers eyes; Auto's Opacity. Defaults change nothing; each eye hides exactly its own effect.
+{const open=()=>page.evaluate(()=>{for(const id of ['colourSection','layersSection','fineTune'])document.getElementById(id).open=true;});await open();
+await page.evaluate(()=>{Object.assign(__bench.state,{layers:[],originalTop:0});document.dispatchEvent(new Event('digilight:settings'));});await settle();
+const ev=fn=>page.evaluate(fn),same=async(a,msg)=>assert.equal(await pixels(),a,msg);
+const tone=()=>page.evaluate(()=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);const d=x.getImageData(0,0,c.width,c.height).data,w=c.width,h=c.height;
+  const reg=(x0,x1,y0,y1)=>{let n=0,s=0,s2=0,sat=0;for(let y=y0;y<y1;y++)for(let a=x0;a<x1;a++){const i=(y*w+a)*4,Y=.2126*d[i]+.7152*d[i+1]+.0722*d[i+2],mx=Math.max(d[i],d[i+1],d[i+2]);n++;s+=Y;s2+=Y*Y;sat+=mx?(mx-Math.min(d[i],d[i+1],d[i+2]))/mx:0;}const m=s/n;return {y:m,sd:Math.sqrt(Math.max(0,s2/n-m*m)),sat:sat/n};};
+  return {all:reg(0,w,0,h),centre:reg(w*.4|0,w*.6|0,h*.4|0,h*.6|0),corner:reg(0,w*.12|0,0,h*.1|0),red:reg(w*.6|0,w*.9|0,h*.2|0,h*.8|0)};});
+const base=await pixels(),t0=await tone();
+const kept=await ev(()=>{const s=__bench.state,o={adjust:s.adjust,overlays:s.overlays,layersOn:s.layersOn};delete s.adjust;delete s.overlays;delete s.layersOn;return o;});
+await same(base,'default adjustments and overlays render as without them');await ev(()=>{});await page.evaluate(o=>Object.assign(__bench.state,o),kept);
+// Levels: changes the image, its eye hides it exactly, a second click brings it back; undoable.
+const h0=await ev(()=>__studio.history.index);
+await slider('adj-levels-inBlack',.25);const lv=await pixels();assert.notEqual(lv,base);assert.ok((await tone()).all.y<t0.all.y,'levels input black darkens');
+await page.click('#adj-levels .eye');await settle();await same(base,'Levels eye hides it');assert.equal(await ev(()=>__bench.state.adjust.levels.on),0);
+await page.click('#adj-levels .eye');await settle();await same(lv,'and shows it again');
+await page.click('#undo');await settle();await same(base,'eye click is one undo step');await page.click('#redo');await settle();await same(lv);assert.ok(await ev(()=>__studio.history.index)>h0);
+// The Colour tool's eye and Opacity: hidden = no adjustments and no Colour & strokes lighting; half = in between.
+await slider('neutralWB',1);const wb=await pixels();assert.notEqual(wb,lv);
+await page.click('#colourEye');await settle();await same(base,'Colour eye hides the adjustments and the lighting colour controls');
+await page.click('#colourEye');await settle();await same(wb);
+await slider('adjustOpacity',.5);const half=await pixels();assert.ok(half!==wb&&half!==base);const th=await tone();assert.ok(th.all.y>(await (async()=>t0.all.y)())-40);
+await slider('adjustOpacity',1);await slider('neutralWB',0);await slider('adj-levels-inBlack',0);await settle();await same(base,'neutral again');
+// Black & White is hidden until used; moving a slider shows it; Channel Mixer monochrome; Curves; Hue/Saturation.
+assert.equal(await ev(()=>__bench.state.adjust.bw.on),0);await slider('adj-bw-reds',60);assert.equal(await ev(()=>__bench.state.adjust.bw.on),1);assert.ok((await tone()).red.sat<.02,'black & white');
+await page.click('#adj-bw .eye');await settle();await same(base);
+await ev(()=>{const m=__bench.state.adjust.mixer;m.mono=1;document.dispatchEvent(new Event('digilight:settings'));});await settle();assert.ok((await tone()).red.sat<.02,'monochrome mixer');assert.equal(await ev(()=>document.querySelector('#adj-mixer-mono').checked),true);
+await ev(()=>{__bench.state.adjust.mixer.mono=0;__bench.state.adjust.curves.rgb=[[0,0],[.5,.7],[1,1]];document.dispatchEvent(new Event('digilight:settings'));});await settle();assert.ok((await tone()).all.y>t0.all.y+8,'curve lifts the mids');
+await ev(()=>{__bench.state.adjust.curves.rgb=[[0,0],[1,1]];});await slider('adj-hueSat-saturation',-1);assert.ok((await tone()).red.sat<.03,'saturation -100');await slider('adj-hueSat-saturation',0);await settle();await same(base);
+// Curves editor: a click adds a point, a drag moves it, double-click removes it.
+{const box=await page.locator('#adj-curves-box');await ev(()=>{document.querySelector('#adj-curves').open=true;});await box.scrollIntoViewIfNeeded();const b=await box.boundingBox();
+ await page.mouse.move(b.x+b.width*.5,b.y+b.height*.5);await page.mouse.down();await page.mouse.move(b.x+b.width*.5,b.y+b.height*.3,{steps:3});await page.mouse.up();await settle();
+ const p=await ev(()=>__bench.state.adjust.curves.rgb);assert.equal(p.length,3);assert.ok(p[1][1]>.6&&Math.abs(p[1][0]-.5)<.03,JSON.stringify(p));assert.notEqual(await pixels(),base);
+ await page.mouse.dblclick(b.x+b.width*p[1][0],b.y+b.height*(1-p[1][1]));await settle();assert.equal((await ev(()=>__bench.state.adjust.curves.rgb)).length,2);await same(base,'curve back to straight');}
+// Overlays: grain adds texture to the painting and exports at the size it previews; vignette darkens corners; the master eye hides all.
+await page.click('#ov-grain .eye');await settle();const gr=await pixels();assert.notEqual(gr,base);const tg=await tone();assert.ok(tg.centre.sd>t0.centre.sd+1,'grain '+JSON.stringify([t0.centre.sd,tg.centre.sd]));
+await slider('ov-grain-seed',7);assert.notEqual(await pixels(),gr,'seed changes the pattern');await slider('ov-grain-seed',1);
+await page.click('#ov-grain .eye');await page.click('#ov-vignette .eye');await settle();const tv=await tone();assert.ok(tv.corner.y<t0.corner.y-5&&Math.abs(tv.centre.y-t0.centre.y)<2,'vignette '+JSON.stringify([t0.corner.y,tv.corner.y,t0.centre.y,tv.centre.y]));const vig=await pixels();
+await page.click('#overlaysEye');await settle();await same(base,'overlays eye hides them all');await page.click('#overlaysEye');await settle();await same(vig);
+await page.evaluate(()=>{document.querySelector('#ov-vignette').open=true;});await page.locator('#ov-vignette-mode').scrollIntoViewIfNeeded();await page.click('#ov-vignette-mode');await page.click('.blendMenu li[data-mode=screen]');await settle();assert.equal(await ev(()=>__bench.state.overlays.vignette.mode),'screen');assert.match(await page.locator('#ov-vignette-mode').textContent(),/Screen/);
+for(const k of ['leak','window','pool']){await page.click(`#ov-${k} .eye`);await settle();}assert.notEqual(await pixels(),vig);
+{const exp=await ev(async()=>{const o=await __bench.exportFullRes();const c=o.canvas||o,W=__bench.canvas.width,H=__bench.canvas.height;const g=document.createElement('canvas');g.width=W;g.height=H;g.getContext('2d').drawImage(c,0,0,W,H);const a=g.getContext('2d').getImageData(0,0,W,H).data;
+   __bench.render();const p=document.createElement('canvas');p.width=W;p.height=H;p.getContext('2d').drawImage(__bench.canvas,0,0);const b=p.getContext('2d').getImageData(0,0,W,H).data;let s=0;for(let i=0;i<a.length;i+=4)s+=Math.abs(a[i]-b[i]);return s/(a.length/4);});
+ assert.ok(exp<6,'overlays export as previewed, mean |diff| '+exp);}
+// Saved, validated and undoable; older saves open with everything neutral; bad values refused.
+const v=await ev(()=>{const snap=__studio.snapshot(),mk=s=>({format:'digilight',version:1,image:'data:image/png;base64,AA',settings:s});const back=__studio.validate(mk(snap));const old={...snap};delete old.adjust;delete old.overlays;delete old.layersOn;delete old.fineHidden;const o=__studio.validate(mk(old));
+  const bad=x=>{try{__studio.validate(mk({...snap,...x}));return '';}catch(e){return e.message;}};
+  return {pool:back.overlays.pool.on,mode:back.overlays.vignette.mode,oldOv:o.overlays.on&&!o.overlays.grain.on,oldAdj:o.adjust.levels.inBlack===0&&o.adjust.bw.on===0,layersOn:o.layersOn,
+    b1:bad({adjust:{levels:{gamma:50}}}),b2:bad({overlays:{vignette:{mode:'nope'}}}),b3:bad({adjust:{curves:{rgb:[[0,0],[0,1]]}}}),b4:bad({overlays:{leak:{hex:'red'}}})};});
+assert.ok(v.pool===1&&v.mode==='screen'&&v.oldOv&&v.oldAdj&&v.layersOn===1&&/colour/.test(v.b1)&&/overlays/i.test(v.b2)&&/colour/.test(v.b3)&&/overlays/i.test(v.b4),JSON.stringify(v));
+await page.click('#overlaysEye');await settle();await same(base);
+// Fine-tune's eye puts its sliders at their starting values and keeps yours; moving one while hidden shows it.
+await slider('fineRelief',1.6);await slider('roughness',.2);const tuned=await pixels();
+await page.click('#fineEye');await settle();const fh=await ev(()=>({fr:__bench.state.fineRelief,ro:__bench.state.roughness,stash:__bench.state.fineHidden,ui:+document.querySelector('#fineRelief').value}));
+assert.ok(fh.fr===.65&&fh.ro===.55&&fh.stash.fineRelief===1.6&&fh.stash.roughness===.2&&fh.ui===.65,JSON.stringify(fh));assert.notEqual(await pixels(),tuned);
+await page.click('#fineEye');await settle();await same(tuned,'Fine-tune back');assert.equal(await setting('fineHidden'),null);
+await page.click('#fineEye');await settle();await slider('roughness',.3);assert.deepEqual(await ev(()=>[__bench.state.fineHidden,__bench.state.fineRelief,__bench.state.roughness]),[null,1.6,.3],'moving a hidden slider shows Fine-tune with the new value');
+await slider('fineRelief',.65);await slider('roughness',.55);await settle();
+// Layers eye hides the blend layers; Auto's Opacity is Original on top turned round.
+const before=await pixels();await page.click('#addLayer');await settle();const ly=await pixels();assert.notEqual(ly,before);
+await page.click('#layersEye');await settle();await same(before,'layers eye');await page.click('#layersEye');await settle();await same(ly);await page.click('.lyDel');await settle();
+await slider('autoOpacity',.25);assert.equal(await setting('originalTop'),.75);assert.equal(await ev(()=>+document.querySelector('#originalTop').value),.75);await slider('originalTop',0);assert.equal(await ev(()=>+document.querySelector('#autoOpacity').value),1);
+const mx=await ev(async()=>{const {mixSettings}=await import('/src/auto.js');const a={lights:[],adjust:{on:1,x:1},overlays:{on:1},layersOn:1},b={lights:[],adjust:{on:0,x:2},overlays:{on:0},layersOn:0};const m1=mixSettings(a,b,.4),m2=mixSettings(a,b,.6);return [m1.adjust.x,m1.layersOn,m2.adjust.x,m2.layersOn,m2.overlays.on];});
+assert.deepEqual(mx,[1,1,2,0,0],'whole tools switch at half in a Strength mix');
+await page.evaluate(()=>{for(const id of ['colourSection','layersSection','fineTune'])document.getElementById(id).open=false;});
+console.log('PASS colour adjustments, eyes and Opacity; overlays (grain, vignette, leak, window, pool) export as previewed; Fine-tune and Layers eyes; Auto Opacity; saved and validated',JSON.stringify({grainSd:[+t0.centre.sd.toFixed(1),+tg.centre.sd.toFixed(1)],vignette:[+t0.corner.y.toFixed(1),+tv.corner.y.toFixed(1)]}));}
 // Phone: two-finger pinch zooms about the fingers, one finger pans when zoomed, a pinch that
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));
@@ -561,12 +630,12 @@ await m.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');a
 {const T=()=>m.evaluate(()=>__studio.tools.current),vis=sel=>m.locator(sel).isVisible();
 const R=await m.locator('#toolRail').boundingBox(),P=await m.locator('#panel').boundingBox(),S=await m.locator('#stage').boundingBox();
 assert.ok(Math.abs(R.y+R.height-844)<1&&R.width>=389&&P.y+P.height<=R.y+1&&S.height>=300,'strip at the bottom '+JSON.stringify({R,P,S}));
-assert.equal(await T(),'auto');assert.ok(await vis('#autoAnalyze')&&!await vis('#grazeSection')&&!await vis('#layersSection')&&!await vis('#toolRail .railAll'));
+assert.equal(await T(),'setup');assert.ok(await vis('#autoAnalyze')&&!await vis('#grazeSection')&&!await vis('#layersSection')&&!await vis('#toolRail .railAll'));
 const small=await m.evaluate(()=>[...document.querySelectorAll('#toolRail button, #autoSection button, #studioToolbar button')].filter(b=>b.offsetParent&&b.getBoundingClientRect().height<40).map(b=>b.textContent));assert.deepEqual(small,[],'touch targets at least 40 px');
 await m.tap('#toolRail [data-tool=graze]');assert.equal(await T(),'graze');assert.ok(await m.evaluate(()=>document.querySelector('#grazeSection').open)&&await vis('#grazeDial')&&!await vis('#autoAnalyze'));
 await m.fill('#toolSearchInput','Add layer');await m.keyboard.press('Enter');await m.waitForTimeout(100);assert.equal(await T(),'layers');assert.ok(await vis('#addLayer'));
-await m.reload();await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);assert.equal(await T(),'layers','the strip remembers the tool');
-await m.tap('#toolRail [data-tool=auto]');console.log('PASS phone tool strip: one section at a time, strip at the bottom, touch targets, search switches tool, remembered');}
+await m.reload();await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);assert.equal(await T(),'setup','every visit opens on Setup');
+await m.tap('#toolRail [data-tool=auto]');console.log('PASS phone tool strip: one section at a time, strip at the bottom, touch targets, search switches tool, opens on Setup');}
 const cdp=await ctx.newCDPSession(m),touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts.map(([x,y],id)=>({x,y,id}))});
 const z=()=>m.evaluate(()=>__bench.state.viewZoom),sc=()=>m.evaluate(()=>{const s=document.querySelector('#scroller');return [s.scrollLeft,s.scrollTop];});
 const pinch=async(c,d0,d1)=>{await touch('touchStart',[[c[0]-d0/2,c[1]]]);await touch('touchMove',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);await touch('touchStart',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);for(let i=1;i<=8;i++){const d=d0+(d1-d0)*i/8;await touch('touchMove',[[c[0]-d/2,c[1]],[c[0]+d/2,c[1]]]);}await touch('touchEnd',[]);};

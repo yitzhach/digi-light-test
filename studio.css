@@ -218,3 +218,28 @@ body { grid-template-columns:minmax(0,1fr) 62px 320px; }
   #photoCompass { grid-template-columns:repeat(3,46px); }
   .handle { width:34px; height:34px; margin:-17px 0 0 -17px; }
 }
+/* Eyes: show or hide a tool, an adjustment or an overlay (adjust.js eyeButton) */
+.eye { float:right; display:inline-grid; place-items:center; width:30px; height:24px; min-height:0!important; padding:0; margin:-3px 0 -3px 6px; background:transparent; border:1px solid transparent; border-radius:5px; color:var(--ink); }
+.eye:hover { border-color:var(--line); background:var(--panel2); }
+.eye svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.eye.off { color:var(--dim); opacity:.7; }
+.off > summary, .layersOff > summary { color:var(--dim); }
+.subHead { margin:14px 0 4px; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--dim); }
+#lookControls > .subHead:first-of-type { margin-top:8px; }
+/* Adjustments and overlays: one small folding block each */
+details.adj { margin:6px 0 0; border:1px solid var(--line); border-radius:6px; background:var(--panel2); }
+details.adj > summary { padding:8px 8px 8px 10px; color:var(--ink); font-size:12px; }
+details.adj.off > summary { color:var(--dim); }
+.adjBody { padding:0 8px 8px; }
+.adjBody .row { margin:4px 0; }
+.adjReset { margin-top:6px; font-size:11px; }
+.curveBox { display:block; width:100%; max-width:256px; aspect-ratio:1; margin:6px auto 2px; background:#111317; border:1px solid var(--line); border-radius:4px; touch-action:none; cursor:crosshair; }
+.curveBox.removing { opacity:.6; cursor:no-drop; }
+.overlays { margin-top:14px; padding-top:10px; border-top:1px solid var(--line); }
+.overlays.off details.adj { opacity:.6; }
+.ovHead { justify-content:space-between; }
+.ovHead .eye { float:none; margin:0; }
+.ovLine { display:flex; gap:8px; align-items:center; margin:2px 0 6px; }
+.ovLine input[type=color] { width:44px; height:28px; padding:0 2px; background:var(--panel); border:1px solid var(--line); border-radius:4px; }
+.ovLine .checkRow { margin:0; }
+.layersOff #layerList { opacity:.5; }

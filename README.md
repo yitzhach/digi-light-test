@@ -8,8 +8,21 @@ render targets; graphics acceleration must be enabled.
 Auto, Light, Graze, Layers, Colour, Detail (calibrate, lamp-photo relief, profile, brush
 corrections, fine-tune, views) and Save. On a phone it sits at the bottom of the screen
 and shows one tool at a time, like Lightroom mobile; on a desktop it is a rail beside
-the panel, where **All** (the default) shows every section at once. Tool search (`/`)
-jumps to any control and switches to its tool. The strip remembers the last tool.
+the panel, where **All** shows every section at once. The app opens on **Setup**, which
+also shows Auto's **Analyze**. Tool search (`/`) jumps to any control and switches to
+its tool. An **eye** button hides a tool's effect without losing its settings: the
+Colour tool and each adjustment, Layers, each overlay, the Graze light and Fine-tune
+(its sliders go back to their starting values while hidden).
+
+**Colour** has the image editor's adjustments (Brightness/Contrast, Levels, Curves,
+Exposure, Vibrance, Hue/Saturation, Color Balance, Black & White, Channel Mixer),
+applied in that order to the relit image before the blend layers, each with its own
+eye, plus one **Opacity** for the whole tool (it also scales Keep greys neutral, Room
+light colour and Stroke definition). **Layers** ends with **Overlays**: Film grain
+(amount, size, colour or mono, seed; made in the shader on a grid tied to the
+painting's width, so a full-size export has the same grain as the preview), Vignette,
+Light leak · warm glow, Window light and Spotlight pool, each with opacity, blend mode
+and colour. Auto's **Opacity** fades the whole effect into the original photo.
 
 Creative Studio starts each uploaded photograph with a restrained look: brushy oil
 about 1 mm deep, photographed in even light. **Auto** (top of the panel) is the
@@ -20,7 +33,7 @@ grid of one-tap looks for this photo: gallery, spot, the matched looks, raking a
 shadows, window, museum spot, plus your saved presets and projects adapted to it (the
 fitted depth, the graze across the strokes, the key light on the side Photo was lit
 names, exposure moved by this photo's brightness). **Strength** mixes the picked look with
-the settings it replaced; Undo steps back. **Quick setup** is the hands-on path:
+the settings it replaced; **Opacity** fades the result into the photo; Undo steps back. **Quick setup** is the hands-on path:
 
 - **Paint texture** — glazes, canvas weave, brushy oil, thick brushwork, palette-knife
   or sculptural impasto, texture paste, plaster. Each sets a typical depth and scale.

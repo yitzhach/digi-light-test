@@ -9,6 +9,8 @@ import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 import { initBatch } from './batch.js';
 import { initAuto } from './auto.js';
 import { initToolRail } from './toolrail.js';
+import { adjustDefaults, validateAdjust, buildAdjustUI, eyeButton } from './adjust.js';
+import { overlayDefaults, validateOverlays, buildOverlayUI } from './overlays.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -33,7 +35,7 @@ export function initStudio(api) {
     <label class="selectRow">Finish<select id="materialPreset"><option value="">Choose finish…</option></select></label>
     <div class="views"><button id="autoSetup">Auto setup</button><button id="resetLighting">Reset lighting</button></div>
     <p class="note" id="autoStatus">A restrained starting look. Pick the paint texture and how the photo was lit.</p>
-    </div><h2>Colour & strokes</h2><div class="grp" id="lookControls"></div><h2>My reusable presets</h2><div class="grp">
+    </div><details class="sectionDetails" id="colourSection"><summary>Colour · adjustments</summary><div class="grp" id="lookControls"></div></details><h2>My reusable presets</h2><div class="grp">
     <input id="presetName" class="full" aria-label="Preset name" placeholder="Preset name" maxlength="120">
     <div class="views"><button id="savePreset">Save current preset</button><button id="downloadPreset">Download current</button></div>
     <label class="selectRow">My presets<select id="userPresetList"><option value="">Choose saved preset…</option></select></label>
@@ -109,17 +111,26 @@ export function initStudio(api) {
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { ...LOOK_NEUTRAL, fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
-    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], originalTop: 0, graze: GRAZE_DEFAULT };
-  const LEGACY = { originalTop: 0, physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
-  const QUICK_RANGES = { originalTop: [0, 1], physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
+    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], originalTop: 0, graze: GRAZE_DEFAULT,
+    layersOn: 1, adjust: adjustDefaults(), overlays: overlayDefaults(), fineHidden: null };
+  const LEGACY = { originalTop: 0, layersOn: 1, physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
+  const QUICK_RANGES = { originalTop: [0, 1], layersOn: [0, 1], physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
   const DERIVED = ['heightScale', 'reliefStrength'];
   // Fill in only what the bench has not already set (the demo source sets how it was lit).
   for (const [k, v] of Object.entries(defaults)) if (!(k in state)) state[k] = structuredClone(v);
   const extraKeys = Object.keys(defaults);
+  // Fine-tune's eye: the sliders it puts back to these starting values while hidden.
+  const FINE_DEFAULTS = { fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, shadowSoftness: 0.2, shadowDetail: SHADOW_DETAIL, metallic: 0, highlightRolloff: 0.7,
+    reliefScale: 3, integrateTaps: 8, chromaReject: 0.6, albedoSuppress: 0.7, reliefAmount: 1, roughness: 0.55, specular: 1, shadow: 0.7, shadowSpread: 4, ao: 0.4 };
+  const FINE_KEYS = Object.keys(FINE_DEFAULTS);
+  // Filled in once their sections exist; sync() may run before.
+  var colourSync = null, overlaySync = null, eyes = [];
   const baseMap = { reliefScale:'reliefScale', azimuth:'azimuthDeg', taps:'integrateTaps', reliefStrength:'reliefStrength', chromaReject:'chromaReject', albedoSuppress:'albedoSuppress', reliefAmount:'reliefAmount', heightScale:'heightScale', roughness:'roughness', specular:'specular', shadow:'shadow', shadowSpread:'shadowSpread', ao:'ao', ambient:'ambient', exposure:'exposure' };
   const keys = [...new Set([...Object.values(baseMap), ...extraKeys, 'lights', 'selected'])];
-  const presetKeys = keys.filter(k => !['strokes', 'meanLuma'].includes(k));
+  const presetKeys = keys.filter(k => !['strokes', 'meanLuma', 'fineHidden'].includes(k));
+  // Objects with their own checks in validate (not plain numbers).
+  const OBJECT_KEYS = ['lights', 'strokes', 'layers', 'graze', 'adjust', 'overlays', 'fineHidden'];
   // While the sweep inspector borrows the lights, saves and history see the real ones.
   let sweep = null;
   const live = k => sweep && (k === 'lights' || k === 'selected') ? sweep[k] : state[k];
@@ -197,7 +208,7 @@ export function initStudio(api) {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { const i = row.querySelector('input'); row.querySelector('output').textContent = Number(i.value).toFixed(+i.step < 0.01 ? 3 : 2); });
-    syncQuick(); syncLook(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
+    syncQuick(); syncLook(); syncColour(); syncOverlays(); syncEyes(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
   }
   const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
   function renderGraze() {
@@ -209,6 +220,7 @@ export function initStudio(api) {
     dial.setAttribute('aria-valuetext', where); $('grazeReadout').textContent = where;
     $('grazeVis').textContent = g.enabled ? 'Visible' : 'Hidden'; $('grazeVis').classList.toggle('on', g.enabled);
     grazeBox.classList.toggle('grazeOff', !g.enabled);
+    $('grazeEye')?.sync();
     $('grazeOpacity').value = g.opacity; $('grazeOpacity').nextElementSibling.textContent = `${Math.round(g.opacity * 100)}%`;
     $('grazeElevation').value = g.elevation; $('grazeElevation').nextElementSibling.textContent = `${g.elevation.toFixed(1)}°`;
     // Detail is a fraction of the painting's width; shown in mm on this painting.
@@ -314,6 +326,7 @@ export function initStudio(api) {
   // Shown top-first like an image editor's layer list; state.layers is bottom-first.
   function renderLayers() {
     const ot=$('originalTop');ot.value=state.originalTop??0;ot.nextElementSibling.textContent=Math.round(ot.value*100)+'%';
+    const ao=$('autoOpacity');if(ao){ao.value=1-(state.originalTop??0);ao.nextElementSibling.textContent=Math.round(ao.value*100)+'%';}
     const list=$('layerList'); list.textContent='';
     const layers=state.layers||(state.layers=[]);
     for (let i=layers.length-1;i>=0;i--) {
@@ -348,7 +361,7 @@ export function initStudio(api) {
   // a click applies it, clicking anywhere else (or Esc) goes back to the applied mode.
   let menu=null;
   function closeMenu(apply){if(!menu)return;const m=menu;menu=null;if(!apply){m.L.mode=m.saved;render();}m.el.remove();document.removeEventListener('pointerdown',m.outside,true);document.removeEventListener('keydown',m.key,true);}
-  function modeMenu(L,btn){
+  function modeMenu(L,btn,redraw=renderLayers){
     if(menu){const same=menu.L===L;closeMenu(false);if(same)return;}
     const el=document.createElement('ul');el.className='blendMenu';el.setAttribute('role','listbox');
     const m={L,saved:L.mode,el};menu=m;
@@ -356,7 +369,7 @@ export function initStudio(api) {
       const li=document.createElement('li');li.textContent=label;li.dataset.mode=k;li.setAttribute('role','option');
       if(k===m.saved)li.classList.add('applied');
       li.onpointerenter=()=>{for(const o of el.children)o.classList.toggle('on',o===li);if(L.mode!==k){L.mode=k;render();}};
-      li.onclick=e=>{e.stopPropagation();L.mode=k;closeMenu(true);renderLayers();render();checkpoint();};
+      li.onclick=e=>{e.stopPropagation();L.mode=k;closeMenu(true);redraw();render();checkpoint();};
       el.append(li);
     }
     el.onpointerleave=()=>{for(const o of el.children)o.classList.remove('on');if(L.mode!==m.saved){L.mode=m.saved;render();}};
@@ -368,7 +381,7 @@ export function initStudio(api) {
     el.style.top=Math.max(8,r.bottom+h+8>innerHeight?r.top-h-4:r.bottom+4)+'px';
     setTimeout(()=>{document.addEventListener('pointerdown',m.outside,true);document.addEventListener('keydown',m.key,true);},0);
   }
-  $('originalTop').addEventListener('input',e=>{state.originalTop=+e.target.value;e.target.nextElementSibling.textContent=Math.round(e.target.value*100)+'%';render();});
+  $('originalTop').addEventListener('input',e=>{state.originalTop=+e.target.value;e.target.nextElementSibling.textContent=Math.round(e.target.value*100)+'%';const ao=$('autoOpacity');if(ao){ao.value=1-state.originalTop;ao.nextElementSibling.textContent=Math.round(ao.value*100)+'%';}render();});
   $('originalTop').addEventListener('change',()=>checkpoint());
   $('addLayer').onclick=()=>{const layers=state.layers||(state.layers=[]);if(layers.length>=MAX_LAYERS)return;layers.push({mode:'pinLight',source:'original',opacity:0.35,enabled:true});renderLayers();render();};
   function restore(value) { if (!value || state.exporting) return; restoring = true; Object.assign(state,value); sync(); restoring = false; }
@@ -440,14 +453,29 @@ export function initStudio(api) {
     ['strokeSize','Stroke size',STROKE_SIZE_MIN,STROKE_SIZE_MAX,0.001,v=>`${(v*state.paintingWidthCm*10).toFixed(1)} mm`,'Width of the strokes Stroke definition works on, on the painting.'],
   ];
   for (const [key,label,min,max,step,fmt,title] of lookControls) {
+    if (key === 'vibrance') continue;   // in the Vibrance adjustment below
     const row = document.createElement('div'); row.className='row'; row.title=title;
     row.innerHTML=`<label for="${key}">${label}</label><input id="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${state[key]}"><output data-own></output>`;
     row.querySelector('input').oninput=e=>{state[key]=+e.target.value; syncLook(); render();};
     $('lookControls').append(row);
   }
   {const n=document.createElement('p');n.className='note';n.textContent='Keep greys neutral with a little Vibrance keeps white paint white under warm light while the colours stay rich. Hover a slider for what it does.';$('lookControls').append(n);}
+  // Colour tool: one eye and an Opacity for all of it (adjust.js), the lighting colour
+  // controls above, then the adjustment list, each with its own eye.
+  {const box=$('lookControls');
+   const h=document.createElement('h3');h.className='subHead';h.textContent='Light colour & strokes';box.prepend(h);
+   const op=document.createElement('div');op.className='row';op.title='How much of the whole Colour tool shows: the adjustments below and Keep greys neutral, Room light colour and Stroke definition';
+   op.innerHTML='<label for="adjustOpacity">Opacity</label><input id="adjustOpacity" type="range" min="0" max="1" step="0.01" value="1"><output data-own>100%</output>';
+   op.querySelector('input').oninput=e=>{state.adjust.opacity=+e.target.value;if(!state.adjust.on){state.adjust.on=1;syncEyes();}op.querySelector('output').textContent=Math.round(e.target.value*100)+'%';render();};
+   box.prepend(op);
+   const h2=document.createElement('h3');h2.className='subHead';h2.textContent='Adjustments';box.append(h2);
+   const list=document.createElement('div');list.id='adjustList';box.append(list);
+   colourSync=buildAdjustUI(list,{state,render});
+   list.addEventListener('adjustshown',()=>syncEyes());
+   const n=document.createElement('p');n.className='note';n.textContent='Applied top to bottom to the relit image, before the blend layers. The eye shows or hides each one; moving a control of a hidden one shows it. Double-click a slider\'s name to reset it.';box.append(n);}
+  function syncColour(){colourSync?.();const o=$('adjustOpacity');if(o&&state.adjust){o.value=state.adjust.opacity;o.nextElementSibling.textContent=Math.round(state.adjust.opacity*100)+'%';}}
   // Matched looks: a whole look in one pick (presets.js looks), undoable like any change.
-  {const l=document.createElement('label');l.className='selectRow';l.textContent='Matched looks';const sel=document.createElement('select');sel.id='lookPreset';sel.add(new Option('Choose a look…',''));for(const name of Object.keys(looks))sel.add(new Option(name,name));l.append(sel);$('lookControls').prepend(l);
+  {const l=document.createElement('label');l.className='selectRow';l.textContent='Matched looks';const sel=document.createElement('select');sel.id='lookPreset';sel.add(new Option('Choose a look…',''));for(const name of Object.keys(looks))sel.add(new Option(name,name));l.append(sel);$('lookControls').prepend(l);$('lookControls').prepend($('adjustOpacity').closest('.row'));
    sel.onchange=()=>{if(looks[sel.value]){useLook(sel.value);sync();}};}
   function useLook(name){stopSweep();const k=looks[name];state.lights=k.lights.map(makeLight);state.selected=0;for(const key of LOOK_KEYS)if(key in k)state[key]=k[key];
     if(k.graze){Object.assign(state.graze,k.graze);delete state.graze.lamp;}else state.graze.enabled=false;refresh();}
@@ -465,6 +493,27 @@ export function initStudio(api) {
   fine.innerHTML='<summary>Fine-tune (advanced)</summary>';
   for (const grp of [$('creativeSliders'),$('surfaceControls'),$('roughness').closest('.grp')]) fine.append(grp.previousElementSibling,grp);
   $('exportBtn').closest('.grp').previousElementSibling.before(fine);
+  // Eyes: show or hide a whole tool without losing its settings.
+  // Fine-tune hidden puts its sliders at their starting values; the values set are kept
+  // in fineHidden (saved, undoable) and come back when it shows. Exposure and Ambient
+  // stay as they are (looks and lighting set them), and so do the photo's own settings.
+  function validFine(v){if(v==null)return null;if(typeof v!=='object')throw new Error('Invalid Fine-tune.');const o={};for(const k of FINE_KEYS){const x=v[k]??state[k];if(!Number.isFinite(x)||Math.abs(x)>10000)throw new Error('Invalid Fine-tune.');o[k]=x;}return o;}
+  function setFine(show){
+    if(show===!state.fineHidden)return;
+    if(show){Object.assign(state,state.fineHidden);state.fineHidden=null;}
+    else{state.fineHidden=Object.fromEntries(FINE_KEYS.map(k=>[k,state[k]]));Object.assign(state,FINE_DEFAULTS);}
+    api.dirty();sync();
+  }
+  {const eye=eyeButton('Fine-tune (its sliders at their starting values while hidden)',()=>!state.fineHidden,setFine);eye.id='fineEye';fine.querySelector('summary').append(eye);eyes.push(eye);
+   // Moving a slider while it is hidden shows it first, keeping the new value.
+   fine.addEventListener('input',e=>{if(!state.fineHidden||e.target.type!=='range')return;const v=e.target.value;setFine(true);e.target.value=v;},true);}
+  {const eye=eyeButton('the Colour tool (all adjustments)',()=>state.adjust.on,on=>{state.adjust.on=on?1:0;render();});eye.id='colourEye';$('colourSection').querySelector('summary').append(eye);eyes.push(eye);}
+  {const eye=eyeButton('the graze light',()=>state.graze.enabled,on=>{state.graze.enabled=on;renderGraze();render();});eye.id='grazeEye';$('grazeSection').querySelector('summary').append(eye);eyes.push(eye);}
+  {const eye=eyeButton('all blend layers',()=>state.layersOn!==0,on=>{state.layersOn=on?1:0;render();});eye.id='layersEye';$('layersSection').querySelector('summary').append(eye);eyes.push(eye);
+   const box=document.createElement('div');box.id='overlaysBox';box.className='overlays';$('layersSection').querySelector('.grp').append(box);
+   overlaySync=buildOverlayUI(box,{state,render,modeMenu});}
+  function syncOverlays(){overlaySync?.();}
+  function syncEyes(){for(const e of eyes)e.sync();$('colourSection')?.classList.toggle('off',!state.adjust?.on);$('fineTune')?.classList.toggle('off',!!state.fineHidden);$('layersSection')?.classList.toggle('layersOff',state.layersOn===0);}
   function makeLight(v) {
     const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
   }
@@ -625,9 +674,10 @@ export function initStudio(api) {
     if(p?.format!=='digilight'||p.version!==1||!/^data:image\/(png|jpeg|webp);base64,/.test(p.image||''))throw new Error('Not a supported DigiLight project.');
     if(!p.settings||!Array.isArray(p.settings.lights)||p.settings.lights.length<1||p.settings.lights.length>8)throw new Error('Invalid project lights.');
     const settings={};
-    for(const k of keys)if(!['lights','strokes','layers','graze'].includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
+    for(const k of keys)if(!OBJECT_KEYS.includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of [...newControls,...lookControls])if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
+    settings.adjust=validateAdjust(p.settings.adjust);settings.overlays=validateOverlays(p.settings.overlays);settings.fineHidden=validFine(p.settings.fineHidden);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2],['lift',-1,1]]){const v=l[k]??({lift:0,softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
@@ -767,6 +817,7 @@ export function initStudio(api) {
       for(const d of document.querySelectorAll('#panel .sectionDetails'))add(d.querySelector('summary').textContent,'Section',d.querySelector('summary'));
       for(const b of document.querySelectorAll('#saveSection .subTabs button'))add(b.textContent,'Save & export',b);
       for(const h of document.querySelectorAll('#panel h2'))add(h.textContent,'Section',h);
+      for(const m of document.querySelectorAll('#panel details.adj > summary'))add(m.firstChild.textContent,sectionOf(m.parentElement),m);
       for(const l of document.querySelectorAll('#panel .row > label, #panel .selectRow, #panel .checkRow'))add(l.firstChild?.textContent||l.textContent,sectionOf(l),l);
       for(const b of document.querySelectorAll('#panel button, #studioToolbar button'))if(!b.closest('.subTabs')&&!b.closest('#layerList'))add(b.textContent,b.closest('#studioToolbar')?'Toolbar':sectionOf(b),b);
       return items;

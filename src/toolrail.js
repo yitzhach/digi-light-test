@@ -26,6 +26,10 @@ const ANCHORS = {
   detail: ['brushOff', 'calibrateSection', 'lampSection', 'probeSection', 'fineTune', 'views'],
   save: ['saveSection'],
 };
+// Blocks a second tool shows too: Setup shows Auto's Analyze under the photo, so the app
+// opens on both (the user, 10-15).
+const ALSO = { auto: ['setup'] };
+const START = 'setup';
 const STORE = 'digilight.tool';
 
 export function initToolRail({ panel }) {
@@ -67,7 +71,7 @@ export function initToolRail({ panel }) {
     if (!valid(tool)) tool = phone.matches ? 'auto' : 'all';
     const changed = tool !== current;
     current = tool; panel.dataset.tool = tool;
-    for (const el of blocks) el.classList.toggle('toolHidden', tool !== 'all' && el.dataset.tool !== tool);
+    for (const el of blocks) el.classList.toggle('toolHidden', tool !== 'all' && el.dataset.tool !== tool && !ALSO[el.dataset.tool]?.includes(tool));
     for (const b of rail.children) { const on = b.dataset.tool === tool; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); }
     if (tool !== 'all' && changed) {
       // A tool that is one folding section opens it; the panel starts at its top.
@@ -83,6 +87,8 @@ export function initToolRail({ panel }) {
     if (t && current !== 'all' && t !== current) show(t);
   }
   phone.addEventListener('change', () => show(saved[layout()], false));
-  show(saved[layout()], false);
+  // Every visit opens on Setup (open the photo, Analyze); switching layout goes back to
+  // the tool last used in that layout.
+  show(START, false);
   return { show, reveal, get current() { return current; }, toolOf: (el) => blockOf(el)?.dataset.tool || '' };
 }

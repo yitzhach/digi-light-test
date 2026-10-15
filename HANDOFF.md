@@ -10,10 +10,13 @@ update this file (mark the phase DONE, note what the next chat needs).
 - Phase 1 — DONE (10-15, on `main`; see Done recently). Open
   questions for the user: are the 8 built-in looks the right set, and is "Strength 0 = the
   settings before the look" the mix they meant (vs mixing toward the plain photo)?
-- Phase 2 — DONE (10-15, on `main`; see Done recently). **Next chat: start Phase 3.** Open
-  questions for the user: desktop opens on **All** (whole panel, as before); should it open
-  on one tool instead? Is the 8th tool **Setup** (open photo + Quick setup) right, and does
-  Detail hold the right things?
+- Phase 2 — DONE (10-15, on `main`; see Done recently). User answered (10-15): open on
+  Setup with Analyze showing (done in Phase 3).
+- Phase 3 — DONE (10-15, on `main`; see Done recently): overlays + the user's notes (Colour tool
+  adjustments with eyes and Opacity, eyes on Fine-tune / Layers / Graze, Auto Opacity, crisper
+  built-in looks, opens on Setup + Analyze). **Next chat: start Phase 4.** Open questions for
+  the user: do the fixed looks (Gallery, Raking texture, Long shadows, Soft window, Museum spot)
+  still read blurry on their phone; are the overlay defaults (grain 35%, vignette 50%) sensible.
 - (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -24,7 +27,7 @@ update this file (mark the phase DONE, note what the next chat needs).
 - (was) Phase 2 — **Mobile tool bar** like Lightroom mobile: a bottom icon strip (Auto, Light, Graze,
   Layers, Colour, Detail, Save) that shows one section at a time on phones (and as a
   vertical rail on desktop); inline SVG icons; panel max-height tuning; bigger touch targets.
-- Phase 3 — **Overlays** in Layers: Film grain (amount, size, colour/mono, seed; generated in the
+- (was) Phase 3 — **Overlays** in Layers: Film grain (amount, size, colour/mono, seed; generated in the
   shader so it is resolution-correct in tiled export), then lighting overlays (vignette, light leak /
   warm glow, soft window light gradient, spotlight pool) each with opacity + blend mode,
   stored in `state.overlays`, saved in projects/presets.
@@ -128,7 +131,9 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Phase 2, tool rail** (`src/toolrail.js`): bottom
+- Last code change on `main` (2026-10-15): **Phase 3** — Colour tool adjustments (`src/adjust.js`),
+  overlays (`src/overlays.js`), eyes, Auto Opacity, crisper looks. See Done recently.
+- Before that (2026-10-15): **Phase 2, tool rail** (`src/toolrail.js`): bottom
   icon strip on phones (one tool at a time), vertical rail beside the panel on desktop (All by
   default). See Done recently.
 - Before that (2026-10-15): **Phase 1, Auto section** (`src/auto.js`, top of the
@@ -235,6 +240,47 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Phase 3 + user notes.** User's notes (with a Photoshop Image ›
+  Adjustments menu screenshot): eyes (visible/hidden) on Fine-tune and other tools; Colour tab
+  with Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Color Balance,
+  Black & White, Channel Mixer (not Color Lookup, Photo Filter), each with an eye, plus a master
+  eye and opacity for the tab; looks Raking texture … Museum spot and Gallery "blurry" (the
+  first three sharp); Strength "works fine but is more like a light direction tool", add an
+  Opacity vs the original; open with Setup and Analyze both showing; test on the red panel.
+  Built:
+  **Colour tool** (`src/adjust.js`, `state.adjust` {on, opacity, brightness, levels, curves
+  {rgb,r,g,b point lists}, exposure, vibrance {saturation; amount stays `state.vibrance`},
+  hueSat, balance, bw (off by default, Photoshop weights 40/60/40/60/20/80 + tint), mixer}):
+  shader `adjustColour()` on sRGB in the menu's order where vibrance used to be (before the
+  layers, so a Relit layer sees it); master `uAdjMix` = mix(unadjusted, adjusted). The Colour
+  eye/Opacity also scale Keep greys neutral, Room light colour, Stroke definition (`colourShare`
+  in shade.js). Every adjustment's defaults are an exact no-op (uniform `on` flags only set when
+  a value differs). Curves: monotone cubic (Fritsch–Carlson) → 256×1 RGBA LUT (`curveLUT`,
+  texture `uAdjCurve`, master in alpha, applied master then channels); editor canvas: click adds,
+  drag moves, drag out / double-click removes. Moving a hidden adjustment's control shows it;
+  double-click a slider name resets it. Section `#colourSection` (was the h2 Colour & strokes):
+  Opacity, Matched looks, Light colour & strokes, Adjustments.
+  **Overlays** (`src/overlays.js`, `state.overlays` {on, grain, vignette, leak, window, pool},
+  all off by default) at the end of Layers: after the blend layers, before Original on top (so
+  Opacity fades them). Shapes in painting coordinates (`gUV`); grain = 2-octave value noise on a
+  grid of `GRAIN_CELL` 1/1500 painting width × Size, so preview and export match (red panel,
+  size 6: preview vs full-size export grain correlation 0.996, rms 25.9 vs 25.0). Each: eye,
+  opacity, blend mode (the layers' hover-preview list, `modeMenu(obj, btn, redraw)`), colour.
+  **Eyes** (`eyeButton` in adjust.js, in section summaries): Colour, each adjustment, Overlays +
+  each, Layers (`state.layersOn`), Graze (mirrors Visible), Fine-tune (`state.fineHidden` stash:
+  hiding sets FINE_KEYS to FINE_DEFAULTS and keeps your values; exposure, ambient, the photo's
+  own keys and derived ones untouched; moving a Fine-tune slider while hidden shows it first).
+  **Auto**: Opacity = 1 − originalTop (same control as Original on top). The five hazy built-in
+  looks get `CRISP` {greys 60%, vibrance 40%, strokes 50%} (the round 1 matched values). Measured
+  on the red panel: the hazy/sharp split was exactly LOOK_NEUTRAL (strokes 0, no white balance)
+  vs the matched looks; with CRISP, by eye clearly crisper and less orange (Laplacian barely
+  moves: it is mid-scale stroke contrast and haze, not pixel sharpness). Analyze measures with the
+  Colour tool and overlays off (grain would read as texture), thumbnails show them; built-in looks
+  keep the user's layers, colour, overlays, Fine-tune eye; Strength switches those at 50%.
+  **Tool rail** opens on Setup every visit; Setup also shows the Auto block (`ALSO`); layout
+  changes still go back to the last tool of that layout. Tool search indexes adjustment and
+  overlay names. Tests: new Phase 3 block in browser.cjs; desktop/phone rail tests now expect
+  Setup. Search bar: it exists since Phase 0 (top of the panel, `/`); told the user.
 - 10-15 (pushed to `main`): **Phase 2 — tool rail** (`src/toolrail.js`, `initToolRail` from studio.js
   before buildSearch; `__studio.tools` {show, reveal, current, toolOf}). Tools: Setup (open photo,
   Demo & capture, Quick setup), Auto, Light, Graze, Layers, Colour (Colour & strokes), Detail

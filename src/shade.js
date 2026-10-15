@@ -15,6 +15,8 @@
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
 import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
+import { ADJUST_GLSL, setAdjustUniforms, curveLUT } from './adjust.js';
+import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
 // Linear grey the Relief view and Grey surface give the paint under the graze light.
@@ -99,7 +101,6 @@ uniform float uGrazeGrey;       // 1 = the graze light falls on an even grey ins
 // Colour & strokes. Neutral values (divisors of 1, 0, 0) leave the render untouched.
 uniform vec3  uWhiteBalance;    // main lights: the camera's white balance, divided out in linear light
 uniform vec3  uGrazeWhiteBalance;
-uniform float uVibrance;        // saturation for coloured paint; near-greys left alone
 uniform sampler2D uStrokeRelief; // the relief smoothed to Stroke size: rgb normal, a height
 uniform sampler2D uStrokeFine;   // and to STROKE_FINE of it, the band's fine edge
 uniform float uStrokeDef;       // Stroke definition, 0..1
@@ -267,6 +268,9 @@ vec3 vibrance(vec3 c, float v) {
   if (k > 1.0) k = min(k, min(y / max(y - mn, 1e-4), (1.0 - y) / max(mx - y, 1e-4)));
   return clamp(vec3(y) + (c - vec3(y)) * k, 0.0, 1.0);
 }
+
+${ADJUST_GLSL}
+${OVERLAY_GLSL}
 
 // Stroke definition: the relief smoothed a little (STROKE_FINE of Stroke size, so the
 // grain is left alone) minus the relief smoothed to Stroke size is a band-pass,
@@ -438,7 +442,9 @@ void main() {
     gs = mix(gs, vec3(dot(gs, vec3(0.2126, 0.7152, 0.0722))), uGrazeGrey);
     relit = mix(relit, gs, uGrazeOpacity);
   }
-  relit = vibrance(relit, uVibrance);
+  // Colour tool: the adjustments, mixed with the unadjusted image by its Opacity.
+  vec3 adj = adjustColour(relit);
+  relit = uAdjMix >= 1.0 ? adj : mix(relit, adj, uAdjMix);
   vec3 col = relit;
   vec4 lmask = texture(uLayerMask, gUV);
   if (uLayerCount > 0) {
@@ -449,6 +455,7 @@ void main() {
       col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i] * dot(lmask, uLayerSel[i]));
     }
   }
+  col = overlays(col, gUV);
   if (uOriginalTop > 0.0) col = mix(col, clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0), uOriginalTop);
   float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
   col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
@@ -463,6 +470,25 @@ export class Shader {
     this.maskVersion = -1;
     this.layerMaskTex = glctx.gl.createTexture();
     this.layerMaskVersion = -1;
+    this.curveTex = glctx.gl.createTexture();
+    this.curveKey = '';
+    this.curveLUT({ rgb: [[0, 0], [1, 1]] });
+  }
+
+  // Curves' lookup table (256 x 1 RGBA), uploaded when the curves change.
+  curveLUT(curves) {
+    const key = JSON.stringify(curves);
+    if (key === this.curveKey) return;
+    const { gl } = this.glctx;
+    gl.activeTexture(gl.TEXTURE0 + 15);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, curveLUT(curves));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.curveKey = key;
   }
 
   /**
@@ -509,6 +535,7 @@ export class Shader {
       ['uShadowRelief', (targets.shadow || targets.normal).tex],
       ['uStrokeRelief', (targets.stroke || targets.normal).tex],
       ['uStrokeFine', (targets.strokeFine || targets.normal).tex],
+      ['uAdjCurve', this.curveTex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -573,7 +600,10 @@ export class Shader {
     gl.uniform1f(u.uHeightView, state.calibrated ? 1.0 : 8.0);
     gl.uniform1i(u.uHeightColour, state.heightColour ? 1 : 0);
     gl.uniform1f(u.uAmbient, state.ambient);
-    const room = state.roomKelvin != null ? roomLightRGB(state.roomKelvin, ROOM_NEUTRAL_K) : state.ambientColor;
+    // The Colour tool's eye and Opacity also scale its lighting controls (Keep greys
+    // neutral, Room light colour, Stroke definition) toward neutral.
+    const ad = state.adjust, colourShare = !ad ? 1 : ad.on ? Math.min(1, Math.max(0, ad.opacity ?? 1)) : 0;
+    const room = state.roomKelvin != null ? roomLightRGB(ROOM_NEUTRAL_K + (state.roomKelvin - ROOM_NEUTRAL_K) * colourShare, ROOM_NEUTRAL_K) : state.ambientColor;
     gl.uniform3fv(u.uAmbientColor, new Float32Array(room));
     gl.uniform1f(u.uRoughness, state.roughness);
     gl.uniform1f(u.uSpecular, state.specular);
@@ -587,7 +617,7 @@ export class Shader {
     // Only visible layers go to the GPU, in order, bottom first. Each keeps the mask
     // channel of its place in state.layers.
     const all = (state.layers || []).slice(0, MAX_LAYERS);
-    const layers = all.filter((l) => l.enabled && l.opacity > 0);
+    const layers = state.layersOn === 0 ? [] : all.filter((l) => l.enabled && l.opacity > 0);
     const lMode = new Int32Array(MAX_LAYERS), lSrc = new Int32Array(MAX_LAYERS), lOp = new Float32Array(MAX_LAYERS);
     const lSel = new Float32Array(MAX_LAYERS * 4), overlay = new Float32Array(4);
     layers.forEach((l, i) => {
@@ -637,17 +667,18 @@ export class Shader {
     // Keep greys neutral: each path's camera is balanced toward the mix of light that
     // path puts on the painting, so mixed lights still differ (a warm key over a cool
     // room light keeps warm faces and cool shadows) while their average turns grey.
-    const wb = Math.min(1, Math.max(0, state.neutralWB ?? 0));
+    const wb = Math.min(1, Math.max(0, state.neutralWB ?? 0)) * colourShare;
     const balance = (white) => white.map((v) => 1 + wb * (v - 1));
     const amb = room.map((v) => v * state.ambient);
     gl.uniform3fv(u.uWhiteBalance, balance(sceneWhite(lights, aspect, amb)));
     const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: gPow, enabled: true, cone: 0, falloff: 2 };
     gl.uniform3fv(u.uGrazeWhiteBalance, balance(sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)))));
-    gl.uniform1f(u.uVibrance, Math.min(1, Math.max(-1, state.vibrance ?? 0)));
+    setAdjustUniforms(gl, u, state, (curves) => this.curveLUT(curves), reliefView);
+    setOverlayUniforms(gl, u, state, reliefView);
     // Stroke definition needs its smoothed relief (GBuffer buildStroke) and the
     // spread of the band it leaves (app.js measures it on the preview; export tiles reuse it).
     const strokeOn = state.viewMode === 0 || state.viewMode === 7;
-    gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) : 0);
+    gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) * colourShare : 0);
     gl.uniform1f(u.uStrokeGain, state.strokeSpread > 0 ? 1 / state.strokeSpread : 0);
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, reliefView ? 0 : layers.length);

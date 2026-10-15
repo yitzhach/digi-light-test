@@ -21,6 +21,7 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // The biases are measured on the painting sample (10-15) so that there each look lands
 // at the exposure it was made or approved at (Gallery 0, Matched 07 +0.6, Matched 05
 // +0.35, the rest 0); on another photo the same offset from its own brightness holds.
+export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5 };
 export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
@@ -28,6 +29,7 @@ const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength',
   'neutralize', 'photoDiffuse', 'textureDepthMm', 'paintingWidthCm', 'physical', 'heightScale', 'reliefAmount', 'shadowDetail', 'strokeDef', 'strokeSize'];
 // Belong to the photo, not to a look: a saved preset or project never changes them here.
 const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes'];
+const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden'];
 const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff'];
 const GRAZE_NUM = ['elevation', 'opacity', 'detail', 'fine', 'reach', 'clean', 'soft', 'lift', 'fill', 'grey'];
 const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
@@ -71,7 +73,8 @@ export function mixSettings(a, b, s, applyColor = () => {}) {
     } else if (gb.enabled) out.graze = { ...clone(gb), opacity: gb.opacity * s };
     else if (ga.enabled) out.graze = { ...clone(ga), opacity: ga.opacity * (1 - s) };
   }
-  if (s < 0.5) out.layers = clone(a.layers || []);
+  // Whole tools switch at half: layers, the Colour tool, overlays, Fine-tune's eye.
+  for (const k of SWITCH) if (k in a || k in b) out[k] = clone(s < 0.5 ? a[k] : b[k]);
   out.strokes = clone(a.strokes || []);
   return out;
 }
@@ -115,7 +118,8 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     <p class="note" id="autoReadout">Reads this photo (brightness, clipping, colour, light, stroke contrast and direction) and makes a set of one-tap looks for it.</p>
     <div id="autoLooks" class="autoLooks" role="list"></div>
     <div class="row" id="autoStrengthRow"><label for="autoStrength">Strength</label><input id="autoStrength" type="range" min="0" max="1" step="0.01" value="1" disabled><output data-own>100%</output></div>
-    <p class="note" id="autoNote">Tap a look to use it; Strength mixes it with the settings you had before. Every slider stays in the sections below.</p></div>`;
+    <div class="row" id="autoOpacityRow" title="How much of the whole effect shows over the original photo (the same as Original on top in Layers, turned round)"><label for="autoOpacity">Opacity</label><input id="autoOpacity" type="range" min="0" max="1" step="0.01" value="1"><output data-own>100%</output></div>
+    <p class="note" id="autoNote">Tap a look to use it. Strength mixes it with the settings you had before (light, graze, tone); Opacity fades the whole effect into the original photo. Every slider stays in the other tools.</p></div>`;
   before.before(box);
 
   let A = null, active = null, running = false;
@@ -161,18 +165,23 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
   // analysed base and its own lighting; the key light goes to the photo's lit side.
   const scene = (s, name) => { const sc = lighting[name]; s.lights = sc.lights.map(makeLight); s.ambient = sc.ambient; for (const k of ['shadow', 'shadowSoftness', ...Object.keys(LOOK_NEUTRAL)]) if (k in sc) s[k] = sc[k]; };
   const neutral = (s) => { Object.assign(s, LOOK_NEUTRAL); s.graze.enabled = false; };
+  // The colour and stroke settings of the user's matched looks (round 1: greys 60%,
+  // vibrance 40%, strokes 50%). Without them the gallery and graze looks read hazy and
+  // soft beside the matched ones (the user, 10-15: "blurry"); measured on the red panel
+  // they sharpen stroke edges and take off the lamps' colour cast.
+  const crisp = (s) => Object.assign(s, CRISP);
   const graze = (s, preset, opacity) => { Object.assign(s.graze, grazePresets[preset], { enabled: true, angle: A.rake, grey: 0 }); if (opacity != null) s.graze.opacity = opacity; delete s.graze.lamp; };
   const look = (s, name, rake) => { const k = looks[name]; s.lights = k.lights.map(makeLight); for (const key of LOOK_KEYS) if (key in k) s[key] = k[key];
     if (k.graze) { Object.assign(s.graze, k.graze, { enabled: true }); if (rake) s.graze.angle = A.rake; delete s.graze.lamp; } else s.graze.enabled = false; };
   const BUILT_IN = [
-    ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); }],
+    ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
     ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
     ['Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
     ['Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
-    ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); }],
-    ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); }],
-    ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); }],
-    ['Museum spot', 'A tight spot, darker room', (s) => { neutral(s); scene(s, 'Museum spotlight'); }],
+    ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
+    ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
+    ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],
+    ['Museum spot', 'A tight spot, darker room', (s) => { neutral(s); scene(s, 'Museum spotlight'); crisp(s); }],
   ];
 
   // A saved preset or project on this image: its tone, colour and lighting relations kept;
@@ -212,12 +221,16 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
       // Depth, under a plain gallery light on the base's texture settings.
       const ref = clone(base);
       neutral(ref); scene(ref, 'Gallery track'); Object.assign(ref, { exposure: 0, layers: [], originalTop: 0, physical: 1 });
+      // Measuring (depth, raking, exposure) sees the lighting alone: the Colour tool and
+      // overlays (grain would read as texture) off. Thumbnails show them.
+      const plain = (x) => ({ ...x, adjust: x.adjust && { ...x.adjust, on: 0 }, overlays: x.overlays && { ...x.overlays, on: 0 } });
+      const dressed = (x) => (x.adjust?.on && x.adjust.opacity > 0) || (x.overlays?.on && Object.values(x.overlays).some((o) => o?.on));
       const m = api.measured?.get?.();
       A.measured = !!(m?.on && m.w === api.canvas.width && m.h === api.canvas.height);
       if (A.measured) { A.depth = base.textureDepthMm; A.depthWhy = 'measured relief (lamp photos)'; }
       else {
         status('Fitting texture depth…'); await frame();
-        const at = (depth) => { put({ ...ref, textureDepthMm: depth }); return contrast(); };
+        const at = (depth) => { put(plain({ ...ref, textureDepthMm: depth })); return contrast(); };
         const flat = at(DEPTH_FLAT);
         const fit = await fitDepth(async (depth) => at(depth) / (flat * RELIEF_GAIN), { lo: DEPTH_FLAT, hi: 8, steps: 3 });
         A.depth = Math.round(Math.max(DEPTH_MIN, Math.min(DEPTH_MAX, fit.depth)) * 20) / 20;
@@ -228,7 +241,7 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
       // Raking direction: across, along or diagonal to the strokes, whichever shows them most,
       // on the key light's side.
       status('Finding the raking direction…'); await frame();
-      put(ref); Object.assign(state.graze, grazePresets['Classic raking'], { grey: 0 }); delete state.graze.lamp;
+      put(plain(ref)); Object.assign(state.graze, grazePresets['Classic raking'], { grey: 0 }); delete state.graze.lamp;
       const sideDeg = side === 'right' ? 45 : side === 'left' ? 135 : (base.graze?.angle ?? 135);
       const rk = findRaking(sideDeg);
       A.rake = rk ? rk.best.from : sideDeg; A.strokes = rk;
@@ -251,10 +264,11 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
       for (const [n, [, , i]] of order.entries()) {
         const it = items[i], s = it.settings;
         status(`Making looks: ${n + 1} of ${items.length} · ${it.name}`); await frame();
-        put(s);
+        put(plain(s));
         if (it.kind === 'built-in') { it.thumb = fitExposure(it.bias); if (it.name === 'Gallery') shift = state.exposure; }
         else { state.exposure = Math.max(-3, Math.min(3, Math.round(((s.exposure ?? 0) + shift) * 100) / 100)); it.thumb = grab(THUMB_W).canvas; }
         s.exposure = state.exposure;
+        if (dressed(s)) { put(s); it.thumb = grab(THUMB_W).canvas; }
       }
       A.items = items; A.base = base; A.ms = Math.round(performance.now() - t0);
       active = null; drawLooks(); readout();
@@ -301,7 +315,7 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     // The photo's own keys (width, Photo was lit, brush corrections) are as they are now.
     const it = A.items[i], target = clone(it.settings);
     for (const k of IMAGE_KEYS) if (k in from && k !== 'physical') target[k] = clone(from[k]);   // looks use calibrated depth
-    if (it.kind === 'built-in') { target.layers = clone(from.layers || []); target.originalTop = from.originalTop ?? 0; }
+    if (it.kind === 'built-in') { for (const k of ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden']) if (k in from) target[k] = clone(from[k]); target.originalTop = from.originalTop ?? 0; }
     active = { index: i, from, target, applied: '' };
     $('autoStrength').disabled = false; $('autoStrength').value = 1;
     apply(1); checkpoint();
@@ -314,6 +328,13 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     $('autoNote').textContent = `${A.items[active.index].name}: ${A.items[active.index].note}.`;
   }
   $('autoStrength').oninput = (e) => { if (active) apply(+e.target.value); };
+  // Opacity of the whole effect over the photo: Original on top (Layers), turned round.
+  $('autoOpacity').oninput = (e) => {
+    state.originalTop = Math.round((1 - +e.target.value) * 100) / 100;
+    e.target.nextElementSibling.textContent = `${Math.round(e.target.value * 100)}%`;
+    const ot = $('originalTop'); if (ot) { ot.value = state.originalTop; ot.nextElementSibling.textContent = `${Math.round(state.originalTop * 100)}%`; }
+    api.render();
+  };
   $('autoAnalyze').onclick = () => analyze();
   $('autoUndo').onclick = () => $('undo').click();
   // A new photo makes the looks stale.
