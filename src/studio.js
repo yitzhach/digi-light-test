@@ -422,6 +422,19 @@ export function initStudio(api) {
   document.addEventListener('fullscreenchange',fsChange);document.addEventListener('webkitfullscreenchange',fsChange);
   $('fullView').onclick=()=>setFullView(!document.body.classList.contains('fullView'));
   $('fullExit').onclick=()=>setFullView(false);
+  // Double-tap (or double-click) the painting: full screen, and again to leave. Only quick
+  // taps count, so a drag, a pan or a pinch never does it; not on a light dot or while brushing.
+  {const wrap=$('wrap');let down=null,last=null;
+   const ok=e=>!e.target.closest('.handle,button,input,select,#probeOverlay')&&!wrap.classList.contains('brushing')&&!state.placingSphere;
+   wrap.addEventListener('pointerdown',e=>{down=e.isPrimary&&ok(e)?{t:performance.now(),x:e.clientX,y:e.clientY}:null;});
+   wrap.addEventListener('pointercancel',()=>{down=null;last=null;});
+   wrap.addEventListener('pointerup',e=>{
+     const t=performance.now();
+     if(!down||t-down.t>300||Math.hypot(e.clientX-down.x,e.clientY-down.y)>12){down=null;last=null;return;}
+     down=null;
+     if(last&&t-last.t<350&&Math.hypot(e.clientX-last.x,e.clientY-last.y)<30){last=null;setFullView(!document.body.classList.contains('fullView'));}
+     else last={t,x:e.clientX,y:e.clientY};
+   });}
   $('fullFit').onclick=()=>zoomTo(1);
   document.addEventListener('digilight:settings',()=>sync());
   // Capture one final snapshot per gesture; input events only redraw.
@@ -809,6 +822,13 @@ export function initStudio(api) {
     wrapS.innerHTML='<input id="toolSearchInput" type="search" placeholder="Search tools… (/ key)" autocomplete="off" aria-label="Search tools" role="combobox" aria-expanded="false" aria-controls="toolSearchList"><ul id="toolSearchList" role="listbox" hidden></ul>';
     $('panel').firstElementChild.after(wrapS);
     const input=$('toolSearchInput'),listEl=$('toolSearchList');
+    // The search icon beside the logo drops the search bar open (it is hidden until then, so
+    // the panel keeps its room); it closes again once a hit is picked, on Esc, or when left empty.
+    const sb=document.createElement('button');sb.id='searchBtn';sb.type='button';sb.title='Search tools ( / key )';sb.setAttribute('aria-label','Search tools');sb.setAttribute('aria-controls','toolSearch');sb.setAttribute('aria-expanded','false');
+    sb.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>';
+    $('studioToolbar').querySelector('strong').after(sb);
+    const openSearch=on=>{document.body.classList.toggle('searchOpen',on);sb.classList.toggle('on',on);sb.setAttribute('aria-expanded',on);if(on){tools.setMin(false);$('panel').scrollTop=0;input.focus();}};
+    sb.onclick=()=>openSearch(!document.body.classList.contains('searchOpen'));
     const clean=t=>(t||'').replace(/\s+/g,' ').trim();
     function index(){
       const items=[],seen=new Set();
@@ -849,12 +869,12 @@ export function initStudio(api) {
     function mark(){[...listEl.children].forEach((li,i)=>li.classList.toggle('on',i===active&&shown.length>0));}
     input.addEventListener('focus',()=>{items=index();update();});
     input.addEventListener('input',update);
-    input.addEventListener('blur',()=>setTimeout(close,100));
+    input.addEventListener('blur',()=>setTimeout(()=>{close();if(!input.value&&document.activeElement!==input)openSearch(false);},150));
     input.addEventListener('keydown',e=>{
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!shown.length)return;active=(active+(e.key==='ArrowDown'?1:-1)+shown.length)%shown.length;mark();listEl.children[active].scrollIntoView({block:'nearest'});}
       else if(e.key==='Enter'||e.key==='Tab'&&shown.length&&!listEl.hidden){if(shown[active]){e.preventDefault();go(shown[active]);}}
-      else if(e.key==='Escape'){input.value='';close();input.blur();}
+      else if(e.key==='Escape'){input.value='';close();input.blur();openSearch(false);}
     });
-    document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select,[contenteditable]')){e.preventDefault();input.focus();}});
+    document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select,[contenteditable]')){e.preventDefault();openSearch(true);}});
   }
 }

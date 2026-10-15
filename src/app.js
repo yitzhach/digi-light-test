@@ -88,8 +88,15 @@ const state = {
 
 /** Texture depth as a fraction of the painting's width — the unit heights use. */
 function physicalDepth(st) {
-  return Math.max(0, st.textureDepthMm) / Math.max(1, st.paintingWidthCm * 10);
+  return Math.max(0, st.textureDepthMm) * reliefBoost(st) / Math.max(1, st.paintingWidthCm * 10);
 }
+// Colour tool › Relief (3D): a multiplier on the depth, faded by the tool's eye and Opacity.
+function reliefBoost(st) {
+  const a = st.adjust, r = a?.relief;
+  if (!r || !r.on || !a.on) return 1;
+  return 1 + ((r.amount ?? 1) - 1) * Math.min(1, Math.max(0, a.opacity ?? 1));
+}
+let builtBoost = 1;
 
 /**
  * The longest shadow any enabled light can cast across the painting: the tallest
@@ -891,6 +898,9 @@ function renderNow() {
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
+    // Relief (3D) changes the depth the relief is built at.
+    const boost = reliefBoost(state);
+    if (boost !== builtBoost) { builtBoost = boost; dirtySurface = true; }
     if (dirtySurface) {
       if (state.mode === 'photometric') {
         const solver = buildSolver(shots.map(shotDir), { fitAmbient: state.psFitAmbient });

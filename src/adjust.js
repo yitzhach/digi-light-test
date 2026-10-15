@@ -17,6 +17,10 @@ const ident = () => [[0, 0], [1, 1]];
 // [field, label, min, max, step, default, format, group]. A group shows one set of fields
 // at a time (Color Balance's tone, Channel Mixer's output channel), as the editor does.
 export const ADJUSTMENTS = [
+  // Relief: more or less 3D. Not a colour step: it scales the depth the lights shade and
+  // shadow (app.js reliefBoost), so it rebuilds the relief. 100% is the depth as set.
+  { key: 'relief', name: 'Relief (3D)', note: 'More or less 3D: 0% is flat, 100% the depth as set (Quick setup), 300% three times deeper. Shading and shadows follow.', fields: [
+    ['amount', 'Relief', 0, 3, 0.05, 1, pct]] },
   { key: 'brightness', name: 'Brightness/Contrast', fields: [
     ['brightness', 'Brightness', -1, 1, 0.01, 0, signed], ['contrast', 'Contrast', -1, 1, 0.01, 0, signed]] },
   { key: 'levels', name: 'Levels', fields: [
@@ -312,6 +316,7 @@ export function buildAdjustUI(box, { state, render }) {
       body.append(row); rows.push(row);
       syncs.push(() => { i.value = get(); out.textContent = fmt(get()); });
     }
+    if (A.note) { const n = document.createElement('p'); n.className = 'note'; n.textContent = A.note; body.append(n); }
     if (pick) { const show = () => { for (const r of rows) r.hidden = r.dataset.group != null && r.dataset.group !== pick.value; }; pick.onchange = (e) => { e.stopPropagation(); show(); }; show(); }
     if (A.key === 'curves') curvesEditor(body, { state, render, touch, syncs });
     const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'adjReset'; reset.textContent = 'Reset';

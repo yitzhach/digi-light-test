@@ -57,7 +57,8 @@ export function initToolRail({ panel }) {
     b.type = 'button'; b.dataset.tool = key; b.setAttribute('role', 'tab'); b.setAttribute('aria-controls', 'panel'); b.title = key === 'all' ? 'Show every section' : label;
     if (key === 'all') b.className = 'railAll';
     b.innerHTML = `${icon}<span>${label}</span>`;
-    b.onclick = () => show(key);
+    // The open tool's button again minimizes the panel (the painting gets the room); again opens it.
+    b.onclick = () => { if (key === current && !minimized) setMin(true); else show(key); };
     rail.append(b);
   }
   panel.after(rail);
@@ -66,8 +67,13 @@ export function initToolRail({ panel }) {
   try { saved = JSON.parse(localStorage.getItem(STORE)) || {}; } catch { saved = {}; }
   const layout = () => (phone.matches ? 'phone' : 'desk');
   const valid = (t) => TOOLS.some(([k]) => k === t) && !(t === 'all' && phone.matches);
-  let current = '';
+  let current = '', minimized = false;
+  function setMin(on) {
+    minimized = on; document.body.classList.toggle('panelMin', on);
+    for (const b of rail.children) b.setAttribute('aria-expanded', !on);
+  }
   function show(tool, remember = true) {
+    setMin(false);
     if (!valid(tool)) tool = phone.matches ? 'auto' : 'all';
     const changed = tool !== current;
     current = tool; panel.dataset.tool = tool;
@@ -83,6 +89,7 @@ export function initToolRail({ panel }) {
   }
   // Show the tool holding an element (tool search, links between sections).
   function reveal(el) {
+    setMin(false);
     const t = blockOf(el)?.dataset.tool;
     if (t && current !== 'all' && t !== current) show(t);
   }
@@ -90,5 +97,5 @@ export function initToolRail({ panel }) {
   // Every visit opens on Setup (open the photo, Analyze); switching layout goes back to
   // the tool last used in that layout.
   show(START, false);
-  return { show, reveal, get current() { return current; }, toolOf: (el) => blockOf(el)?.dataset.tool || '' };
+  return { show, reveal, setMin, get minimized() { return minimized; }, get current() { return current; }, toolOf: (el) => blockOf(el)?.dataset.tool || '' };
 }

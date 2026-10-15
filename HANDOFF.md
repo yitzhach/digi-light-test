@@ -17,6 +17,18 @@ update this file (mark the phase DONE, note what the next chat needs).
   built-in looks, opens on Setup + Analyze). **Next chat: start Phase 4.** Open questions for
   the user: do the fixed looks (Gallery, Raking texture, Long shadows, Soft window, Museum spot)
   still read blurry on their phone; are the overlay defaults (grain 35%, vignette 50%) sensible.
+- Phase 3b — user's notes after Phase 3 (10-15), done in this order:
+  (a) DONE: tool button pressed again minimizes the panel (`body.panelMin`, `tools.setMin`);
+  search icon `#searchBtn` beside the logo drops the search bar open (hidden until then, `/` too,
+  closes on pick / Esc / empty blur); double-tap or double-click the painting toggles full
+  screen (quick taps only, not on dots or while brushing). (b) DONE: **Relief (3D)** first in
+  Colour › Adjustments (`adjust.relief.amount` 0–300%, app.js `reliefBoost` multiplies
+  physicalDepth, rebuilds the relief; faded by the Colour eye/Opacity). (c) DONE: "still a bit
+  blurry": cause measured = De-light albedo (`albedoSuppress`) 0.7 keeps 0.43 detail/brightness
+  vs the photo's 0.74 (0.4 → 0.63, 0 → 0.92); the five crisp Auto looks now use 0.4. Matched
+  looks unchanged (0.7). If still soft: offer 0.2–0.3, or a visible "Photo detail" slider.
+  (d) IN PROGRESS: **raking round** — 8 graze variants on the red panel (round R1, see Test
+  rounds), the user picks the best → set the default graze (GRAZE_DEFAULT / Classic raking).
 - (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -127,11 +139,22 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   10 mm. So depth is not what holds the painting at 3★; past ~3 mm leave it (3–4 mm) and
   vary lighting / graze / room light / relief source next.
 
+- Raking round R1 (10-15, scratch script `rake.cjs`, full-res exports of the red panel
+  sample): base = default photo settings + Gallery track light + greys 60% / vibrance 40% /
+  strokes 50% / De-light 0.4, graze opacity 0.5 from `findRaking(135)`. Variants (graze patch
+  over Classic raking {el 3, detail .01, fine .8, reach 1, clean .3, soft .2}): 01 Classic ·
+  02 Gentle (6°, detail .006, fine 1, clean .15) · 03 2° · 04 5° · 05 soft .5 · 06 detail
+  .006 fine 1 · 07 detail .015 clean .6 fine .6 · 08 Long shadows clean (1°, detail .012,
+  fine .5, soft .15). Picks: PENDING.
+
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Phase 3** — Colour tool adjustments (`src/adjust.js`),
+- Last code change on `main` (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
+  search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks). Raking round
+  R1 sent; waiting on picks. **Next chat: read the R1 picks, set the default graze, then Phase 4.**
+- Before that (2026-10-15): **Phase 3** — Colour tool adjustments (`src/adjust.js`),
   overlays (`src/overlays.js`), eyes, Auto Opacity, crisper looks. See Done recently.
 - Before that (2026-10-15): **Phase 2, tool rail** (`src/toolrail.js`): bottom
   icon strip on phones (one tool at a time), vertical rail beside the panel on desktop (All by

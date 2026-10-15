@@ -243,3 +243,14 @@ details.adj.off > summary { color:var(--dim); }
 .ovLine input[type=color] { width:44px; height:28px; padding:0 2px; background:var(--panel); border:1px solid var(--line); border-radius:4px; }
 .ovLine .checkRow { margin:0; }
 .layersOff #layerList { opacity:.5; }
+/* Tool button pressed again: the panel minimizes and the painting takes the room */
+body.panelMin #panel { display:none!important; }
+body.panelMin { grid-template-columns:minmax(0,1fr) 62px; }
+@media(max-width:860px) { body.panelMin { grid-template-columns:1fr; } }
+/* Search: an icon beside the logo drops the search bar open */
+#toolSearch { display:none; }
+body.searchOpen #toolSearch { display:block; padding-bottom:6px; }
+#searchBtn { display:inline-grid; place-items:center; width:34px; padding:0; margin-right:auto; }
+#searchBtn svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+#searchBtn.on { color:var(--accent); }
+#studioToolbar strong { margin-right:4px; }

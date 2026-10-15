@@ -10,12 +10,14 @@ corrections, fine-tune, views) and Save. On a phone it sits at the bottom of the
 and shows one tool at a time, like Lightroom mobile; on a desktop it is a rail beside
 the panel, where **All** shows every section at once. The app opens on **Setup**, which
 also shows Auto's **Analyze**. Tool search (`/`) jumps to any control and switches to
-its tool. An **eye** button hides a tool's effect without losing its settings: the
+its tool; it opens from the search icon beside the logo. Pressing the open tool's button
+again minimizes the panel. Double-tap (or double-click) the painting for full screen. An **eye** button hides a tool's effect without losing its settings: the
 Colour tool and each adjustment, Layers, each overlay, the Graze light and Fine-tune
 (its sliders go back to their starting values while hidden).
 
 **Colour** has the image editor's adjustments (Brightness/Contrast, Levels, Curves,
 Exposure, Vibrance, Hue/Saturation, Color Balance, Black & White, Channel Mixer),
+plus **Relief (3D)** (0–300% of the set depth),
 applied in that order to the relit image before the blend layers, each with its own
 eye, plus one **Opacity** for the whole tool (it also scales Keep greys neutral, Room
 light colour and Stroke definition). **Layers** ends with **Overlays**: Film grain
