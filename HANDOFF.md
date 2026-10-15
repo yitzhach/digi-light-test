@@ -7,9 +7,13 @@ One phase per chat. Each phase: build, run tests/browser.cjs (add tests), push t
 update this file (mark the phase DONE, note what the next chat needs).
 - Phase 0 — DONE (10-15, on `main`): Original-on-top layer, tool search, Save & export tab, Before export =
   original, blend-mode list with hover preview (Photoshop style).
-- Phase 1 — DONE (10-15, on `main`; see Done recently). **Next chat: start Phase 2.** Open
+- Phase 1 — DONE (10-15, on `main`; see Done recently). Open
   questions for the user: are the 8 built-in looks the right set, and is "Strength 0 = the
   settings before the look" the mix they meant (vs mixing toward the plain photo)?
+- Phase 2 — DONE (10-15, on `main`; see Done recently). **Next chat: start Phase 3.** Open
+  questions for the user: desktop opens on **All** (whole panel, as before); should it open
+  on one tool instead? Is the 8th tool **Setup** (open photo + Quick setup) right, and does
+  Detail hold the right things?
 - (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -17,7 +21,7 @@ update this file (mark the phase DONE, note what the next chat needs).
   Also lists the user's own saved presets/projects as looks, **adapted** to this image (keep the
   look's tone/colour/lighting relations, re-derive image-specific values: azimuth, depth fit,
   exposure target). One Strength slider (mix toward neutral) + Undo. Goal: no 40 sliders.
-- Phase 2 — **Mobile tool bar** like Lightroom mobile: a bottom icon strip (Auto, Light, Graze,
+- (was) Phase 2 — **Mobile tool bar** like Lightroom mobile: a bottom icon strip (Auto, Light, Graze,
   Layers, Colour, Detail, Save) that shows one section at a time on phones (and as a
   vertical rail on desktop); inline SVG icons; panel max-height tuning; bigger touch targets.
 - Phase 3 — **Overlays** in Layers: Film grain (amount, size, colour/mono, seed; generated in the
@@ -124,8 +128,11 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Phase 1, Auto section** (`src/auto.js`, top of the
-  panel): Analyze → readout + one-tap looks for this photo + Strength + Undo. See Done recently.
+- Last code change on `main` (2026-10-15): **Phase 2, tool rail** (`src/toolrail.js`): bottom
+  icon strip on phones (one tool at a time), vertical rail beside the panel on desktop (All by
+  default). See Done recently.
+- Before that (2026-10-15): **Phase 1, Auto section** (`src/auto.js`, top of the
+  panel): Analyze → readout + one-tap looks for this photo + Strength + Undo.
 - **Branch `feature/metrology` merged into `main` (2026-10-14, user asked).** It was:
   building `docs/conoscopic-paper-improvements.md` items in the user's order:
   (1) items 12+13 texture contrast score + Fit depth — DONE on the branch;
@@ -179,6 +186,7 @@ of a painting → estimate surface relief → relight with movable virtual light
 ## Map (src/)
 - `app.js` — main bench: load image, build G-buffer, re-shade on interaction (largest file)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
+- `toolrail.js` — tool rail / phone tool strip: tags each panel block with a tool, shows one at a time
 - `auto.js` — Auto section: Analyze (readout, depth fit, raking direction), one-tap looks, Strength mix
 - `gbuffer.js` — single-photo surface estimation (directional + even-light estimates,
   normalised, blended); `shade.js` — per-frame shading pass (area-light penumbra)
@@ -227,6 +235,27 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Phase 2 — tool rail** (`src/toolrail.js`, `initToolRail` from studio.js
+  before buildSearch; `__studio.tools` {show, reveal, current, toolOf}). Tools: Setup (open photo,
+  Demo & capture, Quick setup), Auto, Light, Graze, Layers, Colour (Colour & strokes), Detail
+  (Calibrate, Measure relief, Profile, Local texture correction, Fine-tune, View), Save, and All
+  (desktop only). Each top-level block of `#panel` / `#creative` gets `data-tool` from an anchor id
+  (`ANCHORS`; the h2 in front of a .grp goes with it); anything unlisted falls under Detail;
+  `.toolHidden` hides the rest. A tool that is one folding section opens it. Tool search
+  `go()` calls `tools.reveal(el)` first. Last tool per layout (phone/desk) in localStorage
+  `digilight.tool`. Layout (studio.css end): desktop grid `1fr 62px 320px` (rail order 1, panel
+  order 2); phone ≤860px rows `auto minmax(160px,1fr) auto auto`: toolbar is one sideways-
+  scrolling row, panel max 42dvh and only as tall as the tool, strip at the bottom with
+  safe-area padding (painting ~370 px tall on a 390×844 phone, was ~300). `pointer:coarse`:
+  buttons/selects ≥ 40 px, sliders 32 px, light dots 34 px, bigger summaries. Search box is
+  sticky. Full screen hides the rail. Tests: desktop rail + phone strip in browser.cjs; the
+  older phone test taps Detail before Local texture correction; the main page goes back to
+  1350×900 after the mobile layout check (the tests after it are desktop tests). Also fixed (app.js `setZoom`,
+  `zoomCentre`): zoom buttons drifted off the middle (6.5 px at 1000% once the stage was 62 px
+  narrower) because each step re-read the centre from whole-pixel scroll; now a middle zoom
+  reuses the exact point when the measured one is within 1.5 px of it. Test race fixed: the
+  "My gallery look" preset test now clears `#presetStatus` before saving (a stale "Saved…"
+  from the Auto test's preset let it apply while the save still held `loading`).
 - 10-15 (pushed to `main`): **Phase 1 — Auto** (`src/auto.js`, `initAuto` from studio.js, section
   `#autoSection` above Quick setup, open by default; `__studio.auto` {analyze, pick, analysis,
   active, setStrength}). **Analyze** (one history-free pass, settings restored after; batching on):

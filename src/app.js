@@ -330,6 +330,7 @@ function viewBox() {
 }
 
 const ZOOM_MIN = 0.2, ZOOM_MAX = 10;
+let zoomCentre = null;   // the painting point the last middle-of-view zoom kept still
 
 /**
  * View zoom, 20% to 1000% of the size that fits the stage. Below fit it brings lights
@@ -349,7 +350,11 @@ function setZoom(z, at) {
   }
   const v = viewBox(), r = canvas.getBoundingClientRect();
   const [cx, cy] = at || [(v.left + v.right) / 2, (v.top + v.bottom) / 2];
-  const u = r.width ? (cx - r.left) / r.width : 0.5, w = r.height ? (cy - r.top) / r.height : 0.5;
+  let u = r.width ? (cx - r.left) / r.width : 0.5, w = r.height ? (cy - r.top) / r.height : 0.5;
+  // Zooming about the middle again with nothing moved since: reuse the exact point. The scroll
+  // it is read back from is rounded to whole pixels, and each zoom step would magnify that.
+  const last = zoomCentre;
+  if (!at && last && Math.abs(u - last.u) * r.width < 1.5 && Math.abs(w - last.w) * r.height < 1.5) ({ u, w } = last);
   state.viewZoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
   fitCanvas();
   if (state.viewZoom > 1) {
@@ -357,6 +362,7 @@ function setZoom(z, at) {
     scroller.scrollLeft += n.left + u * n.width - cx;
     scroller.scrollTop += n.top + w * n.height - cy;
   }
+  zoomCentre = at || state.viewZoom <= 1 ? null : { u, w };
   repositionHandles();
   document.dispatchEvent(new Event('digilight:zoom'));
 }

@@ -4,6 +4,13 @@ package installation or build step are required. Requires WebGL2 and floating-po
 render targets; graphics acceleration must be enabled.
 
 ## Use
+**Tools.** An icon strip picks what the panel shows: Setup (open a photo, Quick setup),
+Auto, Light, Graze, Layers, Colour, Detail (calibrate, lamp-photo relief, profile, brush
+corrections, fine-tune, views) and Save. On a phone it sits at the bottom of the screen
+and shows one tool at a time, like Lightroom mobile; on a desktop it is a rail beside
+the panel, where **All** (the default) shows every section at once. Tool search (`/`)
+jumps to any control and switches to its tool. The strip remembers the last tool.
+
 Creative Studio starts each uploaded photograph with a restrained look: brushy oil
 about 1 mm deep, photographed in even light. **Auto** (top of the panel) is the
 fastest path: **Analyze** reads the photo (tone, clipping, colour, stroke contrast and

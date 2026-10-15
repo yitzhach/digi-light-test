@@ -24,7 +24,7 @@ details { margin-top:12px; } summary { cursor:pointer; color:var(--dim); font-si
 .handle { z-index:2; }
 #beamGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
 .hideGuides #beamGuide,.comparing #beamGuide,.brushing #beamGuide { display:none!important; }
-@media(max-width:860px) { body { grid-template-rows:auto minmax(180px,1fr) minmax(0,48vh); } #studioToolbar { padding:8px;gap:5px; } #studioToolbar strong { width:100%; } #panel { max-height:none; } #compareLabel { display:none; } }
+@media(max-width:860px) { #studioToolbar { padding:8px;gap:5px; } #compareLabel { display:none; } }
 
 /* Quick setup */
 #quickSetup .row { grid-template-columns:92px 1fr 52px; }
@@ -50,7 +50,7 @@ input[type=range]:disabled { opacity:.35; }
 /* Full screen view: the stage alone fills the screen */
 #fullBar { display:none; }
 body.fullView { display:block; }
-body.fullView #studioToolbar, body.fullView #panel, body.fullView #hint { display:none!important; }
+body.fullView #studioToolbar, body.fullView #panel, body.fullView #toolRail, body.fullView #hint { display:none!important; }
 body.fullView #stage { position:fixed; inset:0; z-index:20; background:var(--bg); }
 body.fullView #fullBar { display:flex; gap:6px; position:absolute; z-index:6; top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right)); }
 #fullBar button { background:#14161ae0; padding:8px 12px; font-size:14px; }
@@ -178,3 +178,43 @@ body.batchOpen { overflow:hidden; }
 .autoLook span { font-size:11px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .autoLook.mine span::before { content:'★ '; color:var(--dim); }
 .autoLook.on { outline:2px solid var(--accent); outline-offset:1px; }
+
+/* Tool rail: one section at a time (toolrail.js). Desktop: a vertical rail between the
+   painting and the panel. Phones: a bottom icon strip under the panel, like Lightroom mobile. */
+.toolHidden { display:none!important; }
+body { grid-template-columns:minmax(0,1fr) 62px 320px; }
+#toolRail { order:1; display:flex; flex-direction:column; gap:2px; padding:8px 5px; background:#191c21; border-left:1px solid var(--line); overflow-y:auto; scrollbar-width:none; min-height:0; }
+#toolRail::-webkit-scrollbar { display:none; }
+#panel { order:2; }
+#toolRail button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height:52px; padding:6px 2px; border:0; border-radius:8px; background:none; color:var(--dim); font-size:10px; line-height:1.1; }
+#toolRail button:hover { color:var(--ink); background:var(--panel2); }
+#toolRail button.on { color:var(--ink); background:var(--panel2); box-shadow:inset 0 0 0 1px var(--line); }
+#toolRail button.on svg { stroke:var(--accent); }
+#toolRail svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+#toolRail .railAll { margin-top:auto; }
+#toolSearch { position:sticky; top:0; z-index:31; background:var(--panel); }
+@media(max-width:860px) {
+  /* toolbar, painting (gets what is left), the open tool (only as tall as it needs), strip */
+  body { grid-template-columns:1fr; grid-template-rows:auto minmax(160px,1fr) auto auto; }
+  #panel { order:2; max-height:42vh; max-height:42dvh; padding-bottom:12px; }
+  #panel > h2:first-child { display:none; }
+  #toolRail { order:3; flex-direction:row; justify-content:space-between; gap:0; padding:3px 4px calc(3px + env(safe-area-inset-bottom)); border-left:0; border-top:1px solid var(--line); overflow:auto hidden; }
+  #toolRail button { flex:1 0 42px; min-height:54px; padding:6px 0; }
+  #toolRail .railAll { display:none; }
+  /* toolbar: one row that scrolls sideways instead of three rows of buttons */
+  #studioToolbar { flex-wrap:nowrap; overflow:auto hidden; scrollbar-width:none; }
+  #studioToolbar::-webkit-scrollbar { display:none; }
+  #studioToolbar > * { flex:none; }
+  #studioToolbar strong { margin-right:4px; font-size:15px; }
+  #studioToolbar small { display:none; }
+}
+/* Fingers: bigger targets wherever the pointer is coarse (phones, tablets) */
+@media(pointer:coarse) {
+  #panel button, #panel select, #studioToolbar button, #splitControl button { min-height:40px; }
+  #panel input[type=range], #splitControl input[type=range] { height:32px; }
+  #panel input[type=checkbox] { width:20px; height:20px; }
+  .sectionDetails>summary { padding:15px 14px; }
+  .row { margin:4px 0; }
+  #photoCompass { grid-template-columns:repeat(3,46px); }
+  .handle { width:34px; height:34px; margin:-17px 0 0 -17px; }
+}

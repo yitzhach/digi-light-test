@@ -16,6 +16,14 @@ await page.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth'
 {await page.fill('#toolSearchInput','batch');await settle();assert.ok(await page.locator('#toolSearchList li').count()>0);await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#saveSection').open&&!document.querySelector('[data-pane=batch]').hidden));
 await page.fill('#toolSearchInput','graze opac');await settle();await page.fill('#toolSearchInput','Shadow lift');await settle();await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#grazeSection').open||[...document.querySelectorAll('details')].some(d=>d.open)));
 await page.locator('#saveSection .subTabs [data-pane=image]').click();console.log('PASS tool search opens sections and Save & export tabs');}
+// Tool rail (desktop): a vertical rail between painting and panel; All (default) shows every section, a tool only its own.
+{const tool=()=>page.evaluate(()=>__studio.tools.current),R=await page.locator('#toolRail').boundingBox(),S=await page.locator('#stage').boundingBox(),P=await page.locator('#panel').boundingBox();
+assert.ok(R.height>R.width&&Math.abs(R.x-(S.x+S.width))<1&&Math.abs(P.x-(R.x+R.width))<1,'vertical rail between painting and panel '+JSON.stringify({R,S,P}));assert.equal(await tool(),'all');
+assert.ok(await page.evaluate(()=>[...document.querySelectorAll('#panel > *, #creative > *')].every(el=>el.dataset.tool||el.id==='creative'||el.id==='toolSearch'||el===document.querySelector('#panel').firstElementChild)),'every block belongs to a tool');
+await page.click('#toolRail [data-tool=layers]');assert.equal(await tool(),'layers');assert.ok(await page.locator('#addLayer').isVisible()&&await page.locator('#autoAnalyze').isHidden()&&await page.locator('#quickSetup').isHidden()&&await page.locator('#toolSearchInput').isVisible());
+await page.fill('#toolSearchInput','Analyze');await settle();await page.keyboard.press('Enter');await settle();assert.equal(await tool(),'auto','search switches to the tool holding the hit');assert.ok(await page.locator('#layersSection').isHidden());
+await page.click('#toolRail .railAll');assert.equal(await tool(),'all');assert.ok(await page.locator('#addLayer').isVisible()&&await page.locator('#autoAnalyze').isVisible()&&await page.locator('#quickSetup').isVisible());
+await page.evaluate(()=>{document.querySelector('#layersSection').open=false;});console.log('PASS desktop tool rail: one tool at a time, search switches tool, All shows every section');}
 const fixture=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=240;c.height=300;const x=c.getContext('2d');for(let y=0;y<300;y++)for(let a=0;a<240;a++){const v=120+40*Math.sin(a*.35)+25*Math.cos(y*.19);x.fillStyle=`rgb(${v},${v*.7},${v*.5})`;x.fillRect(a,y,1,1);}return c.toDataURL().split(',')[1];});
 await page.locator('#file').setInputFiles({name:'painting.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});await page.waitForFunction(()=>__bench.canvas.width===240);await settle();
 console.log('PASS uploaded image automatic setup');
@@ -189,7 +197,7 @@ const checked=await page.evaluate(()=>{const s=__studio.snapshot();return __stud
 await page.click('.lyShow');await page.locator('#layersSection').screenshot({path:outputDir+'/layer-mask-panel.png'});await page.screenshot({path:outputDir+'/layer-mask-overlay.png'});await page.click('.lyShow');
 await page.click('.lyReset');await settle();assert.equal((await setting('layers'))[0].mask,undefined);assert.equal(await pixels(),full);await page.click('#undo');await settle();assert.equal(await pixels(),shown);}
 console.log('PASS layer masks: hide all, paint show/hide, overlay, undo, validate, tiled export, reset');
-await page.evaluate(()=>{document.querySelector('#saveSection').open=true;});await page.locator('#saveSection .subTabs [data-pane=presets]').click();await page.fill('#presetName','My gallery look');const presetStrength=await setting('fineRelief');await page.click('#savePreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('Saved'));
+await page.evaluate(()=>{document.querySelector('#saveSection').open=true;});await page.locator('#saveSection .subTabs [data-pane=presets]').click();await page.fill('#presetName','My gallery look');const presetStrength=await setting('fineRelief');await page.evaluate(()=>{document.querySelector('#presetStatus').textContent='';});await page.click('#savePreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('Saved'));
 await slider('fineRelief',.15);await page.click('#applyPreset');await settle();assert.equal(await setting('fineRelief'),presetStrength);await page.click('#undo');await settle();assert.equal(await setting('fineRelief'),.15);await page.click('#redo');await settle();assert.equal(await setting('fineRelief'),presetStrength);
 await page.check('#defaultPreset');await page.waitForFunction(()=>document.querySelector('#presetStatus').textContent.startsWith('This preset'));
 const presetDownload=page.waitForEvent('download');await page.click('#downloadPreset');const presetFile=await presetDownload;await presetFile.saveAs(outputDir + '/preset.json');
@@ -279,7 +287,7 @@ await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');awa
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
 for(let i=0;i<9;i++)await page.click('#zoomIn');await settle();assert.equal(await setting('viewZoom'),10);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.querySelector('#scroller').scrollWidth>document.querySelector('#scroller').clientWidth*2));
-await page.click('#zoomFit');console.log('PASS mobile layout, also at 1000%');
+await page.click('#zoomFit');await page.setViewportSize({width:1350,height:900});await settle();console.log('PASS mobile layout, also at 1000%');
 {await page.locator('#calibrateSection').evaluate(e=>e.open=true);await page.selectOption('#calUnits','in');
 const num=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
 await num('calWidthN',19);await num('calAboveN',32);await num('calLeftN',19);await num('calOutN',4);
@@ -549,6 +557,16 @@ console.log('PASS colour & strokes: no-op when neutral, greys neutral, vibrance 
 // starts on a brush stroke drops it; Full screen hides the chrome and Exit restores it.
 {const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:2});const m=await ctx.newPage();m.on('pageerror',e=>errors.push(e.message));
 await m.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);
+// Phone tool strip: one section at a time, the strip under the panel, the painting keeps most of the screen.
+{const T=()=>m.evaluate(()=>__studio.tools.current),vis=sel=>m.locator(sel).isVisible();
+const R=await m.locator('#toolRail').boundingBox(),P=await m.locator('#panel').boundingBox(),S=await m.locator('#stage').boundingBox();
+assert.ok(Math.abs(R.y+R.height-844)<1&&R.width>=389&&P.y+P.height<=R.y+1&&S.height>=300,'strip at the bottom '+JSON.stringify({R,P,S}));
+assert.equal(await T(),'auto');assert.ok(await vis('#autoAnalyze')&&!await vis('#grazeSection')&&!await vis('#layersSection')&&!await vis('#toolRail .railAll'));
+const small=await m.evaluate(()=>[...document.querySelectorAll('#toolRail button, #autoSection button, #studioToolbar button')].filter(b=>b.offsetParent&&b.getBoundingClientRect().height<40).map(b=>b.textContent));assert.deepEqual(small,[],'touch targets at least 40 px');
+await m.tap('#toolRail [data-tool=graze]');assert.equal(await T(),'graze');assert.ok(await m.evaluate(()=>document.querySelector('#grazeSection').open)&&await vis('#grazeDial')&&!await vis('#autoAnalyze'));
+await m.fill('#toolSearchInput','Add layer');await m.keyboard.press('Enter');await m.waitForTimeout(100);assert.equal(await T(),'layers');assert.ok(await vis('#addLayer'));
+await m.reload();await m.waitForFunction(()=>window.__bench&&window.__studio);await m.waitForTimeout(300);assert.equal(await T(),'layers','the strip remembers the tool');
+await m.tap('#toolRail [data-tool=auto]');console.log('PASS phone tool strip: one section at a time, strip at the bottom, touch targets, search switches tool, remembered');}
 const cdp=await ctx.newCDPSession(m),touch=(type,pts)=>cdp.send('Input.dispatchTouchEvent',{type,touchPoints:pts.map(([x,y],id)=>({x,y,id}))});
 const z=()=>m.evaluate(()=>__bench.state.viewZoom),sc=()=>m.evaluate(()=>{const s=document.querySelector('#scroller');return [s.scrollLeft,s.scrollTop];});
 const pinch=async(c,d0,d1)=>{await touch('touchStart',[[c[0]-d0/2,c[1]]]);await touch('touchMove',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);await touch('touchStart',[[c[0]-d0/2,c[1]],[c[0]+d0/2,c[1]]]);for(let i=1;i<=8;i++){const d=d0+(d1-d0)*i/8;await touch('touchMove',[[c[0]-d/2,c[1]],[c[0]+d/2,c[1]]]);}await touch('touchEnd',[]);};
@@ -556,9 +574,9 @@ let b=await m.locator('#gl').boundingBox();const c=[b.x+b.width/2,b.y+b.height/2
 await pinch(c,60,180);let zz=await z();assert.ok(Math.abs(zz-3)<.15,'pinch zoom '+zz);
 const s0=await sc();await touch('touchStart',[[c[0],c[1]]]);for(let i=1;i<=6;i++)await touch('touchMove',[[c[0]-10*i,c[1]-8*i]]);await touch('touchEnd',[]);const s1=await sc();assert.ok(s1[0]-s0[0]>50&&s1[1]-s0[1]>40,'one-finger pan '+JSON.stringify([s0,s1]));
 await pinch(c,200,40);assert.ok(await z()<1.2,'pinch out '+await z());await m.click('#zoomFit');
-await m.getByText('Local texture correction',{exact:true}).click();await m.click('#brushAdd');const n0=(await m.evaluate(()=>__bench.state.strokes.length));b=await m.locator('#gl').boundingBox();
+await m.tap('#toolRail [data-tool=detail]');await m.getByText('Local texture correction',{exact:true}).click();await m.click('#brushAdd');const n0=(await m.evaluate(()=>__bench.state.strokes.length));b=await m.locator('#gl').boundingBox();
 await pinch([b.x+b.width/2,b.y+b.height/2],60,120);assert.equal(await m.evaluate(()=>__bench.state.strokes.length),n0,'a pinch drops the stroke its first finger began');await m.click('#brushOff');
-await m.click('#fullView');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isHidden()&&await m.locator('#panel').isHidden()&&await m.locator('#fullExit').isVisible());
+await m.click('#fullView');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isHidden()&&await m.locator('#panel').isHidden()&&await m.locator('#toolRail').isHidden()&&await m.locator('#fullExit').isVisible());
 const st=await m.locator('#stage').boundingBox();assert.ok(st.width>=389&&st.height>=843,'stage fills the screen '+JSON.stringify(st));
 b=await m.locator('#gl').boundingBox();await pinch([b.x+b.width/2,b.y+b.height/2],60,150);assert.ok(await z()>2,'pinch in full screen '+await z());
 await m.click('#fullFit');assert.equal(await z(),1);await m.click('#fullExit');await m.waitForTimeout(200);assert.ok(await m.locator('#studioToolbar').isVisible()&&await m.locator('#fullExit').isHidden());

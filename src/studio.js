@@ -8,6 +8,7 @@ import { exportTestBundle } from './testbundle.js';
 import { encodeRelief, validRelief, decodeRelief } from './reliefsave.js';
 import { initBatch } from './batch.js';
 import { initAuto } from './auto.js';
+import { initToolRail } from './toolrail.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -724,8 +725,10 @@ export function initStudio(api) {
     findRaking,userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,
     userProjects:()=>storage('projects','readonly',s=>s.getAll()),projectSettings:p=>validate(p),currentProject:()=>projectId,unmasked});
   buildSaveExport();
+  // One section at a time: bottom tool strip on phones, vertical rail on desktop (toolrail.js).
+  const tools=initToolRail({panel:$('panel')});
   buildSearch();
-  window.__studio={calibrate:cal,lamp,probe,auto,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 
   // Save & export: every way out of the app in one section, one sub-tab at a time.
   function buildSaveExport(){
@@ -770,7 +773,7 @@ export function initStudio(api) {
     }
     let items=[],active=0,shown=[];
     function go(item){
-      const el=item.el;input.value='';close();
+      const el=item.el;input.value='';close();tools.reveal(el);
       if(el.closest('#studioToolbar')){el.focus();flash(el);return;}
       const pane=el.closest('.subPane');if(pane)showPane(pane.dataset.pane);
       if(el.closest('.subTabs'))showPane(el.dataset.pane);
