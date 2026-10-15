@@ -4,7 +4,7 @@
 // keeps light dragging at frame rate.
 
 import { createGL, bindTarget } from './gl.js';
-import { GBuffer } from './gbuffer.js';
+import { GBuffer, FORM_GAIN, FORM_OUTER } from './gbuffer.js';
 import { Shader, MAX_LIGHTS } from './shade.js';
 import { kelvinToLinearRGB, hexToLinearRGB, linearRGBToHex } from './kelvin.js';
 import { synthesizePainting, synthesizeCaptureSet, normalsToImageData } from './synth.js';
@@ -96,7 +96,28 @@ function reliefBoost(st) {
   if (!r || !r.on || !a.on) return 1;
   return 1 + ((r.amount ?? 1) - 1) * Math.min(1, Math.max(0, a.opacity ?? 1));
 }
-let builtBoost = 1;
+// Relief (3D)'s bands, faded the same way: Fine and Mid detail multiply the one-photo
+// relief's fine and stroke bands, Broad form (0 = none) adds the large-scale form layer
+// at Broad size times its default scale (gbuffer.js). Calibrated relief only for the form.
+// `formScale` is the form layer's 2-98% spread in units of the relief as set: FORM_GAIN of
+// its own width (the outer blur) at 100%, so the swells keep their shape whatever the
+// Texture depth, Broad size or resolution, and Relief still scales them with the rest.
+function reliefBands(st, W) {
+  const a = st.adjust, r = a?.relief;
+  if (!r || !r.on || !a.on || st.mode !== 'single') return { fine: 1, mid: 1, form: 0, formSize: 1, formScale: 0 };
+  const k = Math.min(1, Math.max(0, a.opacity ?? 1)), mix = (v, d) => d + ((v ?? d) - d) * k;
+  const form = st.physical ? mix(r.form, 0) : 0, formSize = r.formSize ?? 1;
+  const depth = Math.max(1e-6, st.textureDepthMm / Math.max(1, st.paintingWidthCm * 10));
+  const formScale = form * FORM_GAIN * (st.reliefScale * FORM_OUTER * formSize / Math.max(1, W)) / depth;
+  return { fine: mix(r.fine, 1), mid: mix(r.mid, 1), form, formSize, formScale };
+}
+// The tallest relief the bands can make, in units of the relief as set: the bands'
+// largest multiplier plus the form layer's spread. Bounds shadow reach.
+function reliefSpan(st) {
+  const b = st.reliefBands;
+  return b ? Math.max(b.fine, b.mid) + b.formScale : 1;
+}
+let builtRelief = '';
 
 /**
  * The longest shadow any enabled light can cast across the painting: the tallest
@@ -104,7 +125,7 @@ let builtBoost = 1;
  * corner farthest from it. Bounds the march and the export tile margin.
  */
 function shadowReach(st, depth, aspect) {
-  const rise = depth * st.reliefAmount * 1.5;
+  const rise = depth * st.reliefAmount * 1.5 * reliefSpan(st);
   let reach = 0;
   for (const l of st.lights) {
     if (!l.enabled) continue;
@@ -816,6 +837,7 @@ function updateDerived(workingW, st = state) {
   const W = Math.max(1, workingW);
   // Calibrated relief is a single-photo model; a capture measures its own heights.
   st.calibrated = st.mode === 'single' && !!st.physical;
+  st.reliefBands = reliefBands(st, W);
   if (st.mode === 'photometric') {
     // Measured relief sits at its true physical scale whatever the resolution,
     // so shadow reach is a fraction of image width and stays put.
@@ -856,7 +878,7 @@ function updateDerived(workingW, st = state) {
   // Shadow length setting takes that share of the tallest relief over tan(elevation).
   st.grazeReach = st.shadowDist;
   if (st.calibrated && g && (st.viewMode === 7 || (g.enabled && g.opacity > 0)) && g.reach > 0) {
-    const rise = physicalDepth(st) * st.reliefAmount * 1.5;
+    const rise = physicalDepth(st) * st.reliefAmount * 1.5 * reliefSpan(st);
     // A calibrated lamp is lowest to the wall at the corner farthest from it.
     const asp = imgH / Math.max(1, imgW);
     const el = g.lamp ? Math.max(0.5, Math.min(...[[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]].map(([u, v]) =>
@@ -898,9 +920,9 @@ function renderNow() {
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
-    // Relief (3D) changes the depth the relief is built at.
-    const boost = reliefBoost(state);
-    if (boost !== builtBoost) { builtBoost = boost; dirtySurface = true; }
+    // Relief (3D) changes the depth and the bands the relief is built from.
+    const relief = JSON.stringify([reliefBoost(state), state.reliefBands]);
+    if (relief !== builtRelief) { builtRelief = relief; dirtySurface = true; }
     if (dirtySurface) {
       if (state.mode === 'photometric') {
         const solver = buildSolver(shots.map(shotDir), { fitAmbient: state.psFitAmbient });

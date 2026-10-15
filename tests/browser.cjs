@@ -599,6 +599,23 @@ await ev(()=>{__bench.state.adjust.curves.rgb=[[0,0],[1,1]];});await slider('adj
 // Relief (3D): scales the depth the lights shade and shadow; its eye hides it.
 {const hs0=await ev(()=>{__bench.render();return __bench.state.heightScale;});await slider('adj-relief-amount',2);const rp=await pixels();assert.notEqual(rp,base);assert.ok(Math.abs(await ev(()=>{__bench.render();return __bench.state.heightScale;})-2*hs0)<1e-9,'relief doubles the depth');
  await page.click('#adj-relief .eye');await settle();await same(base,'Relief eye');await page.click('#adj-relief .eye');await settle();await same(rp);await slider('adj-relief-amount',1);await settle();await same(base);}
+// Relief (3D) bands: Fine and Mid detail scale their band alone (the spread is still measured at 100%),
+// Broad form adds the large-scale layer (0 = none) at Broad size, in the tiled export as previewed.
+{const hs=()=>ev(()=>{__bench.render();return JSON.stringify(__bench.state.heightStats);}),hs0=await hs();
+ await slider('adj-relief-fine',0);const fp=await pixels();assert.notEqual(fp,base);assert.equal(await hs(),hs0,'Fine detail does not re-measure the relief');
+ await slider('adj-relief-fine',1);await settle();await same(base);await slider('adj-relief-mid',2);assert.notEqual(await pixels(),base);await slider('adj-relief-mid',1);await settle();await same(base);
+ await slider('adj-relief-form',1);const fm=await pixels();assert.notEqual(fm,base);assert.ok(await ev(()=>__bench.state.reliefBands.formScale>0));
+ await slider('adj-relief-formSize',2);assert.notEqual(await pixels(),fm,'Broad size');
+ const d=await ev(async()=>{__bench.render();const W=__bench.canvas.width,H=__bench.canvas.height,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(__bench.canvas,0,0);const a=x.getImageData(0,0,W,H).data;
+   __bench.state.maxTile=160;const o=await __bench.exportFullRes();const t=o.canvas||o;const g=document.createElement('canvas');g.width=W;g.height=H;g.getContext('2d').drawImage(t,0,0,W,H);const b=g.getContext('2d').getImageData(0,0,W,H).data;
+   let sum=0;for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]-b[i]);delete __bench.state.maxTile;__bench.dirty();__bench.render();return sum/a.length;});
+ assert.ok(d<1,'Broad form tile difference '+d);
+ await page.click('#adj-relief .eye');await settle();await same(base,'Relief eye hides the bands');await page.click('#adj-relief .eye');await settle();
+ await slider('adj-relief-formSize',1);await slider('adj-relief-form',0);await settle();await same(base,'Broad form 0 is none');
+ const v=await ev(()=>{const t=r=>{const s=__studio.snapshot();s.adjust={relief:r};try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).adjust.relief;}catch{return null;}};
+   return {old:t({on:1,amount:2}),bad:t({form:4}),badSize:t({formSize:0})};});
+ assert.deepEqual(v.old,{on:1,amount:2,fine:1,mid:1,form:0,formSize:1},'older saves open with the bands neutral');assert.equal(v.bad,null);assert.equal(v.badSize,null);
+ console.log('PASS Relief (3D) bands: fine, mid, broad form and size, tiled export, eye, validate');}
 // Overlays: grain adds texture to the painting and exports at the size it previews; vignette darkens corners; the master eye hides all.
 await page.click('#ov-grain .eye');await settle();const gr=await pixels();assert.notEqual(gr,base);const tg=await tone();assert.ok(tg.centre.sd>t0.centre.sd+1,'grain '+JSON.stringify([t0.centre.sd,tg.centre.sd]));
 await slider('ov-grain-seed',7);assert.notEqual(await pixels(),gr,'seed changes the pattern');await slider('ov-grain-seed',1);

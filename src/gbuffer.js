@@ -55,6 +55,12 @@
 import { program, makeTarget, bindTarget, bindTextures, drawFullscreen } from './gl.js';
 import { STROKE_FINE } from './presets.js';
 
+// Relief (3D) › Broad form: the form layer's 2-98% spread at 100%, as a share of its own
+// width (the outer blur's sigma; app.js reliefBands), and its band: luminance between
+// FORM_INNER and FORM_OUTER times Texture size (× Broad size).
+export const FORM_GAIN = 0.1;
+export const FORM_INNER = 4, FORM_OUTER = 24;
+
 const HEAD = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -110,6 +116,8 @@ uniform sampler2D uLin;    // linear rgb + luma
 uniform sampler2D uBlur;   // blurred linear rgb + luma
 uniform sampler2D uFine;
 uniform sampler2D uBroad;
+uniform sampler2D uFormIn;   // Broad form's band: inner and outer blur (the same when off)
+uniform sampler2D uFormOut;
 uniform vec3 uBands;
 uniform float uChromaReject;
 void main() {
@@ -138,7 +146,12 @@ void main() {
   float hueShift = length(chromaA - chromaB);
   float w = 1.0 - uChromaReject * smoothstep(0.02, 0.25, hueShift);
 
-  outColor = vec4(h * w, hueShift, hEven * w, 1.0);
+  // Broad form: the large-scale luminance as a height (light forward, dark back), the
+  // even-light reading at the scale of whole shapes. No chroma reject: its weight changes
+  // at the fine scale, and would print the grain back into the form.
+  float form = log(max(texture(uFormIn, vUV).a, 1e-4) / max(texture(uFormOut, vUV).a, 1e-4));
+
+  outColor = vec4(h * w, hueShift, hEven * w, form);
 }`;
 
 // Directional integration: reconstruct height by accumulating −slope backwards
@@ -163,8 +176,9 @@ void main() {
     acc += -texture(uSlope, suv).r * wt;
     total += wt;
   }
-  // g: the even-light estimate, read straight off the band-passed luminance.
-  outColor = vec4(total > 0.0 ? acc / total : 0.0, texture(uSlope, vUV).b, 0.0, 1.0);
+  // g: the even-light estimate, read straight off the band-passed luminance; b: Broad form.
+  vec4 here = texture(uSlope, vUV);
+  outColor = vec4(total > 0.0 ? acc / total : 0.0, here.b, here.a, 1.0);
 }`;
 
 // Point-sample both height estimates on a scattered grid, so their spread can be
@@ -199,9 +213,10 @@ uniform sampler2D uHeight;
 uniform vec2 uTexel;
 uniform float uStrength;
 uniform vec3 uMix;   // x: directional scale, y: even-light scale, z: even-light share
+uniform float uForm; // Broad form's scale (0 when off)
 float heightAt(vec2 uv) {
-  vec2 e = texture(uHeight, uv).rg;
-  return mix(e.r * uMix.x, e.g * uMix.y, uMix.z);
+  vec3 e = texture(uHeight, uv).rgb;
+  return mix(e.r * uMix.x, e.g * uMix.y, uMix.z) + e.b * uForm;
 }
 void main() {
   float l = heightAt(vUV - vec2(uTexel.x, 0.0));
@@ -286,9 +301,9 @@ export class GBuffer {
       v.sort();
       return v[Math.floor(N * N * 0.98)] - v[Math.floor(N * N * 0.02)];
     };
-    const dir = spread(0), cav = spread(1);
+    const dir = spread(0), cav = spread(1), form = spread(2);
     // A blank image has no spread; keep the scale finite rather than amplifying noise.
-    return { dir: Math.max(dir, 1e-4), cav: Math.max(cav, 1e-4) };
+    return { dir: Math.max(dir, 1e-4), cav: Math.max(cav, 1e-4), form: Math.max(form, 1e-4) };
   }
 
   resize(w, h) {
@@ -302,7 +317,7 @@ export class GBuffer {
       }
     }
     const mk = () => makeTarget(gl, w, h, { float: true, caps });
-    this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
+    this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), formIn: mk(), formOut: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
     this.sigmas = {};
     this.size = { w, h };
   }
@@ -334,25 +349,48 @@ export class GBuffer {
       gl.uniform1f(u.uSigma, reliefScale);
     });
 
-    for (const [target, sigma] of [[T.fine, Math.max(0.5, reliefScale * 0.4)], [T.broad, reliefScale * 4]]) {
-      run(this.progs.blur, T.tmp, [['uSrc', T.lin.tex]], (u) => {
+    // Relief (3D)'s bands (app.js reliefBands); none passed is the relief as estimated.
+    const bands = opts.reliefBands || { fine: 1, mid: 1, form: 0, formSize: 1 };
+    const formOn = bands.form > 0 && !opts.measured;
+    const broadSigma = reliefScale * 4;
+    const blurs = [[T.fine, Math.max(0.5, reliefScale * 0.4)], [T.broad, broadSigma]];
+    // Broad form's wide blurs start from the broad band's: a wide kernel samples with a
+    // stride, which aliases into a dot grid unless its input is already smooth.
+    if (formOn) for (const [target, k] of [[T.formIn, FORM_INNER], [T.formOut, FORM_OUTER]]) {
+      const sigma = reliefScale * k * bands.formSize;
+      blurs.push(sigma > broadSigma ? [target, Math.sqrt(sigma * sigma - broadSigma * broadSigma), T.broad] : [target, sigma]);
+    }
+    for (const [target, sigma, from = T.lin] of blurs) {
+      run(this.progs.blur, T.tmp, [['uSrc', from.tex]], (u) => {
         gl.uniform2f(u.uStep, 1 / w, 0); gl.uniform1f(u.uSigma, sigma);
       });
       run(this.progs.blur, target, [['uSrc', T.tmp.tex]], (u) => {
         gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, sigma);
       });
     }
-    run(this.progs.slope, T.slope, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uFine', T.fine.tex], ['uBroad', T.broad.tex]], (u) => {
-      gl.uniform1f(u.uChromaReject, chromaReject);
-      gl.uniform3f(u.uBands, opts.fineRelief ?? 1, opts.mediumRelief ?? 1, opts.broadRelief ?? 0.15);
-    });
-
     const az = (azimuthDeg * Math.PI) / 180;
-    run(this.progs.integrate, T.height, [['uSlope', T.slope.tex]], (u) => {
-      gl.uniform2f(u.uTexel, 1 / w, 1 / h);
-      gl.uniform2f(u.uAzimuth, Math.cos(az), Math.sin(az));
-      gl.uniform1f(u.uTaps, integrateTaps);
-    });
+    // Slope bands then the integral into T.height, at Fine and Mid detail multipliers k.
+    const estimate = (kFine, kMid) => {
+      const form = formOn ? T.formOut : T.broad;
+      run(this.progs.slope, T.slope, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uFine', T.fine.tex], ['uBroad', T.broad.tex],
+        ['uFormIn', formOn ? T.formIn.tex : form.tex], ['uFormOut', form.tex]], (u) => {
+        gl.uniform1f(u.uChromaReject, chromaReject);
+        gl.uniform3f(u.uBands, (opts.fineRelief ?? 1) * kFine, (opts.mediumRelief ?? 1) * kMid, (opts.broadRelief ?? 0.15) * kMid);
+      });
+      run(this.progs.integrate, T.height, [['uSlope', T.slope.tex]], (u) => {
+        gl.uniform2f(u.uTexel, 1 / w, 1 / h);
+        gl.uniform2f(u.uAzimuth, Math.cos(az), Math.sin(az));
+        gl.uniform1f(u.uTaps, integrateTaps);
+      });
+    };
+    // The spread is measured on the relief as estimated, so each band's multiplier
+    // scales that band alone: no Fine detail does not make the strokes deeper.
+    const banded = bands.fine !== 1 || bands.mid !== 1;
+    if (banded && opts.measureHeight && !opts.measured) {
+      estimate(1, 1);
+      this.heightStats = this.measureHeight(T.height.tex);
+    }
+    estimate(bands.fine, bands.mid);
 
     // Measured relief replaces the estimate: {tex, rect} (rect in the measured map's
     // UV, v up). Everything downstream (spread, normals, shadows) is built from it.
@@ -368,13 +406,15 @@ export class GBuffer {
 
     // Calibrated mode measures the preview and reuses that spread for export tiles;
     // legacy mode keeps the raw directional estimate exactly as it always was.
-    if (opts.measureHeight) this.heightStats = this.measureHeight(T.height.tex);
+    if (opts.measureHeight && !(banded && !opts.measured)) this.heightStats = this.measureHeight(T.height.tex);
     const calibrated = !!opts.physical;
     const stats = !calibrated ? { dir: 1, cav: 1 }
       : opts.measureHeight ? this.heightStats : (opts.heightStats || this.heightStats);
     const share = Math.min(1, Math.max(0, opts.photoDiffuse ?? 0));
     // Kept so the graze relief can be rebuilt alone with exactly these normals.
-    this.normalMix = { strength: reliefStrength, mix: [1 / stats.dir, 1 / stats.cav, share] };
+    // Broad form in units of the relief as set, from its own measured spread.
+    const form = formOn && calibrated ? (bands.formScale || 0) / (stats.form || 1) : 0;
+    this.normalMix = { strength: reliefStrength, mix: [1 / stats.dir, 1 / stats.cav, share], form };
     run(this.progs.normal, T.normal, [['uHeight', T.height.tex]], (u) => this.normalUniforms(u, w, h));
 
     run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex]], (u) => {
@@ -397,6 +437,7 @@ export class GBuffer {
     gl.uniform2f(u.uTexel, 1 / w, 1 / h);
     gl.uniform1f(u.uStrength, m.strength);
     gl.uniform3f(u.uMix, m.mix[0], m.mix[1], m.mix[2]);
+    gl.uniform1f(u.uForm, m.form || 0);
   }
 
   /**

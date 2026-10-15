@@ -29,6 +29,12 @@ update this file (mark the phase DONE, note what the next chat needs).
   looks unchanged (0.7). If still soft: offer 0.2–0.3, or a visible "Photo detail" slider.
   (d) IN PROGRESS: **raking round** — 8 graze variants on the red panel (round R1, see Test
   rounds), the user picks the best → set the default graze (GRAZE_DEFAULT / Classic raking).
+  User (10-15) has not been able to judge R1 yet; still pending.
+  (e) DONE (10-15): **Relief (3D) bands** — user: "too much granular tiny detail … like tons of
+  little sand bumps versus true 3-D dimensionality". Added Fine detail / Mid detail (0–300%,
+  default 100%), Broad form (0–300%, default 0 = none) and Broad size (25–400%). See Done recently.
+  Ask the user: is Broad form 100% the right strength, and do Fine 30% + Broad form 100–200%
+  give the "true 3D" they meant (try it on the AI-match look, Next up −4)?
 - (was) Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
   measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
   grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
@@ -151,9 +157,11 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - Last updated: 2026-10-15
-- Last code change on `main` (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
-  search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks). Raking round
-  R1 sent; waiting on picks. **Next chat: read the R1 picks, set the default graze, then Phase 4.**
+- Last code change on `main` (2026-10-15): **Relief (3D) bands** (Fine detail, Mid detail,
+  Broad form, Broad size). Raking round R1 still waiting on picks. **Next chat: the user's
+  verdict on the bands, the R1 picks (set the default graze), then Phase 4.**
+- Before that (2026-10-15): **Phase 3b** (user notes: tool re-tap minimizes,
+  search icon, double-tap full screen, Relief (3D), De-light 0.4 in crisp looks).
 - Before that (2026-10-15): **Phase 3** — Colour tool adjustments (`src/adjust.js`),
   overlays (`src/overlays.js`), eyes, Auto Opacity, crisper looks. See Done recently.
 - Before that (2026-10-15): **Phase 2, tool rail** (`src/toolrail.js`): bottom
@@ -263,6 +271,26 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Relief (3D) bands.** `adjust.relief` gains `fine`, `mid` (multipliers
+  on the one-photo relief's fine band and on its medium + broad bands; slope shader `uBands`),
+  `form` (0 = none) and `formSize`. app.js `reliefBands(st, W)` fades them by the Colour
+  eye/Opacity like `reliefBoost` and is stored as `st.reliefBands` in updateDerived (export tiles
+  get it via renderState); a change rebuilds the relief (`builtRelief` key). **Fine/Mid scale
+  their band alone**: when either is not 100% gbuffer.build estimates once at 100% to measure
+  `heightStats`, then again with the multipliers, so Fine 0 does not deepen the strokes.
+  **Broad form**: luminance band log(blur σ FORM_INNER·size / blur σ FORM_OUTER·size) (4 and 24 ×
+  Texture size × Broad size) as a height, light forward / dark back, in both estimates (slope.a →
+  height.b, `uForm` in the normal pass); no chroma reject (it would print the grain back in).
+  Its 2–98% spread (`heightStats.form`) is scaled to FORM_GAIN 0.1 × its own width (outer σ) at
+  100%, so the swells keep their shape whatever Texture depth, size or resolution; Relief still
+  scales them. Calibrated relief only (legacy projects: 0); measured relief ignores the bands.
+  The wide blurs start from the broad blur (a strided wide kernel on the raw image aliased into a
+  dot grid). Shadow reach × `reliefSpan` (max(fine, mid) + formScale); export margin covers 3σ of
+  the form blur. Measured on the red panel (preview, default light), mean |Δ| luma vs as set:
+  Fine 0 2.9, Mid 0 1.3, both 0 3.6 (the rest of the "sand" is baked into the photo; De-light
+  controls that), Fine 300% 5.0. In the Relief view (graze 3°) Broad form 100% already throws
+  long shadows; under the normal light 100% is a gentle swell, 200–300% strong. Test: "Relief
+  (3D) bands" in tests/browser.cjs (no-op at defaults, stats unchanged, tiled export, eye, validate).
 - 10-15 (pushed to `main`): **Phase 3 + user notes.** User's notes (with a Photoshop Image ›
   Adjustments menu screenshot): eyes (visible/hidden) on Fine-tune and other tools; Colour tab
   with Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Color Balance,

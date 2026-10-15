@@ -19,8 +19,12 @@ const ident = () => [[0, 0], [1, 1]];
 export const ADJUSTMENTS = [
   // Relief: more or less 3D. Not a colour step: it scales the depth the lights shade and
   // shadow (app.js reliefBoost), so it rebuilds the relief. 100% is the depth as set.
-  { key: 'relief', name: 'Relief (3D)', note: 'More or less 3D: 0% is flat, 100% the depth as set (Quick setup), 300% three times deeper. Shading and shadows follow.', fields: [
-    ['amount', 'Relief', 0, 3, 0.05, 1, pct]] },
+  // Fine and Mid detail scale the one-photo relief's bands (gbuffer.js), each on its own:
+  // the relief is still measured at 100%, so taking the grain away does not deepen the
+  // strokes. Broad form adds a larger-scale relief the estimate leaves out (0% = none).
+  { key: 'relief', name: 'Relief (3D)', note: 'More or less 3D: 0% is flat, 100% the depth as set (Quick setup), 300% three times deeper. Shading and shadows follow. Fine detail is the paint grain (the sandy bumps), Mid detail the brush strokes, Broad form the larger shapes as gentle swells (light areas forward, dark back). The three bands shape the one-photo relief, not measured relief.', fields: [
+    ['amount', 'Relief', 0, 3, 0.05, 1, pct], ['fine', 'Fine detail', 0, 3, 0.05, 1, pct], ['mid', 'Mid detail', 0, 3, 0.05, 1, pct],
+    ['form', 'Broad form', 0, 3, 0.05, 0, pct], ['formSize', 'Broad size', 0.25, 4, 0.05, 1, pct]] },
   { key: 'brightness', name: 'Brightness/Contrast', fields: [
     ['brightness', 'Brightness', -1, 1, 0.01, 0, signed], ['contrast', 'Contrast', -1, 1, 0.01, 0, signed]] },
   { key: 'levels', name: 'Levels', fields: [

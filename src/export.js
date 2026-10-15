@@ -12,6 +12,7 @@
 
 import { makeTarget, bindTarget } from './gl.js';
 import { uploadShotArray } from './photometric.js';
+import { FORM_OUTER } from './gbuffer.js';
 
 /**
  * How far outside a tile the surface passes reach, in pixels. Getting this wrong
@@ -27,7 +28,9 @@ export function requiredMargin(state) {
     const mean = Math.ceil(3 * (state.psMeanSigma || 16));
     return jacobi + mean + shadow + 4;
   }
-  const blur = Math.ceil(12 * state.reliefScale);
+  // 3 sigma of the widest luminance blur: the broad band, or Relief (3D)'s Broad form.
+  const b = state.reliefBands;
+  const blur = Math.ceil(3 * state.reliefScale * (b?.form > 0 ? Math.max(4, FORM_OUTER * b.formSize) : 4));
   const integrate = Math.ceil(state.integrateTaps);
   // The graze, shadow and stroke smoothed reliefs read 3 sigma beyond the heights they blur.
   const graze = Math.ceil(3 * Math.max(state.grazeSigmaPx || 0, state.shadowSigmaPx || 0, state.strokeSigmaPx || 0));
