@@ -741,12 +741,31 @@ function shadowPanel(p, l) {
     styles.appendChild(b);
   }
   p.appendChild(styles);
+  if (l.kind === 'shade') {
+    // Shape: as if cast through something between the lamp and the painting.
+    const shapes = document.createElement('div');
+    shapes.className = 'lightTypes shadeShapes';
+    for (const [key, name, tip] of [['pool', 'Soft pool', 'A soft round pool of shadow'], ['window', 'Window', 'The shadow of window bars, as from light through a window'],
+      ['blinds', 'Blinds', 'Stripes, as from light through blinds'], ['leaves', 'Leaves', 'Dappled, as from light through leaves']]) {
+      const b = document.createElement('button');
+      b.textContent = name; b.title = tip; b.dataset.shape = key;
+      if ((l.shape ?? 'pool') === key) b.className = 'on';
+      b.onclick = () => { l.shape = key; rebuildLightPanel(); render(); };
+      shapes.appendChild(b);
+    }
+    p.appendChild(shapes);
+  }
   if (l.kind === 'shade') p.appendChild(slider('Darkness', 0, 1, 0.01, () => l.dark ?? 0.6, (v) => { l.dark = v; }, (v) => `${Math.round(v * 100)}%`));
   else p.appendChild(slider('Strength', -3, Math.log2(POWER_MAX), 0.02, () => Math.log2(Math.max(l.power, 0.125)),
     (v) => { l.power = 2 ** v; }, (v) => { const w = 2 ** v; return w < 10 ? w.toFixed(2) : w.toFixed(0); }));
   // Cone 0.4 … 0.985: the pool's size where the shadow sits straight on; Edge is the beam's.
   p.appendChild(slider('Size', 0, 1, 0.01, () => clamp((0.985 - l.cone) / 0.585, 0, 1), (v) => { l.cone = 0.985 - 0.585 * v; rebuildHandles(); },
     (v) => `${Math.round(v * 100)}%`));
+  if (l.kind === 'shade' && (l.shape ?? 'pool') !== 'pool') {
+    p.appendChild(slider('Pattern size', 0.25, 4, 0.05, () => l.patternSize ?? 1, (v) => { l.patternSize = v; }, (v) => `${Math.round(v * 100)}%`));
+    p.appendChild(slider('Pattern turn', 0, 360, 1, () => l.patternRot ?? 0, (v) => { l.patternRot = v; }, (v) => `${Math.round(v)}°`));
+    p.appendChild(slider('Pattern blur', 0, 1, 0.01, () => Math.min(1, l.size ?? 0.3), (v) => { l.size = v; }, (v) => `${Math.round(v * 100)}%`));
+  }
   p.appendChild(slider('Edge', 0, 1, 0.02, () => l.softness ?? 0.5, (v) => { l.softness = v; }, (v) => (v < 0.15 ? 'hard' : v > 0.85 ? 'very soft' : `${Math.round(v * 100)}%`)));
   p.appendChild(slider('Angle to wall', 1, 90, 0.5, () => elevationOf(l), (v) => { setElevation(l, v); rebuildHandles(); },
     (v) => (v < 10 ? `${v.toFixed(1)}°` : `${Math.round(v)}°`)));
@@ -766,7 +785,7 @@ function shadowPanel(p, l) {
   const note = document.createElement('p');
   note.className = 'note';
   note.textContent = 'Drag the dot to move the shadow. Tint is the colour of the light left in it (cool, like daylight in shade, or warm). '
-    + 'Shade: a soft pool of less light, the paint keeps its texture. Negative light: a lamp in reverse; lower its Angle to wall to darken the paint facing it.';
+    + 'Shade: a soft pool of less light, the paint keeps its texture; or shaped, as if cast through a window, blinds or leaves (lower Angle to wall stretches the shape).  Negative light: a lamp in reverse; lower its Angle to wall to darken the paint facing it.';
   p.appendChild(note);
 }
 

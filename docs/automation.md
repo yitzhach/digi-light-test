@@ -45,7 +45,8 @@ Paths are dotted names into `settings()`. The common ones:
 - Surface: `textureDepthMm`, `paintingWidthCm`, `photoDiffuse` (0 lit from a side, 1 even), `azimuthDeg`, `albedoSuppress` (De-light)
 - Colour & strokes: `neutralWB` (Keep greys neutral), `vibrance`, `roomKelvin`, `strokeDef`, `strokeSize`, `strokeDir` (Stroke direction)
 - Lights: `lights.N.x|y|z|power|kelvin|cone|softness|falloff|aimX|aimY|size|lift|enabled|useKelvin|hex` (N from 0; `x`, `y` in painting widths, 0,0 bottom left)
-- Shadow lights (lights with `kind` `shade` or `negative`): `lights.N.kind`, `lights.N.dark` (a shade's Darkness, 0–1); `kelvin` is the tint of the light left in the shadow
+- Shadow lights (lights with `kind` `shade` or `negative`): `lights.N.kind`, `lights.N.dark` (a shade's Darkness, 0–1), `lights.N.shape` (`pool`, `window`, `blinds`, `leaves`),
+  `lights.N.patternSize` (0.25–4), `lights.N.patternRot` (0–360°), `lights.N.size` (shape blur); `kelvin` is the tint of the light left in the shadow
 - Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill`
 - Colour tool: `adjust.on`, `adjust.opacity`, `adjust.<name>.<field>`, e.g. `adjust.relief.amount`, `adjust.relief.form` (Broad form), `adjust.relief.formSize` (Broad size, 0–400%), `adjust.exposure.exposure`, `adjust.hueSat.saturation`; `adjust.curves.rgb` is a list of `[x, y]` points (0–1)
 - Overlays: `overlays.<grain|vignette|leak|window|pool>.on|opacity|...`

@@ -21,7 +21,8 @@ const MIME = { png: 'image/png', jpeg: 'image/jpeg', jpg: 'image/jpeg', webp: 'i
 const LIGHT_FIELDS = [['x', 'Across (painting widths, 0 left … 1 right)'], ['y', 'Up (0 bottom … 1 top)'], ['z', 'Height out from the wall'],
   ['power', 'Power'], ['kelvin', 'Colour temperature (K), with useKelvin 1'], ['cone', 'Beam cone'], ['softness', 'Softness'], ['falloff', 'Falloff'],
   ['aimX', 'Aim across'], ['aimY', 'Aim up'], ['size', 'Lamp size'], ['lift', 'Shadow lift (−1 … 1)'], ['enabled', 'On (true/false)'], ['useKelvin', 'Use colour temperature'], ['hex', 'Colour (#rrggbb)'],
-  ['kind', 'Kind: light, shade (a soft shadow: less light where it falls) or negative (a lamp in reverse)'], ['dark', 'Darkness of a shade (0–1)']];
+  ['kind', 'Kind: light, shade (a soft shadow: less light where it falls) or negative (a lamp in reverse)'], ['dark', 'Darkness of a shade (0–1)'],
+  ['shape', 'Shape of a shade: pool, window, blinds or leaves'], ['patternSize', 'Shape size (0.25–4)'], ['patternRot', 'Shape turn (0–360°)']];
 const GRAZE_FIELDS = [['enabled', 'Visible', 'grazeVis'], ['angle', 'Direction (0° from the right, 90° top)', null, 0, 359.9], ['elevation', 'Angle to wall', 'grazeElevation'],
   ['opacity', 'Opacity', 'grazeOpacity'], ['detail', 'Detail', 'grazeDetail'], ['fine', 'Fine', 'grazeFine'], ['reach', 'Shadow length', 'grazeReach'],
   ['clean', 'Clean shadows', 'grazeClean'], ['soft', 'Softness', 'grazeSoft'], ['lift', 'Shadow lift', 'grazeLift'], ['fill', 'Room light', null, 0, null], ['grey', 'Grey surface', null, 0, 1]];

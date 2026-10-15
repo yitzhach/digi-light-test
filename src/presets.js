@@ -92,6 +92,8 @@ export const POWER_MAX = 1024;
 // 'shade' (a flag or a cloud between the lamps and the painting) or 'negative' (a lamp in reverse).
 export const LIGHT_KINDS = ['light', 'shade', 'negative'];
 export const isLamp = (l) => !l.kind || l.kind === 'light';
+// A Shade's shape (shade.js shadeShape): a soft pool, or cast through window bars, blinds, leaves.
+export const SHADE_SHAPES = ['pool', 'window', 'blinds', 'leaves'];
 
 /**
  * Grazing light: the lamp almost in the painting's own plane, a painting width out

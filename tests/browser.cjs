@@ -734,15 +734,21 @@ const r=await a.evaluate(async()=>{const d=window.digilight,out={};
  await d.set('lights.1.kind','shade');await d.setProject(proj);out.reopened=__bench.state.lights[1].kind;
  const added=await d.addLight('shade',{x:.7,y:.3,aimX:.7,aimY:.3,dark:.4});out.added=[added.index,added.light.kind,added.light.dark];
  try{await d.addLight('cloud');}catch(e){out.badAdd=e.message;}
- out.removed=(await d.removeLight(2)).lights;return out;});
+ out.removed=(await d.removeLight(2)).lights;
+ await d.set('lights.1.kind','shade');const pool=await d.render(),shots={};
+ for(const sh of ['window','blinds','leaves']){await d.set('lights.1.shape',sh);shots[sh]=await d.render();}
+ out.shapes=new Set([pool,...Object.values(shots)]).size;
+ for(const [k,v] of [['lights.1.shape','star'],['lights.1.patternSize',9]])try{await d.set(k,v);out['bad '+k]='no error';}catch(e){out['bad '+k]=e.message;}
+ await d.set({'lights.1.shape':'window','lights.1.patternSize':1.5,'lights.1.patternRot':30});const pj=await d.getProject();out.shapeSaved=[pj.settings.lights[1].shape,pj.settings.lights[1].patternSize,pj.settings.lights[1].patternRot];
+ return out;});
 assert.equal(r.kind,'shade');assert.equal(r.n,2);assert.deepEqual(r.tab.slice(0,2),['Light 1','Shadow 2']);assert.ok(r.tab.includes('+ Shadow'));assert.equal(r.dot,1);
 assert.ok(r.panel.includes('Darkness')&&r.panel.includes('Tint')&&!r.panel.includes('Shadow lift'),JSON.stringify(r.panel));
 assert.ok(r.shade[0]<0.8&&Math.abs(r.shade[1]-1)<0.03,'shade darkens its pool only '+JSON.stringify(r.shade));assert.ok(r.zero,'Darkness 0 changes nothing');
 assert.equal(r.neg,'negative');assert.ok(r.negative[0]<0.85&&Math.abs(r.negative[1]-1)<0.03,'negative light darkens near it '+JSON.stringify(r.negative));
 assert.match(r['lights.1.kind'],/Invalid light kind/);assert.match(r['lights.1.dark'],/Invalid shadow darkness/);
 assert.deepEqual(r.saved,['negative',0.6,undefined]);assert.equal(r.reopened,'negative');
-assert.deepEqual(r.added,[2,'shade',0.4]);assert.match(r.badAdd,/kind is light, shade or negative/);assert.equal(r.removed,2);
-await ctx.close();console.log('PASS Shadow light: Shade pool and Negative light darken where they fall, validated, saved, API',JSON.stringify({shade:r.shade.map(v=>+v.toFixed(2)),negative:r.negative.map(v=>+v.toFixed(2))}));}
+assert.deepEqual(r.added,[2,'shade',0.4]);assert.equal(r.shapes,4,'pool, window, blinds and leaves each differ');assert.match(r['bad lights.1.shape'],/Invalid shadow shape/);assert.match(r['bad lights.1.patternSize'],/Invalid shadow shape/);assert.deepEqual(r.shapeSaved,['window',1.5,30]);assert.match(r.badAdd,/kind is light, shade or negative/);assert.equal(r.removed,2);
+await ctx.close();console.log('PASS Shadow light: Shade pool and Negative light darken where they fall, shapes (window, blinds, leaves), validated, saved, API',JSON.stringify({shade:r.shade.map(v=>+v.toFixed(2)),negative:r.negative.map(v=>+v.toFixed(2))}));}
 // Stroke direction: with Stroke definition on, 0 renders as before, more lights each stroke from the main lamp's side; off without Stroke definition; validated.
 {const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
 await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);

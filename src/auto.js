@@ -33,7 +33,7 @@ const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength',
 // Belong to the photo, not to a look: a saved preset or project never changes them here.
 const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes'];
 const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden'];
-const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff', 'dark'];
+const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff', 'dark', 'patternSize', 'patternRot'];
 const GRAZE_NUM = ['elevation', 'opacity', 'detail', 'fine', 'reach', 'clean', 'soft', 'lift', 'fill', 'grey'];
 const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
 const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];

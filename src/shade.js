@@ -13,7 +13,7 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, isLamp } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, SHADE_SHAPES, isLamp } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
 import { ADJUST_GLSL, setAdjustUniforms, curveLUT } from './adjust.js';
 import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
@@ -57,6 +57,10 @@ uniform float uLightLift[${MAX_LIGHTS}];     // Shadow lift: how far this light 
 // 2 = Negative light (shaded like a lamp, subtracted from the lamps). 0 = an ordinary light.
 uniform int   uLightKind[${MAX_LIGHTS}];
 uniform float uLightDark[${MAX_LIGHTS}];
+// A Shade's shape, as if cast through something: 0 a soft pool, 1 window bars, 2 blinds,
+// 3 leaves (dappled). uLightPattern: (size, rotation in radians).
+uniform int   uLightShape[${MAX_LIGHTS}];
+uniform vec2  uLightPattern[${MAX_LIGHTS}];
 uniform sampler2D uShadowRelief;             // relief for the main lights' shadows: grain smoothed out
 
 uniform float uAspect;
@@ -303,6 +307,33 @@ float strokeShade(float mask) {
   return exp2(uStrokeDef * ${STROKE_STOPS.toFixed(1)} * (c < 0.0 ? c : 0.5 * c));
 }
 
+// Value noise and three octaves of it, for the leaves shape.
+float hash21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash21(i), hash21(i + vec2(1, 0)), u.x), mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), u.x), u.y);
+}
+// Where a Shade's shape blocks the light (1) or lets it through (0). q: the point as the
+// shadow light sees it, across its beam (-1..1 at the beam's edge), so the shape is
+// projected like a gobo: it stretches when the light is low and grows with distance.
+// soft: the edge width, from the light's Source size (a bigger source blurs the shape).
+float shadeShape(int shape, vec2 q, float soft) {
+  if (shape == 1) {        // window: a frame of bars, panes about 0.65 beam-widths
+    vec2 g = abs(fract(q * 1.5 + 0.5) - 0.5);
+    return 1.0 - smoothstep(0.06, 0.06 + soft, min(g.x, g.y));
+  }
+  if (shape == 2) {        // blinds: slats across, a little more open than closed
+    float y = abs(fract(q.y * 6.0) - 0.5);
+    return smoothstep(0.27 - soft, 0.27 + soft, y);
+  }
+  if (shape == 3) {        // leaves: dappled, about half covered
+    vec2 p = q * 6.0;
+    float n = 0.55 * vnoise(p) + 0.3 * vnoise(p * 2.1 + 7.3) + 0.15 * vnoise(p * 4.3 + 1.7);
+    return smoothstep(0.47 - soft, 0.47 + soft, n);
+  }
+  return 1.0;
+}
+
 // How much of a light's pool reaches this point: 1 on the part of the painting
 // nearest the light, falling off with its distance falloff (and the beam, via spot).
 float poolShare(vec3 lp, float dist, float falloff) {
@@ -385,6 +416,17 @@ void main() {
       // Cast by something between the lamps and the painting: no relief of its own,
       // just a soft pool of less light, densest nearest it (its Falloff) and tinted.
       float b = spot * poolShare(lp, dist, uLightFalloff[i]);
+      if (uLightShape[i] > 0) {
+        vec3 side = abs(aim.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : normalize(cross(aim, vec3(0.0, 1.0, 0.0)));
+        vec3 up = cross(side, aim);
+        vec3 d = -Lv;
+        float depth = max(dot(d, aim), 1e-4);
+        float tanOuter = cone < 0.01 ? 1.0 : sqrt(max(1.0 - cosOuter * cosOuter, 1e-6)) / cosOuter;
+        vec2 q = vec2(dot(d, side), dot(d, up)) / depth / tanOuter;
+        float r = uLightPattern[i].y;
+        q = mat2(cos(r), sin(r), -sin(r), cos(r)) * q / max(uLightPattern[i].x, 0.05);
+        b *= shadeShape(uLightShape[i], q, 0.01 + 0.25 * min(uLightSize[i], 1.0));
+      }
       // The tint comes in with the darkness (full from 50%), so Darkness 0 is no shadow at all.
       float dk = uLightDark[i];
       shade *= max(mix(vec3(1.0), (1.0 - dk) * mix(vec3(1.0), uLightColor[i], min(1.0, 2.0 * dk)), b), 0.0);
@@ -582,6 +624,7 @@ export class Shader {
     const size = new Float32Array(MAX_LIGHTS);
     const lift = new Float32Array(MAX_LIGHTS);
     const kind = new Int32Array(MAX_LIGHTS), dark = new Float32Array(MAX_LIGHTS);
+    const shape = new Int32Array(MAX_LIGHTS), pattern = new Float32Array(MAX_LIGHTS * 2);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
@@ -596,6 +639,8 @@ export class Shader {
       lift[i] = l.lift ?? 0;
       kind[i] = LIGHT_KINDS.indexOf(l.kind ?? 'light');
       dark[i] = l.dark ?? 0.6;
+      shape[i] = l.kind === 'shade' ? Math.max(0, SHADE_SHAPES.indexOf(l.shape ?? 'pool')) : 0;
+      pattern[i * 2] = l.patternSize ?? 1; pattern[i * 2 + 1] = (l.patternRot ?? 0) * Math.PI / 180;
       // A Shade tints what it leaves (its colour at unit luminance, so the tint never
       // brightens); a Negative light takes away half the opposite tint, so a cool one leaves
       // the remaining light a little cooler (the whole opposite turned pale paint cyan).
@@ -624,6 +669,8 @@ export class Shader {
     gl.uniform1fv(u.uLightLift, lift);
     gl.uniform1iv(u.uLightKind, kind);
     gl.uniform1fv(u.uLightDark, dark);
+    gl.uniform1iv(u.uLightShape, shape);
+    gl.uniform2fv(u.uLightPattern, pattern);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);

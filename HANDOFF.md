@@ -63,8 +63,12 @@ update this file (mark the phase DONE, note what the next chat needs).
   all light where its beam falls, tinted, no relief of its own) and **Negative light** (idea a: a
   lamp in reverse, shaded over the relief, subtracted from the lamps, floor = room light). Idea (c)
   (gobo / window-bar shape) not built. Comparison sent to the user (6 frames, sample painting,
-  Gallery track). **Ask the user which reads natural**; drop the other or keep both. Next chat:
-  their answer, then the R1 raking picks and any new notes.
+  Gallery track). User (10-15): "Number one and four look the best" — on that sheet #1 was No
+  shadow and #4 Shade 50% low angle, so most likely the two Shade frames (Shade 60% cool / Shade
+  low angle); **confirm**, then decide whether to drop Negative light. User also liked shaped
+  shadows ("through a window pane and a few other things") → DONE 10-15: Shade shapes Window,
+  Blinds, Leaves (see Done recently); sheet sent. Ask what other shapes they want (ideas: a
+  tree branch, lattice / trellis, curtain edge, a person's silhouette, a picture-frame edge).
 
 ## Earlier plan: automated test rounds (user's plan, 10-14)
 The user wants Claude to run the tests, not them. Each round:
@@ -281,6 +285,16 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-15 (pushed to `main`): **Shade shapes** (Phase 5 follow-up). Shade light fields `shape`
+  ('pool' default | 'window' | 'blinds' | 'leaves', presets.js SHADE_SHAPES), `patternSize`
+  0.25–4, `patternRot` 0–360°; `size` blurs the shape ("Pattern blur"). Shader `shadeShape`:
+  the point as the shadow light sees it (basis ⟂ to its aim, divided by depth and tan of the
+  cone's half-angle, so −1..1 at the beam edge), rotated and scaled, so the shape is projected
+  like a gobo: stretches at a low Angle to wall, grows with Distance. Window = bars every
+  ~0.67 beam-widths (width 0.06); blinds = slats, 6 per beam-width; leaves = 3-octave value noise
+  at 0.47. Multiplies the pool `b`. UI: Soft pool / Window / Blinds / Leaves buttons
+  (`.shadeShapes`), then Pattern size / turn / blur. Validated ("Invalid shadow shape."),
+  saved only when not the default. Test in the Shadow light block.
 - 10-15 (pushed to `main`): **Stroke direction** (Colour › Light colour & strokes, `strokeDir` 0–1,
   default 0 = as before; LOOK_NEUTRAL, auto.js SURFACE). Stroke definition's band (strokeFine −
   stroke heights) is also sampled a Stroke size (strokeSigmaPx texels) either side toward the

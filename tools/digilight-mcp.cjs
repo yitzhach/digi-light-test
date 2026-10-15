@@ -159,7 +159,7 @@ server.registerTool('set_settings', {
 
 server.registerTool('add_light', {
   title: 'Add a light or a shadow',
-  description: 'Adds a lamp (kind "light") or a Shadow light that takes light away where it falls: "shade" (a soft shadow, as if a flag or a cloud off the frame blocked the lamps; dark 0–1 sets how much) or "negative" (a lamp in reverse, shading the relief; power sets how much). It sits where x, y say (painting widths, 0,0 bottom left) and aims at aimX, aimY; kelvin tints it (6500 neutral, higher cooler). Up to 8 in all. Returns its index for set_settings ("lights.N.field").',
+  description: 'Adds a lamp (kind "light") or a Shadow light that takes light away where it falls: "shade" (a soft shadow, as if a flag or a cloud off the frame blocked the lamps; dark 0–1 sets how much) or "negative" (a lamp in reverse, shading the relief; power sets how much). A shade can take a shape, as if cast through something: shape "window" (window bars), "blinds", "leaves" (dappled) or "pool" (default); patternSize 0.25–4, patternRot 0–360, size blurs it. It sits where x, y say (painting widths, 0,0 bottom left) and aims at aimX, aimY; kelvin tints it (6500 neutral, higher cooler). Up to 8 in all. Returns its index for set_settings ("lights.N.field").',
   inputSchema: {
     kind: z.enum(['light', 'shade', 'negative']).optional().describe('Default light'),
     fields: z.record(z.string(), z.any()).optional().describe('Any light fields, e.g. {"x": 0.3, "y": 0.7, "aimX": 0.3, "aimY": 0.7, "dark": 0.5, "kelvin": 9000}'),
