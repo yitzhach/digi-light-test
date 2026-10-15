@@ -156,7 +156,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   over Classic raking {el 3, detail .01, fine .8, reach 1, clean .3, soft .2}): 01 Classic ·
   02 Gentle (6°, detail .006, fine 1, clean .15) · 03 2° · 04 5° · 05 soft .5 · 06 detail
   .006 fine 1 · 07 detail .015 clean .6 fine .6 · 08 Long shadows clean (1°, detail .012,
-  fine .5, soft .15). Picks: PENDING.
+  fine .5, soft .15). Picks: PENDING; re-rendered 10-15 into the Round S review page (Raking set).
 
 - AI-match round S (10-15, sent; picks PENDING). Scratch scripts (Playwright + `digilight`
   API: `applyPreset('looks', …)`, `set`, `export` at full size 1932×2576, ~45–60 s each in
@@ -172,6 +172,12 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   Relief (3D) › Fine detail** (shading only, albedo untouched): on 07, Fine 100 / 50 / 0% →
   <3 px 0.70 / 0.57 / 0.50, mean luma 85 → 88; 50% calms the sand and keeps grooves sharp, 0%
   reads soft and blotchy. So no new control was built; candidates are dir ~70% + Fine ~50%.
+  **Review page** (10-15): artifact N9ceUJPQ3Ui5HeQoWHbeh5 ("DigiLight Round S", phone swipe viewer,
+  full size 1932×2576 JPEGs, Hold flips to the "as now" render): set AI match = S 01–06 above + S 07
+  (07 + dir 100%); set Raking = R1 01–08 re-rendered (graze from findRaking(135) = 130°, settings
+  as in Raking round R1). Stars in its db collection `ratings`, docs `s-NN` / `r1-NN` {round 'S' |
+  'R1', render, stars, why}; read with ArtifactData list. Claude's picks marked: S 02, S 06.
+  Round 2's page (VDxrYW7MHAhdHfpsis5pEq) has no saved ratings (checked 10-15).
 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
@@ -179,7 +185,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 - Last updated: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
-  round S** sent to the user (see Test rounds). **Next chat: the user's picks from round S (Stroke direction sheet and the
+  round S** sent to the user, plus a review page for it and R1 (see Test rounds). **Next chat: read
+  the review page's ratings first; the user's picks from round S (Stroke direction sheet and the
   6-look combo sheet), then put the winning Stroke direction / Fine detail into the matched looks
   (or a new matched look); still pending from the user: shadow style pick (Phase 5), MCP setup on
   their computer (Phase 4b), R1 raking picks.**
