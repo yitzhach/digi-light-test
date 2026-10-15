@@ -143,3 +143,18 @@ body.batchOpen { overflow:hidden; }
 .bvActions button { flex:1 1 auto; padding:9px 10px; }
 .bvActions .primary { background:var(--accent); color:#fff; border-color:var(--accent); }
 .bvStatus { margin:6px 0 0; font-size:12px; color:var(--dim); }
+
+/* Tool search */
+#toolSearch { position:relative; padding:10px 14px; border-bottom:1px solid var(--line); }
+#toolSearchInput { width:100%; background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:7px 9px; font:inherit; }
+#toolSearchList { position:absolute; left:14px; right:14px; top:100%; margin:-6px 0 0; padding:4px; list-style:none; background:var(--panel2); border:1px solid var(--line); border-radius:6px; z-index:30; max-height:320px; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+#toolSearchList li { display:flex; justify-content:space-between; gap:10px; padding:6px 8px; border-radius:4px; cursor:pointer; }
+#toolSearchList li small { color:var(--dim); text-align:right; }
+#toolSearchList li.on, #toolSearchList li:hover { background:var(--accent); color:#fff; }
+#toolSearchList li.on small, #toolSearchList li:hover small { color:#e6edff; }
+#toolSearchList li.none { color:var(--dim); cursor:default; background:none; }
+.searchHit { outline:2px solid var(--warn); outline-offset:2px; border-radius:4px; transition:outline-color .3s; }
+/* Save & export sub-tabs */
+.subTabs { display:flex; flex-wrap:wrap; gap:5px; padding:4px 14px 10px; }
+.subPane[hidden] { display:none; }
+#originalTopLayer .layerHead { display:flex; gap:8px; align-items:baseline; }

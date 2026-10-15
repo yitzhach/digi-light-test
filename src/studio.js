@@ -60,7 +60,7 @@ export function initStudio(api) {
   const tabs=$('tabs'), lightPanel=$('lightPanel');tabs.previousElementSibling.remove();lights.append(tabs,lightPanel);
   panel.insertBefore(lights,panel.querySelectorAll('h2')[1]);
   const layersBox = document.createElement('details');layersBox.className='sectionDetails';layersBox.id='layersSection';
-  layersBox.innerHTML='<summary>Layers · blend effects</summary><div class="grp"><p class="note">Copies of the photo blended over the relit result, like layer blend modes in an image editor. Pin light or Soft light of the original adds natural highlights. Top of the list is applied last.</p><div id="layerList"></div><button id="addLayer" class="full">+ Add layer</button><label class="selectRow">Mask brush<input id="maskBrushSize" type="range" min="5" max="240" value="60"></label><p class="note">Mask: Paint hide / Paint show to brush where a layer applies (red marks where it is hidden while you paint). Hide all, then Paint show, to apply it only where you paint.</p></div>';
+  layersBox.innerHTML='<summary>Layers · blend effects</summary><div class="grp"><p class="note">Copies of the photo blended over the relit result, like layer blend modes in an image editor. Pin light or Soft light of the original adds natural highlights. Top of the list is applied last.</p><div class="layer" id="originalTopLayer"><div class="layerHead"><strong>Original</strong><span class="note" style="margin:0">always on top</span></div><div class="row"><label for="originalTop">Opacity</label><input id="originalTop" type="range" min="0" max="1" step="0.01" value="0"><output data-own></output></div><p class="note" style="margin:0">The untouched photo over everything: the higher, the less of the effect shows.</p></div><div id="layerList"></div><button id="addLayer" class="full">+ Add layer</button><label class="selectRow">Mask brush<input id="maskBrushSize" type="range" min="5" max="240" value="60"></label><p class="note">Mask: Paint hide / Paint show to brush where a layer applies (red marks where it is hidden while you paint). Hide all, then Paint show, to apply it only where you paint.</p></div>';
   lights.after(layersBox);
   // Graze effect: an extra raking light at any direction round the painting, faded
   // over the main lighting. The dial's knob sits where the light comes from.
@@ -107,9 +107,9 @@ export function initStudio(api) {
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { ...LOOK_NEUTRAL, fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
-    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], graze: GRAZE_DEFAULT };
-  const LEGACY = { physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
-  const QUICK_RANGES = { physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
+    physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], originalTop: 0, graze: GRAZE_DEFAULT };
+  const LEGACY = { originalTop: 0, physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
+  const QUICK_RANGES = { originalTop: [0, 1], physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
   const DERIVED = ['heightScale', 'reliefStrength'];
   // Fill in only what the bench has not already set (the demo source sets how it was lit).
@@ -305,6 +305,7 @@ export function initStudio(api) {
   $('grazeDial').addEventListener('keyup', () => setTimeout(checkpoint, 0));
   // Shown top-first like an image editor's layer list; state.layers is bottom-first.
   function renderLayers() {
+    const ot=$('originalTop');ot.value=state.originalTop??0;ot.nextElementSibling.textContent=Math.round(ot.value*100)+'%';
     const list=$('layerList'); list.textContent='';
     const layers=state.layers||(state.layers=[]);
     for (let i=layers.length-1;i>=0;i--) {
@@ -334,6 +335,8 @@ export function initStudio(api) {
     state.maskOverlay=brush.startsWith('mask')?maskLayer:-1;
     rebuildLayerMasks();
   }
+  $('originalTop').addEventListener('input',e=>{state.originalTop=+e.target.value;e.target.nextElementSibling.textContent=Math.round(e.target.value*100)+'%';render();});
+  $('originalTop').addEventListener('change',()=>checkpoint());
   $('addLayer').onclick=()=>{const layers=state.layers||(state.layers=[]);if(layers.length>=MAX_LAYERS)return;layers.push({mode:'pinLight',source:'original',opacity:0.35,enabled:true});renderLayers();render();};
   function restore(value) { if (!value || state.exporting) return; restoring = true; Object.assign(state,value); sync(); restoring = false; }
   $('undo').onclick = () => { if (!state.exporting) { stopSweep(); restore(history.undo()); } };
@@ -526,7 +529,8 @@ export function initStudio(api) {
     // A lamp photo can stand in for the painting photo (lamp photos' Compare).
     const b=$('wrap').dataset.before; splitRow.firstElementChild.textContent=b||'BEFORE';
     $('compareLabel').textContent=split?`${b||'BEFORE'} ← → AFTER`:before?(b||'BEFORE · ORIGINAL'):'AFTER · RELIT';
-    $('wrap').classList.toggle('comparing',before||split); render();
+    $('wrap').classList.toggle('comparing',before||split);
+    $('exportBtn').textContent=before&&!split?'Export the original (Before) · no effects':'Render at full resolution'; render();
   }
   $('compare').onclick=()=>{if(state.exporting)return; before=!before;split=false;comparison();};
   $('splitView').onclick=()=>{if(state.exporting)return;split=!split;before=false;comparison();};
@@ -683,5 +687,84 @@ export function initStudio(api) {
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
     listProjects:()=>list()});
+  buildSaveExport();
+  buildSearch();
   window.__studio={calibrate:cal,lamp,probe,bestRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+
+  // Save & export: every way out of the app in one section, one sub-tab at a time.
+  function buildSaveExport(){
+    const box=document.createElement('details');box.className='sectionDetails';box.id='saveSection';
+    box.innerHTML='<summary>Save & export</summary><div class="subTabs" role="tablist"></div>';
+    const tabsEl=box.firstElementChild.nextElementSibling;
+    const exportGrp=$('exportBtn').closest('.grp');exportGrp.previousElementSibling.remove();
+    const testing=document.createElement('div');testing.className='grp';
+    testing.innerHTML='<p class="note">One .zip with the photo, settings, result and diagnostic views, to send for testing.</p>';
+    const tb=$('testBundle');tb.classList.add('full');testing.prepend(tb);
+    const fromDetails=id=>{const d=$(id).closest('.sectionDetails'),g=d.querySelector(':scope > .grp');d.remove();return g;};
+    const panes=[['image','Save image',exportGrp],['projects','Projects',fromDetails('projectName')],['presets','Presets',fromDetails('presetName')],['batch','Batch',fromDetails('batchRun')],['testing','Testing',testing]];
+    for(const [key,label,grp] of panes){
+      grp.dataset.pane=key;grp.classList.add('subPane');box.append(grp);
+      const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.pane=key;b.setAttribute('role','tab');b.onclick=()=>showPane(key);tabsEl.append(b);
+    }
+    $('fineTune').before(box);
+    showPane('image');
+  }
+  function showPane(key){
+    const box=$('saveSection');
+    for(const g of box.querySelectorAll('.subPane'))g.hidden=g.dataset.pane!==key;
+    for(const b of box.querySelectorAll('.subTabs button'))b.classList.toggle('on',b.dataset.pane===key);
+  }
+  // Search: type a tool's name, pick it, and its section opens and scrolls into view.
+  function buildSearch(){
+    const wrapS=document.createElement('div');wrapS.id='toolSearch';
+    wrapS.innerHTML='<input id="toolSearchInput" type="search" placeholder="Search tools… (/ key)" autocomplete="off" aria-label="Search tools" role="combobox" aria-expanded="false" aria-controls="toolSearchList"><ul id="toolSearchList" role="listbox" hidden></ul>';
+    $('panel').firstElementChild.after(wrapS);
+    const input=$('toolSearchInput'),listEl=$('toolSearchList');
+    const clean=t=>(t||'').replace(/\s+/g,' ').trim();
+    function index(){
+      const items=[],seen=new Set();
+      const add=(name,where,el)=>{name=clean(name);if(!name||name.length>60)return;const k=name.toLowerCase()+'|'+where;if(seen.has(k))return;seen.add(k);items.push({name,where,el});};
+      const sectionOf=el=>{const pane=el.closest('.subPane');if(pane)return 'Save & export › '+$('saveSection').querySelector(`.subTabs [data-pane="${pane.dataset.pane}"]`).textContent;const d=el.closest('.sectionDetails');if(d)return clean(d.querySelector('summary').textContent);let n=el.closest('.grp');while(n&&n.tagName!=='H2')n=n.previousElementSibling;return n?clean(n.textContent):'';};
+      for(const d of document.querySelectorAll('#panel .sectionDetails'))add(d.querySelector('summary').textContent,'Section',d.querySelector('summary'));
+      for(const b of document.querySelectorAll('#saveSection .subTabs button'))add(b.textContent,'Save & export',b);
+      for(const h of document.querySelectorAll('#panel h2'))add(h.textContent,'Section',h);
+      for(const l of document.querySelectorAll('#panel .row > label, #panel .selectRow, #panel .checkRow'))add(l.firstChild?.textContent||l.textContent,sectionOf(l),l);
+      for(const b of document.querySelectorAll('#panel button, #studioToolbar button'))if(!b.closest('.subTabs')&&!b.closest('#layerList'))add(b.textContent,b.closest('#studioToolbar')?'Toolbar':sectionOf(b),b);
+      return items;
+    }
+    let items=[],active=0,shown=[];
+    function go(item){
+      const el=item.el;input.value='';close();
+      if(el.closest('#studioToolbar')){el.focus();flash(el);return;}
+      const pane=el.closest('.subPane');if(pane)showPane(pane.dataset.pane);
+      if(el.closest('.subTabs'))showPane(el.dataset.pane);
+      for(let d=el.closest('details');d;d=d.parentElement.closest('details'))d.open=true;
+      if(el.tagName==='SUMMARY')el.parentElement.open=true;
+      const target=el.closest('.row,.selectRow,.checkRow')||el;
+      target.scrollIntoView({block:'center',behavior:'smooth'});flash(target);
+      const f=target.matches('input,select,button')?target:target.querySelector('input,select,button');f?.focus({preventScroll:true});
+    }
+    function flash(el){el.classList.remove('searchHit');void el.offsetWidth;el.classList.add('searchHit');setTimeout(()=>el.classList.remove('searchHit'),1600);}
+    function close(){listEl.hidden=true;listEl.textContent='';shown=[];input.setAttribute('aria-expanded','false');}
+    function update(){
+      const q=input.value.trim().toLowerCase();if(!q){close();return;}
+      if(!items.length)items=index();
+      const score=it=>{const n=it.name.toLowerCase();if(n.startsWith(q))return 0;if(n.split(/[^a-z0-9]+/).some(w=>w.startsWith(q)))return 1;if(n.includes(q))return 2;if(it.where.toLowerCase().includes(q))return 3;return -1;};
+      shown=items.map(it=>[score(it),it]).filter(([sc])=>sc>=0).sort((a,b)=>a[0]-b[0]).slice(0,12).map(([,it])=>it);
+      active=0;listEl.textContent='';
+      if(!shown.length){const li=document.createElement('li');li.className='none';li.textContent='No matching tool';listEl.append(li);}
+      shown.forEach((it,i)=>{const li=document.createElement('li');li.setAttribute('role','option');li.innerHTML='<span></span><small></small>';li.firstChild.textContent=it.name;li.lastChild.textContent=it.where;li.onmousedown=e=>{e.preventDefault();go(it);};listEl.append(li);});
+      mark();listEl.hidden=false;input.setAttribute('aria-expanded','true');
+    }
+    function mark(){[...listEl.children].forEach((li,i)=>li.classList.toggle('on',i===active&&shown.length>0));}
+    input.addEventListener('focus',()=>{items=index();update();});
+    input.addEventListener('input',update);
+    input.addEventListener('blur',()=>setTimeout(close,100));
+    input.addEventListener('keydown',e=>{
+      if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!shown.length)return;active=(active+(e.key==='ArrowDown'?1:-1)+shown.length)%shown.length;mark();listEl.children[active].scrollIntoView({block:'nearest'});}
+      else if(e.key==='Enter'||e.key==='Tab'&&shown.length&&!listEl.hidden){if(shown[active]){e.preventDefault();go(shown[active]);}}
+      else if(e.key==='Escape'){input.value='';close();input.blur();}
+    });
+    document.addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select,[contenteditable]')){e.preventDefault();input.focus();}});
+  }
 }

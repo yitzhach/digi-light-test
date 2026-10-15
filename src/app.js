@@ -1306,6 +1306,21 @@ function wireExport() {
       ? { mode: 'photometric', sources: shots.map((s2) => rescale(s2.source)), solver }
       : { mode: 'single', source: rescale(fullSource) };
 
+    // Before / After showing Before: export the photo itself, without any effects.
+    if (!photometric && state.viewMode === 4 && !(state.compareSplit >= 0)) {
+      try {
+        const img = rescale(fullSource), c = document.createElement('canvas');
+        c.width = outW; c.height = Math.round(fullH * Math.min(1, scalePct));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const bytes = await downloadCanvas(c, `original-${c.width}x${c.height}.${fmt === 'image/png' ? 'png' : 'jpg'}`, fmt, fmt === 'image/jpeg' ? 0.95 : undefined);
+        status.textContent = `Original (Before), no effects: ${c.width}x${c.height}, ${(bytes / 1e6).toFixed(1)}MB`;
+      } catch (e) { status.textContent = 'failed — see console'; fail(e); }
+      finally {
+        document.querySelectorAll('[data-export-disabled]').forEach(el => { el.disabled = el.dataset.exportDisabled === 'true'; delete el.dataset.exportDisabled; });
+        wrap.style.pointerEvents = ''; btn.disabled = false;
+      }
+      return;
+    }
     try {
       status.textContent = `margin ${requiredMargin(scaled)}px — starting…`;
       const t0 = performance.now();

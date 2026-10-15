@@ -2,7 +2,31 @@
 
 Start a new chat with: "Read HANDOFF.md and continue." Keep this file short.
 
-## NEXT SESSION STARTS HERE: automated test rounds (user's plan, 10-14)
+## NEXT SESSION STARTS HERE: upgrade phases (user's plan, 10-15)
+One phase per chat. Each phase: build, run tests/browser.cjs (add tests), push to `main`,
+update this file (mark the phase DONE, note what the next chat needs).
+- Phase 0 — DONE (10-15): Original-on-top layer, tool search, Save & export tab, Before export = original.
+- Phase 1 — **Automated tab** ("Auto"): one button **Analyze** (reuse photocheck stroke direction,
+  measure.js stats, texscore, clipping, photo-lit direction from autoSetup) → a short readout plus a
+  grid of 6–8 one-tap looks (built from `looks`/`lighting`/graze presets, each adapted to the
+  analysis: depth from texture score, graze across stroke direction, exposure from mean luma).
+  Also lists the user's own saved presets/projects as looks, **adapted** to this image (keep the
+  look's tone/colour/lighting relations, re-derive image-specific values: azimuth, depth fit,
+  exposure target). One Strength slider (mix toward neutral) + Undo. Goal: no 40 sliders.
+- Phase 2 — **Mobile tool bar** like Lightroom mobile: a bottom icon strip (Auto, Light, Graze,
+  Layers, Colour, Detail, Save) that shows one section at a time on phones (and as a
+  vertical rail on desktop); inline SVG icons; panel max-height tuning; bigger touch targets.
+- Phase 3 — **Overlays** in Layers: Film grain (amount, size, colour/mono, seed; generated in the
+  shader so it is resolution-correct in tiled export), then lighting overlays (vignette, light leak /
+  warm glow, soft window light gradient, spotlight pool) each with opacity + blend mode,
+  stored in `state.overlays`, saved in projects/presets.
+- Phase 4 — **AI automation**: a documented JS API `window.digilight` (load image from URL/dataURL,
+  analyze, list/apply looks, set any setting by name, render/export to dataURL/blob, project
+  get/set) + a URL/postMessage bridge, `docs/automation.md`, and a headless Node CLI
+  (`tools/digilight-cli.cjs`, Playwright) so an agent can run `analyze`, `apply look`, `export`.
+  Optionally an MCP server wrapping the CLI.
+
+## Earlier plan: automated test rounds (user's plan, 10-14)
 The user wants Claude to run the tests, not them. Each round:
 1. Write `tools/batches/round-NN.json` with **10 variants** (spec format at the top
    of `tools/render-batch.cjs`: base sample or project, lampPhotos/measure, common
@@ -95,7 +119,13 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   All four steps merged into `main`. Ask before
   items 8–11. Each step: before/after images + numbers to the user, test in
   tests/browser.cjs, push the branch, update this file.
-- Last code change on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 4 whole looks
+- Last code change (2026-10-15, branch `claude/relaxed-euler-k2vuj7`, not yet on `main`): **Original on top**
+  layer (Layers section, `state.originalTop`, shader `uOriginalTop`, mixes the untouched photo over everything);
+  **tool search** box at the top of the panel (`/` key, autocomplete over sections, labels and buttons; Enter
+  opens the section/sub-tab and scrolls to it); **Save & export** section with sub-tabs Save image / Projects /
+  Presets / Batch / Testing (built last in studio.js `buildSaveExport`, moves the existing groups);
+  Export while Before is showing downloads the original photo (`original-WxH`) with no effects.
+- Before that, on `main`: (2026-10-15) **Matched looks** picker (Colour & strokes): 4 whole looks
   (05 Raking graze, 06 Softer lamp, 07 Brighter, 09 Lower lamp); round 2 looks removed
 - Before that: (2026-10-14) **Colour & strokes** section: Keep greys neutral, Vibrance,
   Room light colour, Stroke definition + Stroke size; lighting preset "Gallery spot, upper right"

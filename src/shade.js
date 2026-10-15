@@ -73,6 +73,7 @@ uniform float uExposure;
 uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 original, 6 shadows, 7 relief (graze on grey)
 
 uniform int   uLayerCount;
+uniform float uOriginalTop;                   // Original on top: the untouched photo over everything
 uniform int   uLayerMode[${MAX_LAYERS}];
 uniform int   uLayerSource[${MAX_LAYERS}];   // 0 original photo, 1 relit image
 uniform float uLayerOpacity[${MAX_LAYERS}];
@@ -448,6 +449,7 @@ void main() {
       col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i] * dot(lmask, uLayerSel[i]));
     }
   }
+  if (uOriginalTop > 0.0) col = mix(col, clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0), uOriginalTop);
   float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
   col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
   outColor = vec4(col, 1.0);
@@ -652,6 +654,7 @@ export class Shader {
     gl.uniform1iv(u.uLayerMode, lMode);
     gl.uniform1iv(u.uLayerSource, lSrc);
     gl.uniform1fv(u.uLayerOpacity, lOp);
+    gl.uniform1f(u.uOriginalTop, reliefView ? 0 : Math.min(1, Math.max(0, state.originalTop ?? 0)));
 
     drawFullscreen(gl);
   }
