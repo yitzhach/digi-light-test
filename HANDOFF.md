@@ -214,7 +214,12 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
      of the 9 looks + full size 06 Raking texture, 07 Long shadows, 08 Soft window; full-res review page of all 9 + the photo:
      https://claude.ai/artifact/FAARtq3vLRypeB9ENxW1om . Claude's read:
      06/07 show the plaster best; every look renders darker/greyer than the photo and the steel
-     loses its sheen (try exposure +, metallic on the steel via a layer mask). Waiting on picks.
+     loses its sheen. **User picks (10-16): 01, 05, 06, 07; "make the steel brighter"; 06/07 "a
+     little too noisy / gritty".** Round 2 (same review page, top section): steel lift = Colour ›
+     Levels gamma 1.6 + output black 0.05 (steel mean 22 → 57–62, photo 60; plaster 160 → ~200,
+     photo 199); de-grit (b "smooth") = graze.fine 0.25, graze.clean 0.65, graze.soft 0.35, Relief
+     Fine detail 0.45, Stroke definition 0.25; (c "extra smooth") 0.1 / 0.8 / 0.5 / 0.25 / 0.1.
+     Sent 01b, 05b, 06b/c, 07b/c. Waiting on picks.
      The photo isn't in the repo; ask the user to re-attach it if the session is new.
 - Last updated: 2026-10-16 (steel + plaster piece rendered in the cloud; DigiLight MCP in cloud sessions; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
@@ -993,6 +998,8 @@ To judge it on a real painting, by eye:
    bright (one-photo relief); recheck them on measured relief.
 
 ## Gotchas
+- `window.digilight.setSettings` takes top-level keys only (dotted paths are ignored silently);
+  use `set({'adjust.levels.gamma': 1.6})` for paths (the CLI's --set and the MCP set_settings do).
 - Calibrated mode (`state.physical`, single photo only) derives heightScale,
   reliefStrength and shadow reach in `app.js` updateDerived; export tiles reuse the
   preview's measured `heightStats`, never re-measure.
