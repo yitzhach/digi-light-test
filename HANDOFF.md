@@ -29,7 +29,7 @@ update this file (mark the phase DONE, note what the next chat needs).
   looks unchanged (0.7). If still soft: offer 0.2–0.3, or a visible "Photo detail" slider.
   (d) IN PROGRESS: **raking round** — 8 graze variants on the red panel (round R1, see Test
   rounds), the user picks the best → set the default graze (GRAZE_DEFAULT / Classic raking).
-  User (10-15) has not been able to judge R1 yet; still pending.
+  User (10-16): can't judge from sheets, needs full-screen A/B (see Status).
   (e) DONE (10-15): **Relief (3D) bands** — user: "too much granular tiny detail … like tons of
   little sand bumps versus true 3-D dimensionality". Added Fine detail / Mid detail (0–300%,
   default 100%), Broad form (0–300%, default 0 = none) and Broad size (25–400%). See Done recently.
@@ -182,6 +182,18 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-16 (in the Phase 3b chat), NEXT CHAT START HERE:**
+  1. **De-light albedo:** of the crops original / De-light 0.7 / 0.4 / 0 (red panel, Gallery +
+     crisp settings), the user said **0 and the original look best**. Do: `albedoSuppress` 0 in
+     `CRISP` (auto.js); show before/after on the red panel; ask whether new photos (app.js state
+     0.7, FINE_DEFAULTS in studio.js) and the Matched looks (presets.js ROUND1 0.7) should go to 0
+     too, or offer a visible "Photo detail" slider. Watch for doubled baked shading under low /
+     graze light; update tests that assume 0.7.
+  2. **Raking round R1:** the user could not judge it from the contact sheet and crops: "I would
+     need to see them full screen and go A/B to see differences". The review page
+     N9ceUJPQ3Ui5HeQoWHbeh5 (set Raking) may already do this. Check its `ratings` first; if
+     none, point the user to it and make sure it gives full screen plus a quick A↔B flip
+     between two chosen variants (pairs, not 8 at once). Then set the default graze.
 - Last updated: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
