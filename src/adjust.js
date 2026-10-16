@@ -23,9 +23,14 @@ export const ADJUSTMENTS = [
   // the relief is still measured at 100%, so taking the grain away does not deepen the
   // strokes. Broad form adds a larger-scale relief the estimate leaves out (0% = none);
   // Broad size 0% is none too (its swells are as tall as they are wide, app.js reliefBands).
-  { key: 'relief', name: 'Relief (3D)', note: 'More or less 3D: 0% is flat, 100% the depth as set (Quick setup), 300% three times deeper. Shading and shadows follow. Fine detail is the paint grain (the sandy bumps), Mid detail the brush strokes, Broad form the larger shapes as gentle swells (light areas forward, dark back); Broad size sets how large, from 0% (none) up. The three bands shape the one-photo relief, not measured relief.', fields: [
+  // Smooth calms the grit without moving the other sliders (smoothFactor, SMOOTH below).
+  { key: 'relief', name: 'Relief (3D)', note: 'More or less 3D: 0% is flat, 100% the depth as set (Quick setup), 300% three times deeper. Shading and shadows follow. Fine detail is the paint grain (the sandy bumps), Mid detail the brush strokes, Broad form the larger shapes as gentle swells (light areas forward, dark back); Broad size sets how large, from 0% (none) up. The three bands shape the one-photo relief, not measured relief. Smooth takes away grit and noise and keeps the cracks and strokes: it lowers the fine grain, the graze light\'s fine detail and Stroke definition, and cleans and softens the graze shadows, without moving their own sliders. Good for low-relief pieces.', fields: [
     ['amount', 'Relief', 0, 3, 0.05, 1, pct], ['fine', 'Fine detail', 0, 3, 0.05, 1, pct], ['mid', 'Mid detail', 0, 3, 0.05, 1, pct],
-    ['form', 'Broad form', 0, 3, 0.05, 0, pct], ['formSize', 'Broad size', 0, 4, 0.05, 1, pct]] },
+    ['form', 'Broad form', 0, 3, 0.05, 0, pct], ['formSize', 'Broad size', 0, 4, 0.05, 1, pct], ['smooth', 'Smooth', 0, 1, 0.05, 0, pct]] },
+  // Lift darks: brightens dark materials (steel, dark paint) most and leaves white white.
+  // 100% is Levels gamma 1.6 with output black 0.05 (the steel-and-plaster pick, 10-16).
+  { key: 'lift', name: 'Lift darks', note: 'Brightens the dark parts (steel, dark paint, deep shadows) the most, the mid tones a little, and leaves white white. 100% is a strong lift; up to 200%.', fields: [
+    ['amount', 'Lift darks', 0, 2, 0.01, 0, pct]] },
   { key: 'brightness', name: 'Brightness/Contrast', fields: [
     ['brightness', 'Brightness', -1, 1, 0.01, 0, signed], ['contrast', 'Contrast', -1, 1, 0.01, 0, signed]] },
   { key: 'levels', name: 'Levels', fields: [
@@ -51,6 +56,23 @@ export const ADJUSTMENTS = [
     ['mono', 'Monochrome (Red output)', 0, 1, 1, 0, null]] },
 ];
 const CURVE_CH = ['rgb', 'r', 'g', 'b'];
+
+/** Relief (3D) › Smooth, faded by the Colour tool's eye and Opacity (0 = none). */
+export function smoothFactor(st) {
+  const a = st.adjust, r = a?.relief;
+  if (!r || !r.on || !a.on) return 0;
+  return Math.min(1, Math.max(0, r.smooth ?? 0)) * Math.min(1, Math.max(0, a.opacity ?? 1));
+}
+// What Smooth 100% does: the one-photo fine band and the graze light's Fine are scaled by
+// `fine` / `grazeFine`, Stroke definition by `stroke`; Clean shadows and Softness move this
+// share of the way to 100%. On the steel-and-plaster piece's Raking texture this lands on
+// the user's pick (Fine detail 45%, graze Fine 25%, Clean 65%, Softness 35%, strokes 25%).
+export const SMOOTH = { fine: 0.45, grazeFine: 0.3, stroke: 0.5, clean: 0.5, soft: 0.19 };
+/** The graze light's fine / clean / soft after Smooth `s`. */
+export function smoothGraze(g, s) {
+  const fine = g?.fine ?? 1, clean = g?.clean ?? 0, soft = g?.soft ?? 0;
+  return { fine: fine * (1 - (1 - SMOOTH.grazeFine) * s), clean: clean + (1 - clean) * SMOOTH.clean * s, soft: soft + (1 - soft) * SMOOTH.soft * s };
+}
 const isCheck = (f) => f[6] === null;
 
 export function adjustDefaults() {
@@ -135,6 +157,7 @@ export function curveLUT(curves) {
 
 export const ADJUST_GLSL = `
 uniform float uAdjMix;        // the Colour tool's Opacity; 0 while it is hidden
+uniform float uAdjLift;       // Lift darks, 0 = off
 uniform vec3  uAdjBC;         // brightness, contrast, on
 uniform vec4  uAdjLevels;     // input black, input white, 1 / gamma, on
 uniform vec2  uAdjLevelsOut;  // output black, output white
@@ -182,6 +205,10 @@ float bwGrey(vec3 c) {
   return clamp(mn + (md - mn) * ws + (mx - md) * wp, 0.0, 1.0);
 }
 vec3 adjustColour(vec3 c) {
+  if (uAdjLift > 0.0) {
+    float ob = 0.05 * uAdjLift;
+    c = ob + (1.0 - ob) * pow(max(c, 0.0), vec3(1.0 / (1.0 + 0.6 * uAdjLift)));
+  }
   if (uAdjBC.z > 0.0) {
     if (uAdjBC.x != 0.0) c = pow(c, vec3(exp2(-uAdjBC.x)));
     if (uAdjBC.y > 0.0) c = mix(c, c * c * (3.0 - 2.0 * c), uAdjBC.y);
@@ -231,6 +258,8 @@ let fallback = null;
 export function setAdjustUniforms(gl, u, state, lut, off) {
   const a = state.adjust || (fallback ||= adjustDefaults()), on = (k) => !!a[k]?.on;
   gl.uniform1f(u.uAdjMix, a.on && !off ? Math.min(1, Math.max(0, a.opacity ?? 1)) : 0);
+  const lift = a.lift || { on: 0, amount: 0 };
+  gl.uniform1f(u.uAdjLift, on('lift') ? Math.max(0, lift.amount) : 0);
   const bc = a.brightness, lv = a.levels, ex = a.exposure, hs = a.hueSat, cb = a.balance, bw = a.bw, mx = a.mixer;
   gl.uniform3f(u.uAdjBC, bc.brightness, bc.contrast, on('brightness') && (bc.brightness || bc.contrast) ? 1 : 0);
   const lvOn = on('levels') && (lv.inBlack !== 0 || lv.inWhite !== 1 || lv.gamma !== 1 || lv.outBlack !== 0 || lv.outWhite !== 1);

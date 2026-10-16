@@ -15,6 +15,7 @@ import { registerFrames, resample } from './register.js';
 import { estimateLight, spherePointFromLight } from './sphere.js';
 import { initStudio } from './studio.js';
 import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles, LOOK_NEUTRAL } from './presets.js';
+import { smoothFactor, SMOOTH } from './adjust.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -109,7 +110,9 @@ function reliefBands(st, W) {
   const form = st.physical ? mix(r.form, 0) : 0, formSize = r.formSize ?? 1;
   const depth = Math.max(1e-6, st.textureDepthMm / Math.max(1, st.paintingWidthCm * 10));
   const formScale = form * FORM_GAIN * (st.reliefScale * FORM_OUTER * formSize / Math.max(1, W)) / depth;
-  return { fine: mix(r.fine, 1), mid: mix(r.mid, 1), form, formSize, formScale };
+  // Smooth lowers the fine band on top of Fine detail (adjust.js SMOOTH).
+  const fine = mix(r.fine, 1) * (1 - (1 - SMOOTH.fine) * smoothFactor(st));
+  return { fine, mid: mix(r.mid, 1), form, formSize, formScale };
 }
 // The tallest relief the bands can make, in units of the relief as set: the bands'
 // largest multiplier plus the form layer's spread. Bounds shadow reach.

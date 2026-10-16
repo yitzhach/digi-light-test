@@ -621,8 +621,24 @@ await ev(()=>{__bench.state.adjust.curves.rgb=[[0,0],[1,1]];});await slider('adj
  await slider('adj-relief-formSize',1);await slider('adj-relief-form',0);await settle();await same(base,'Broad form 0 is none');
  const v=await ev(()=>{const t=r=>{const s=__studio.snapshot();s.adjust={relief:r};try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).adjust.relief;}catch{return null;}};
    return {old:t({on:1,amount:2}),bad:t({form:4}),badSize:t({formSize:-0.05}),zeroSize:t({formSize:0})};});
- assert.deepEqual(v.old,{on:1,amount:2,fine:1,mid:1,form:0,formSize:1},'older saves open with the bands neutral');assert.equal(v.bad,null);assert.equal(v.badSize,null);assert.equal(v.zeroSize?.formSize,0,'Broad size 0 saves');
+ assert.deepEqual(v.old,{on:1,amount:2,fine:1,mid:1,form:0,formSize:1,smooth:0},'older saves open with the bands neutral');assert.equal(v.bad,null);assert.equal(v.badSize,null);assert.equal(v.zeroSize?.formSize,0,'Broad size 0 saves');
  console.log('PASS Relief (3D) bands: fine, mid, broad form and size, tiled export, eye, validate');}
+// Relief (3D) › Smooth lowers the fine band (and the graze grit / Stroke definition) without moving
+// their sliders; Lift darks brightens the darks most. Both 0 = none, both hidden by their eye.
+{await slider('adj-relief-smooth',1);const sp=await pixels();assert.notEqual(sp,base,'Smooth changes the relief');
+ assert.ok(Math.abs(await ev(()=>{__bench.render();return __bench.state.reliefBands.fine;})-.45)<1e-9,'Smooth 100% = fine band 45%');assert.equal(await ev(()=>__bench.state.adjust.relief.fine),1,'Fine detail slider untouched');
+ await page.click('#adj-relief .eye');await settle();await same(base,'Relief eye hides Smooth');await page.click('#adj-relief .eye');await settle();await same(sp);
+ await slider('adj-relief-smooth',0);await settle();await same(base,'Smooth 0 is none');
+ const dark=()=>ev(()=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);const d=x.getImageData(0,0,c.width,c.height).data;
+   const Y=[];for(let i=0;i<d.length;i+=4)Y.push(.2126*d[i]+.7152*d[i+1]+.0722*d[i+2]);Y.sort((a,b)=>a-b);return [Y[Y.length*.05|0],Y[Y.length*.95|0]];});
+ const [d0,b0]=await dark();await slider('adj-lift-amount',1);const lp=await pixels();assert.notEqual(lp,base);const [d1,b1]=await dark();
+ assert.ok(d1-d0>12&&d1-d0>2*(b1-b0),'Lift darks lifts the darks most '+JSON.stringify([d0,d1,b0,b1]));
+ await page.click('#adj-lift .eye');await settle();await same(base,'Lift darks eye');await page.click('#adj-lift .eye');await settle();await same(lp);
+ await slider('adj-lift-amount',0);await settle();await same(base,'Lift darks 0 is none');
+ const v=await ev(()=>{const t=a=>{const s=__studio.snapshot();s.adjust=a;try{return __studio.validate({format:'digilight',version:1,image:'data:image/png;base64,',settings:s}).adjust;}catch{return null;}};
+   return {old:t({relief:{on:1}})?.lift,bad:t({lift:{amount:3}}),badS:t({relief:{smooth:2}})};});
+ assert.deepEqual(v.old,{on:1,amount:0},'older saves open with Lift darks at 0');assert.equal(v.bad,null);assert.equal(v.badS,null);
+ console.log('PASS Relief (3D) Smooth and Lift darks: match the sliders, eyes, 0 = none, validate');}
 // Overlays: grain adds texture to the painting and exports at the size it previews; vignette darkens corners; the master eye hides all.
 await page.click('#ov-grain .eye');await settle();const gr=await pixels();assert.notEqual(gr,base);const tg=await tone();assert.ok(tg.centre.sd>t0.centre.sd+1,'grain '+JSON.stringify([t0.centre.sd,tg.centre.sd]));
 await slider('ov-grain-seed',7);assert.notEqual(await pixels(),gr,'seed changes the pattern');await slider('ov-grain-seed',1);

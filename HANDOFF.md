@@ -221,10 +221,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
      Fine detail 0.45, Stroke definition 0.25; (c "extra smooth") 0.1 / 0.8 / 0.5 / 0.25 / 0.1.
      Sent 01b, 05b, 06b/c, 07b/c. **User's favourites (10-16): 05b, 06b, 07b** (Your favourite +
      steel lift; Raking texture / Long shadows + steel lift + "smooth" de-grit). Sent them as full-res
-     JPGs + .digilight.json projects. Idea to ask: a built-in "Smooth" option (the b de-grit values)
-     for low-relief pieces, and/or a "Lift darks" control for dark materials like the steel.
+     JPGs + .digilight.json projects. User said yes to both ideas → DONE (10-16): Colour ›
+     **Relief (3D) › Smooth** and **Lift darks** (see Done recently). Ask how they feel on the site.
      The photo isn't in the repo; ask the user to re-attach it if the session is new.
-- Last updated: 2026-10-16 (steel + plaster piece rendered in the cloud; DigiLight MCP in cloud sessions; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
+- Last updated: 2026-10-16 (Smooth + Lift darks controls; steel + plaster piece rendered in the cloud; DigiLight MCP in cloud sessions; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
   round S** sent to the user, plus a review page for it and R1 (see Test rounds). **Next chat: read
@@ -354,6 +354,14 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-16 (pushed to `main`): **Smooth** (Relief (3D) › Smooth, `adjust.relief.smooth` 0–100%) and
+  **Lift darks** (new Colour adjustment `adjust.lift.amount` 0–200%). Smooth scales, without moving
+  their sliders: one-photo fine band ×(1−0.55s) (app.js reliefBands), graze Fine ×(1−0.7s), Stroke
+  definition ×(1−0.5s), Clean / Softness move 50% / 19% of the way to 100% (adjust.js SMOOTH,
+  smoothGraze; shade.js). Lift darks a: c' = 0.05a + (1−0.05a)·c^(1/(1+0.6a)) at the start of the
+  Colour chain (100% = Levels gamma 1.6 + out black 0.05). Both faded by the Colour eye/Opacity.
+  Smooth 100% + Lift 100% on the steel piece's 06/07 match the user's 06b/07b (mean |diff| 0.7 /
+  1.7 levels, same steel brightness). tests/browser.cjs covers both.
 - 10-16 (pushed to `main`): **DigiLight in cloud sessions** — `.mcp.json` (digilight MCP server,
   `tools/mcp-start.sh`), `.claude/settings.json` SessionStart hook (`tools/install-deps.sh`, locked
   so hook and launcher never install at once; exports DIGILIGHT_BROWSER), docs/automation.md › In

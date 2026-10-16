@@ -15,7 +15,7 @@
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
 import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, SHADE_SHAPES, isLamp } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
-import { ADJUST_GLSL, setAdjustUniforms, curveLUT } from './adjust.js';
+import { ADJUST_GLSL, setAdjustUniforms, curveLUT, smoothFactor, smoothGraze, SMOOTH } from './adjust.js';
 import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
@@ -748,12 +748,14 @@ export class Shader {
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading
     // contrast goes as slope / tan(elevation), so its weight goes as tan(elevation).
     const fineDeg = GRAZE_FINE_DEG * Math.PI / 180;
+    // Relief (3D) › Smooth calms the graze light's grit too (adjust.js smoothGraze).
+    const smooth = smoothFactor(state), gs = smoothGraze(g, smooth);
     // Clean shadows: heights are in units of the relief's measured spread, so the
     // dead zone follows how much of the relief the estimate can be trusted with.
-    gl.uniform1f(u.uGrazeBias, state.calibrated ? (g?.clean ?? 0) * GRAZE_CLEAN_MAX * state.heightScale * state.reliefAmount : 0);
+    gl.uniform1f(u.uGrazeBias, state.calibrated ? gs.clean * GRAZE_CLEAN_MAX * state.heightScale * state.reliefAmount : 0);
     gl.uniform1f(u.uGrazeReach, state.grazeReach ?? state.shadowDist);
-    gl.uniform1f(u.uGrazeSize, grazeSize(g?.soft ?? 0));
-    gl.uniform1f(u.uGrazeFine, (g?.fine ?? 1) * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
+    gl.uniform1f(u.uGrazeSize, grazeSize(gs.soft));
+    gl.uniform1f(u.uGrazeFine, gs.fine * Math.min(1, Math.tan(gEl) / Math.tan(fineDeg)));
 
     // Keep greys neutral: each path's camera is balanced toward the mix of light that
     // path puts on the painting, so mixed lights still differ (a warm key over a cool
@@ -769,7 +771,7 @@ export class Shader {
     // Stroke definition needs its smoothed relief (GBuffer buildStroke) and the
     // spread of the band it leaves (app.js measures it on the preview; export tiles reuse it).
     const strokeOn = state.viewMode === 0 || state.viewMode === 7;
-    gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) * colourShare : 0);
+    gl.uniform1f(u.uStrokeDef, strokeOn && targets.stroke && state.strokeSpread > 0 ? Math.min(1, Math.max(0, state.strokeDef ?? 0)) * (1 - (1 - SMOOTH.stroke) * smooth) * colourShare : 0);
     gl.uniform1f(u.uStrokeGain, state.strokeSpread > 0 ? 1 / state.strokeSpread : 0);
     const sd = strokeLamp(lights, aspect);
     gl.uniform2f(u.uStrokeStep, sd.x * (state.strokeSigmaPx || 0), sd.y * (state.strokeSigmaPx || 0));
