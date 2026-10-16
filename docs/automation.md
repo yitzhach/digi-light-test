@@ -172,6 +172,21 @@ It runs on a computer (Mac, Windows or Linux), not on a phone.
    claude mcp add digilight -- node /Users/you/digi-light-test/tools/digilight-mcp.cjs
    ```
 
+### Older Macs (macOS 11 Big Sur, 12 Monterey)
+
+Checked 2026-10 (for example a 2014 iMac, which stops at Big Sur):
+
+- **The Claude desktop app and Claude Code need macOS 13 (Ventura) or later**, so on Big Sur
+  or Monterey there is no Claude on that computer to add the MCP server to. Use DigiLight's
+  website as usual, or let Claude run DigiLight for you in a Claude Code session on the web
+  (claude.ai/code, this repository): it runs the same tools in the cloud.
+- The command line tool (`digilight-cli.cjs`) still works there:
+  - **Node.js 22** (LTS until April 2027). Node 24 and later need macOS 13.5, so pick the
+    **v22** macOS installer on https://nodejs.org/en/download, not the newest one.
+  - `tools/package.json` pins **Playwright 1.53.2**, whose Chromium (138) is the last that
+    runs on macOS 11 (Chrome 139 dropped Big Sur). Keep that pin; `npm install` and
+    `npx playwright install chromium` then fetch the right one.
+
 Optional settings go in an `"env"` block in the config (or `-e NAME=value` with `claude mcp add`):
 `DIGILIGHT_GPU=1` uses the graphics card (much faster if it works on your computer; leave it
 out if previews come back blank), `DIGILIGHT_URL` runs the live site instead of the files

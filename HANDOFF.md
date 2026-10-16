@@ -54,7 +54,7 @@ update this file (mark the phase DONE, note what the next chat needs).
   URL params + `?bridge` postMessage, `docs/automation.md`, `tools/digilight-cli.cjs`. The MCP server
   came after, in Phase 4b.
 - Phase 4b — DONE (10-15, on `main`; see Done recently): MCP server `tools/digilight-mcp.cjs`.
-  **Ask the user** what computer they have (Mac / Windows) and walk them through docs/automation.md
+  (10-16: user's Mac is Big Sur, too old for Claude desktop; see Status 4.) Was: ask the user what computer they have (Mac / Windows) and walk them through docs/automation.md
   › MCP server › Set it up (Node, download the repo, `cd tools && npm install && npx playwright
   install chromium`, the Claude desktop config entry). Not tried on a real Mac/Windows yet; whether
   `DIGILIGHT_GPU=1` works there is untested.
@@ -194,12 +194,16 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   3. **Review pages:** always give the user the **direct link** (e.g.
      https://claude.ai/artifact/N9ceUJPQ3Ui5HeQoWHbeh5); they compare full-res images there.
      R1 is settled by their own graze (above); round S (AI match) still unrated.
-  4. **MCP setup:** user has a **2014 iMac**. Those top out at macOS Big Sur (11); check their
-     macOS version first: current Node LTS and Playwright's Chromium may need macOS 12+, so pick
-     an older Node / Playwright that still runs there, then walk them through docs/automation.md.
+  4. **MCP setup — BLOCKED on the user's Mac (10-16):** 2014 iMac, **macOS Big Sur** (user
+     confirmed). The Claude desktop app and Claude Code both need **macOS 13**, so there is no
+     Claude on that Mac to add the MCP server to. Done: tools/package.json pins Playwright
+     **1.53.2** (Chromium 138, last for Big Sur; tests/mcp.cjs passes), docs/automation.md ›
+     Older Macs (Node 22, not 24 which needs 13.5). Asked the user which way: (a) Claude runs
+     DigiLight for them in a cloud session (claude.ai/code, as it already does for test rounds),
+     (b) the CLI only on the iMac, (c) wait for a newer Mac. Do not suggest OpenCore patching.
   5. The user pushes to `main` (no session branches); a `claude/...` branch the cloud session
      makes can be ignored.
-- Last updated: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
+- Last updated: 2026-10-16 (Big Sur: Playwright pin 1.53.2, docs Older Macs). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
   round S** sent to the user, plus a review page for it and R1 (see Test rounds). **Next chat: read
@@ -329,6 +333,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-16 (pushed to `main`): **Big Sur** — tools/package.json pins Playwright 1.53.2 (was ^1.56.1;
+  Chromium 138 is the last for macOS 11), docs/automation.md › Older Macs. tests/mcp.cjs passes.
 - 10-16 (pushed to `main`): **Your favourite** built-in look (presets.js FAVOURITE; LOOK_KEYS now
   also carries surface, shadow and layer keys, copied with structuredClone) and **Broad soft
   raking** as the default graze (every graze preset now names its Shadow lift, 0 except this one).
