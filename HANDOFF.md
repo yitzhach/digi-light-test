@@ -219,7 +219,10 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
      Levels gamma 1.6 + output black 0.05 (steel mean 22 → 57–62, photo 60; plaster 160 → ~200,
      photo 199); de-grit (b "smooth") = graze.fine 0.25, graze.clean 0.65, graze.soft 0.35, Relief
      Fine detail 0.45, Stroke definition 0.25; (c "extra smooth") 0.1 / 0.8 / 0.5 / 0.25 / 0.1.
-     Sent 01b, 05b, 06b/c, 07b/c. Waiting on picks.
+     Sent 01b, 05b, 06b/c, 07b/c. **User's favourites (10-16): 05b, 06b, 07b** (Your favourite +
+     steel lift; Raking texture / Long shadows + steel lift + "smooth" de-grit). Sent them as full-res
+     JPGs + .digilight.json projects. Idea to ask: a built-in "Smooth" option (the b de-grit values)
+     for low-relief pieces, and/or a "Lift darks" control for dark materials like the steel.
      The photo isn't in the repo; ask the user to re-attach it if the session is new.
 - Last updated: 2026-10-16 (steel + plaster piece rendered in the cloud; DigiLight MCP in cloud sessions; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
