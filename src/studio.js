@@ -854,7 +854,7 @@ export function initStudio(api) {
     }
     let items=[],active=0,shown=[];
     function go(item){
-      const el=item.el;input.value='';close();tools.reveal(el);
+      const el=item.el;input.value='';close();openSearch(false);tools.reveal(el);
       if(el.closest('#studioToolbar')){el.focus();flash(el);return;}
       const pane=el.closest('.subPane');if(pane)showPane(pane.dataset.pane);
       if(el.closest('.subTabs'))showPane(el.dataset.pane);
@@ -879,7 +879,7 @@ export function initStudio(api) {
     function mark(){[...listEl.children].forEach((li,i)=>li.classList.toggle('on',i===active&&shown.length>0));}
     input.addEventListener('focus',()=>{items=index();update();});
     input.addEventListener('input',update);
-    input.addEventListener('blur',()=>setTimeout(()=>{close();if(!input.value&&document.activeElement!==input)openSearch(false);},150));
+    input.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement===input)return;close();if(!input.value)openSearch(false);},150));
     input.addEventListener('keydown',e=>{
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!shown.length)return;active=(active+(e.key==='ArrowDown'?1:-1)+shown.length)%shown.length;mark();listEl.children[active].scrollIntoView({block:'nearest'});}
       else if(e.key==='Enter'||e.key==='Tab'&&shown.length&&!listEl.hidden){if(shown[active]){e.preventDefault();go(shown[active]);}}

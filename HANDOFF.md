@@ -182,19 +182,25 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- **User, 10-16 (in the Phase 3b chat), NEXT CHAT START HERE:**
-  1. **De-light albedo:** of the crops original / De-light 0.7 / 0.4 / 0 (red panel, Gallery +
-     crisp settings), the user said **0 and the original look best**. Do: `albedoSuppress` 0 in
-     `CRISP` (auto.js); show before/after on the red panel; ask whether new photos (app.js state
-     0.7, FINE_DEFAULTS in studio.js) and the Matched looks (presets.js ROUND1 0.7) should go to 0
-     too, or offer a visible "Photo detail" slider. Watch for doubled baked shading under low /
-     graze light; update tests that assume 0.7.
-  2. **Raking round R1:** the user could not judge it from the contact sheet and crops: "I would
-     need to see them full screen and go A/B to see differences". The review page
-     N9ceUJPQ3Ui5HeQoWHbeh5 (set Raking) may already do this. Check its `ratings` first; if
-     none, point the user to it and make sure it gives full screen plus a quick A↔B flip
-     between two chosen variants (pairs, not 8 at once). Then set the default graze.
-- Last updated: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
+- **User, 10-16 (later chat), NEXT CHAT START HERE:**
+  1. **User's current favourite:** a project they made by hand (red panel), settings saved as
+     `tools/batches/user-best-10-16.settings.json` (image left out): one 4000 K lamp upper left
+     (x .3, y 1.05, z .8, power 4.5), graze 129° / elev 4 / opacity .63 / lift .13, a Pin light
+     layer of the original at 88%, Texture size 5, strength 3.24, De-light 0.2, depth 3.7 mm,
+     Fine .55 / Mid 1.1 / Broad .55, ambient .22, no colour/strokes. Next: make it a built-in look
+     (or default for Auto), and use it as the base for rounds instead of Matched 05–07. Ask first.
+  2. **De-light:** `CRISP.albedoSuppress` is now 0 (done, see Done recently). Still ask: new photos
+     (app.js 0.7, studio.js FINE_DEFAULTS 0.7) and Matched looks (presets.js 0.7) to 0 too? Note
+     the user's own favourite uses 0.2.
+  3. **Raking round R1:** the user wants a **direct link** to the review page each time; they
+     compare full-res images side by side there. Give the link (artifact N9ceUJPQ3Ui5HeQoWHbeh5,
+     set Raking) and read its ratings next chat.
+  4. **MCP setup:** user has a **2014 iMac**. Those top out at macOS Big Sur (11); check their
+     macOS version first: current Node LTS and Playwright's Chromium may need macOS 12+, so pick
+     an older Node / Playwright that still runs there, then walk them through docs/automation.md.
+  5. The user pushes to `main` (no session branches); a `claude/...` branch the cloud session
+     makes can be ignored.
+- Last updated: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
   round S** sent to the user, plus a review page for it and R1 (see Test rounds). **Next chat: read
@@ -324,6 +330,10 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-16 (pushed to `main`): **De-light 0 in the crisp looks** (`CRISP.albedoSuppress` 0.4 → 0,
+  user's pick of 0.7 / 0.4 / 0). Also fixed **tool search**: picking a hit now closes the search
+  bar (it stayed open), and the bar's delayed blur no longer wipes the list after it is
+  re-focused; this was what failed tests/browser.cjs line 33. All tests pass.
 - 10-15 (pushed to `main`): **iPhone page zoom + finicky sliders** (user: the screen often zooms
   in a bit when selecting tools or after a double tap, then needs a pinch out; sliders "not as
   responsive as they could be"). Zoom: `html { touch-action: manipulation }` (no double-tap zoom;

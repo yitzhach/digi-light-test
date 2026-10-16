@@ -21,10 +21,10 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // The biases are measured on the painting sample (10-15) so that there each look lands
 // at the exposure it was made or approved at (Gallery 0, Matched 07 +0.6, Matched 05
 // +0.35, the rest 0); on another photo the same offset from its own brightness holds.
-// albedoSuppress (De-light) 0.4, not the default 0.7: measured on the red panel (10-15) the
-// default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63;
-// the user still found these looks "a bit blurry" with 0.7.
-export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0.4 };
+// albedoSuppress (De-light) 0, not the default 0.7: measured on the red panel (10-15) the
+// default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63,
+// 0 keeps 0.92. The user found 0.7 "a bit blurry"; of 0.7 / 0.4 / 0 they picked 0 (10-16).
+export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0 };
 export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.

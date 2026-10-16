@@ -1,0 +1,265 @@
+{
+ "note": "User's favourite (10-16), red panel photo; image omitted (settings only)",
+ "format": "digilight",
+ "version": 1,
+ "id": "4c1c7fb2-cd62-4626-b0cc-aa34f60c3766",
+ "name": "Untitled painting",
+ "updated": 1792116972757,
+ "settings": {
+  "reliefScale": 5,
+  "azimuthDeg": 141,
+  "integrateTaps": 8,
+  "reliefStrength": 3.2375,
+  "chromaReject": 0.85,
+  "albedoSuppress": 0.2,
+  "reliefAmount": 1,
+  "heightScale": 0.006166666666666667,
+  "roughness": 0.72,
+  "specular": 0.45,
+  "shadow": 0.85,
+  "shadowSpread": 4,
+  "ao": 0.4,
+  "ambient": 0.22,
+  "exposure": 0.04,
+  "neutralWB": 0,
+  "vibrance": 0,
+  "roomKelvin": 6500,
+  "strokeDef": 0,
+  "strokeSize": 0.01,
+  "strokeDir": 0,
+  "fineRelief": 0.55,
+  "mediumRelief": 1.1,
+  "broadRelief": 0.55,
+  "neutralize": 0,
+  "metallic": 0,
+  "shadowSoftness": 0.2,
+  "highlightRolloff": 0.7,
+  "meanLuma": 0.25,
+  "shadowDetail": 0.004,
+  "physical": 1,
+  "paintingWidthCm": 60,
+  "textureDepthMm": 3.7,
+  "photoDiffuse": 0.6,
+  "strokes": [],
+  "layers": [
+   {
+    "mode": "pinLight",
+    "source": "original",
+    "opacity": 0.88,
+    "enabled": true
+   }
+  ],
+  "originalTop": 0.07,
+  "graze": {
+   "enabled": true,
+   "angle": 129,
+   "elevation": 4,
+   "opacity": 0.63,
+   "detail": 0.02,
+   "fine": 0.15,
+   "reach": 1,
+   "clean": 0.55,
+   "soft": 0.4,
+   "lift": 0.13
+  },
+  "layersOn": 1,
+  "adjust": {
+   "on": 0,
+   "opacity": 1,
+   "relief": {
+    "on": 1,
+    "amount": 1,
+    "fine": 1,
+    "mid": 1,
+    "form": 0,
+    "formSize": 1
+   },
+   "brightness": {
+    "on": 1,
+    "brightness": 0,
+    "contrast": 0
+   },
+   "levels": {
+    "on": 1,
+    "inBlack": 0,
+    "gamma": 1,
+    "inWhite": 1,
+    "outBlack": 0,
+    "outWhite": 1
+   },
+   "curves": {
+    "on": 1,
+    "rgb": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "r": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "g": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "b": [
+     [
+      0,
+      0
+     ],
+     [
+      1,
+      1
+     ]
+    ]
+   },
+   "exposure": {
+    "on": 1,
+    "exposure": 0,
+    "offset": 0,
+    "gamma": 1
+   },
+   "vibrance": {
+    "on": 1,
+    "saturation": 0
+   },
+   "hueSat": {
+    "on": 1,
+    "hue": 0,
+    "saturation": 0,
+    "lightness": 0
+   },
+   "balance": {
+    "on": 1,
+    "sCR": 0,
+    "sMG": 0,
+    "sYB": 0,
+    "mCR": 0,
+    "mMG": 0,
+    "mYB": 0,
+    "hCR": 0,
+    "hMG": 0,
+    "hYB": 0,
+    "preserve": 1
+   },
+   "bw": {
+    "on": 0,
+    "reds": 40,
+    "yellows": 60,
+    "greens": 40,
+    "cyans": 60,
+    "blues": 20,
+    "magentas": 80,
+    "tint": 0,
+    "tintHue": 35,
+    "tintSat": 0.25
+   },
+   "mixer": {
+    "on": 1,
+    "rR": 100,
+    "rG": 0,
+    "rB": 0,
+    "rC": 0,
+    "gR": 0,
+    "gG": 100,
+    "gB": 0,
+    "gC": 0,
+    "bR": 0,
+    "bG": 0,
+    "bB": 100,
+    "bC": 0,
+    "mono": 0
+   }
+  },
+  "overlays": {
+   "on": 0,
+   "grain": {
+    "on": 0,
+    "opacity": 0.35,
+    "size": 1,
+    "colour": 0,
+    "seed": 1,
+    "mode": "overlay"
+   },
+   "vignette": {
+    "on": 0,
+    "opacity": 0.5,
+    "size": 0.45,
+    "feather": 0.55,
+    "hex": "#000000",
+    "mode": "multiply"
+   },
+   "leak": {
+    "on": 0,
+    "opacity": 0.5,
+    "angle": 45,
+    "size": 0.55,
+    "hex": "#ff8a3d",
+    "mode": "screen"
+   },
+   "window": {
+    "on": 0,
+    "opacity": 0.55,
+    "angle": 135,
+    "soft": 0.8,
+    "reach": 0.2,
+    "hex": "#fff3e0",
+    "mode": "softLight"
+   },
+   "pool": {
+    "on": 0,
+    "opacity": 0.6,
+    "x": 0.5,
+    "y": 0.55,
+    "size": 0.38,
+    "soft": 0.6,
+    "surround": 0.5,
+    "hex": "#ffe2b3",
+    "mode": "softLight"
+   }
+  },
+  "fineHidden": null,
+  "lights": [
+   {
+    "x": 0.3,
+    "y": 1.05,
+    "z": 0.8,
+    "power": 4.5,
+    "kelvin": 4000,
+    "cone": 0.3,
+    "softness": 0.55,
+    "falloff": 2,
+    "aimX": 0.5,
+    "aimY": 0.5,
+    "size": 0.03,
+    "lift": 0,
+    "hex": "#ffffff",
+    "useKelvin": true,
+    "enabled": true,
+    "rgb": [
+     1.4148051023120236,
+     0.9237991688420305,
+     0.5333970871557289
+    ]
+   }
+  ],
+  "selected": 0
+ }
+}
