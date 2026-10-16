@@ -211,7 +211,8 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   6. **New piece (10-16): steel + plaster**, 17 in (43.2 cm) wide, texture 1–3 mm (user). Plaster
      top, two dark steel plates with a weld seam below. Analyze: even light, depth fit 4.3 mm (too
      deep vs the user's 1–3 mm, so every look was re-rendered at 2 mm), rake 131°. Sent a sheet
-     of the 9 looks + full size 06 Raking texture, 07 Long shadows, 08 Soft window. Claude's read:
+     of the 9 looks + full size 06 Raking texture, 07 Long shadows, 08 Soft window; full-res review page of all 9 + the photo:
+     https://claude.ai/artifact/FAARtq3vLRypeB9ENxW1om . Claude's read:
      06/07 show the plaster best; every look renders darker/greyer than the photo and the steel
      loses its sheen (try exposure +, metallic on the steel via a layer mask). Waiting on picks.
      The photo isn't in the repo; ask the user to re-attach it if the session is new.
