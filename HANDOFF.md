@@ -202,9 +202,20 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
      tools/digilight-cli.cjs.** The user attaches photos in chat; send results with
      SendUserFile or a review page. Local CLI later, when they get a newer Mac (Node 22 +
      Playwright 1.53.2 pin also covers Big Sur, docs/automation.md › Older Macs).
-  5. The user pushes to `main` (no session branches); a `claude/...` branch the cloud session
-     makes can be ignored.
-- Last updated: 2026-10-16 (DigiLight MCP in cloud sessions: .mcp.json + SessionStart hook; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
+  5. The user pushes to `main` (no session branches). Push to `main` only, never to the session's
+     `claude/...` branch (the user asked, 10-16, to get rid of it; the session's git proxy refuses
+     branch deletes, so the user deletes them on GitHub › Branches). Branches identical to / merged
+     into main (safe to delete): affectionate-cori, batch-preview, compassionate-bardeen,
+     great-brown, handoff-continuation, laughing-gates, quirky-rubin, relaxed-euler,
+     feature/metrology, dreamy-euler.
+  6. **New piece (10-16): steel + plaster**, 17 in (43.2 cm) wide, texture 1–3 mm (user). Plaster
+     top, two dark steel plates with a weld seam below. Analyze: even light, depth fit 4.3 mm (too
+     deep vs the user's 1–3 mm, so every look was re-rendered at 2 mm), rake 131°. Sent a sheet
+     of the 9 looks + full size 06 Raking texture, 07 Long shadows, 08 Soft window. Claude's read:
+     06/07 show the plaster best; every look renders darker/greyer than the photo and the steel
+     loses its sheen (try exposure +, metallic on the steel via a layer mask). Waiting on picks.
+     The photo isn't in the repo; ask the user to re-attach it if the session is new.
+- Last updated: 2026-10-16 (steel + plaster piece rendered in the cloud; DigiLight MCP in cloud sessions; Big Sur Playwright pin). Before: 2026-10-16 (De-light 0, search fix). Before: 2026-10-15. Last code change: **iPhone zoom + touch sliders** (see Done recently);
   ask the user whether the iPhone still zooms by itself and whether sliders feel better (not
   tried on a real iPhone, only Chromium phone emulation). Before that (handoff only): **AI-match
   round S** sent to the user, plus a review page for it and R1 (see Test rounds). **Next chat: read
