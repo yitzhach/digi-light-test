@@ -178,14 +178,28 @@ Checked 2026-10 (for example a 2014 iMac, which stops at Big Sur):
 
 - **The Claude desktop app and Claude Code need macOS 13 (Ventura) or later**, so on Big Sur
   or Monterey there is no Claude on that computer to add the MCP server to. Use DigiLight's
-  website as usual, or let Claude run DigiLight for you in a Claude Code session on the web
-  (claude.ai/code, this repository): it runs the same tools in the cloud.
+  website as usual, or let Claude run DigiLight for you in the cloud (next section).
 - The command line tool (`digilight-cli.cjs`) still works there:
   - **Node.js 22** (LTS until April 2027). Node 24 and later need macOS 13.5, so pick the
     **v22** macOS installer on https://nodejs.org/en/download, not the newest one.
   - `tools/package.json` pins **Playwright 1.53.2**, whose Chromium (138) is the last that
     runs on macOS 11 (Chrome 139 dropped Big Sur). Keep that pin; `npm install` and
     `npx playwright install chromium` then fetch the right one.
+
+### In the cloud (claude.ai/code)
+
+Any computer or phone works: start a Claude Code session on this repository at
+claude.ai/code (or the Code tab of the Claude app) and attach your photos to a message, for
+example *"Relight this with a soft raking light from the left and send me the full-size
+image."* The repository sets this up by itself:
+
+- `.mcp.json` adds the DigiLight MCP server (`tools/mcp-start.sh`), so Claude has the tools
+  in the table below in every session on this repository.
+- `.claude/settings.json` runs `.claude/hooks/session-start.sh` when a cloud session starts:
+  it installs the tools' packages (`tools/install-deps.sh`) and sets `DIGILIGHT_BROWSER` to the
+  session's Chromium, so the CLI and `tools/render-batch.cjs` work too.
+
+Claude sends the results back as files in the chat, or as a review page to compare looks.
 
 Optional settings go in an `"env"` block in the config (or `-e NAME=value` with `claude mcp add`):
 `DIGILIGHT_GPU=1` uses the graphics card (much faster if it works on your computer; leave it

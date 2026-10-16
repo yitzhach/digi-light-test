@@ -7,3 +7,5 @@ CLAUDE.md
 HANDOFF.md
 .wrangler
 tools
+.claude
+.mcp.json
