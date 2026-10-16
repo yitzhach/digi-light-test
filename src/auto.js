@@ -20,12 +20,12 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // Exposure: each look puts the render's mean brightness at the photo's times 2^bias.
 // The biases are measured on the painting sample (10-15) so that there each look lands
 // at the exposure it was made or approved at (Gallery 0, Matched 07 +0.6, Matched 05
-// +0.35, the rest 0); on another photo the same offset from its own brightness holds.
+// +0.35, Your favourite +0.04, the rest 0); on another photo the same offset from its own brightness holds.
 // albedoSuppress (De-light) 0, not the default 0.7: measured on the red panel (10-15) the
 // default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63,
 // 0 keeps 0.92. The user found 0.7 "a bit blurry"; of 0.7 / 0.4 / 0 they picked 0 (10-16).
 export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0 };
-export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
+export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.64, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
@@ -176,13 +176,14 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
   // they sharpen stroke edges and take off the lamps' colour cast.
   const crisp = (s) => Object.assign(s, CRISP);
   const graze = (s, preset, opacity) => { Object.assign(s.graze, grazePresets[preset], { enabled: true, angle: A.rake, grey: 0 }); if (opacity != null) s.graze.opacity = opacity; delete s.graze.lamp; };
-  const look = (s, name, rake) => { const k = looks[name]; s.lights = k.lights.map(makeLight); for (const key of LOOK_KEYS) if (key in k) s[key] = k[key];
+  const look = (s, name, rake) => { const k = looks[name]; s.lights = k.lights.map(makeLight); for (const key of LOOK_KEYS) if (key in k) s[key] = clone(k[key]);
     if (k.graze) { Object.assign(s.graze, k.graze, { enabled: true }); if (rake) s.graze.angle = A.rake; delete s.graze.lamp; } else s.graze.enabled = false; };
   const BUILT_IN = [
     ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
     ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
     ['Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
     ['Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
+    ['Your favourite', 'Your own look (10-16): gallery lamp, low raking graze, Pin light photo layer', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
     ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
     ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
     ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],

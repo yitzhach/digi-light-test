@@ -219,12 +219,25 @@ const SPOT = (z = 0.45, power = 4) => [L(1.22, 0.75, z, power, 4300, 0, 0.5, 0.0
 const RAKE25 = (opacity = 0.3) => ({ enabled: true, angle: 25, elevation: 3, opacity });
 const ROUND1 = { ambient: 0.06, highlightRolloff: 1, exposure: 0.35, neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, strokeSize: 0.01,
   roomKelvin: ROOM_NEUTRAL_K, reliefScale: 3, fineRelief: 0.65, albedoSuppress: 0.7, graze: null, lights: SPOT() };
-export const LOOK_KEYS = ['ambient', 'highlightRolloff', 'exposure', 'reliefScale', 'fineRelief', 'albedoSuppress', ...Object.keys(LOOK_NEUTRAL)];
+// The user's own favourite (10-16, made by hand on the red panel; settings in
+// tools/batches/user-best-10-16.settings.json): the Gallery track lamp with a low raking
+// graze, a Pin light layer of the photo at 88%, bigger texture with less fine detail.
+// It names more than the matched looks (surface, shadow, layers), so LOOK_KEYS carries those too;
+// a look without them leaves them as they are.
+const FAVOURITE = { ambient: 0.22, highlightRolloff: 0.7, exposure: 0.04, ...LOOK_NEUTRAL,
+  reliefScale: 5, reliefStrength: 3.2375, chromaReject: 0.85, albedoSuppress: 0.2, fineRelief: 0.55, mediumRelief: 1.1, broadRelief: 0.55,
+  roughness: 0.72, specular: 0.45, shadow: 0.85, shadowSoftness: 0.2,
+  layers: [{ mode: 'pinLight', source: 'original', opacity: 0.88, enabled: true }], layersOn: 1, originalTop: 0.07,
+  graze: { enabled: true, angle: 129, elevation: 4, opacity: 0.63, detail: 0.02, fine: 0.15, reach: 1, clean: 0.55, soft: 0.4, lift: 0.13 },
+  lights: [L(0.3, 1.05, 0.8, 4.5, 4000, 0.3, 0.55, 0.03)] };
+export const LOOK_KEYS = ['ambient', 'highlightRolloff', 'exposure', 'reliefScale', 'fineRelief', 'albedoSuppress', ...Object.keys(LOOK_NEUTRAL),
+  'reliefStrength', 'chromaReject', 'mediumRelief', 'broadRelief', 'roughness', 'specular', 'shadow', 'shadowSoftness', 'layers', 'layersOn', 'originalTop'];
 export const looks = {
   'Raking graze (05)':             { ...ROUND1, graze: RAKE25() },
   'Softer lamp (06)':              { ...ROUND1, lights: [L(1.22, 0.75, 0.45, 4, 4300, 0, 0.5, 0.08)] },
   'Brighter (07)':                 { ...ROUND1, exposure: 0.6 },
   'Lower lamp (09)':               { ...ROUND1, lights: SPOT(0.3, 3.5) },
+  'Your favourite (10-16)':        FAVOURITE,
 };
 
 export class History {

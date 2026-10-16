@@ -560,6 +560,11 @@ const lk=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enable
 assert.deepEqual(lk,{g:true,op:.3,z:.45,rs:3,al:.7,sd:.5,exp:.35},'matched look '+JSON.stringify(lk));
 await page.selectOption('#lookPreset','Brighter (07)');await settle();assert.equal(await page.evaluate(()=>__bench.state.graze.enabled),false);assert.equal(await setting('exposure'),.6);
 await page.click('#undo');await settle();assert.equal(await setting('exposure'),.35);
+await page.selectOption('#lookPreset','Your favourite (10-16)');await settle();
+{const f=await page.evaluate(()=>{const s=__bench.state;const r={layers:JSON.stringify(s.layers),top:s.originalTop,g:[s.graze.enabled,s.graze.elevation,s.graze.opacity],rs:s.reliefScale,al:s.albedoSuppress,sd:s.strokeDef,exp:s.exposure};s.layers[0].opacity=0.1;return r;});
+ assert.deepEqual(f,{layers:JSON.stringify([{mode:'pinLight',source:'original',opacity:0.88,enabled:true}]),top:.07,g:[true,4,.63],rs:5,al:.2,sd:0,exp:.04},'favourite look '+JSON.stringify(f));
+ await page.selectOption('#lookPreset','');await page.selectOption('#lookPreset','Your favourite (10-16)');await settle();assert.equal(await page.evaluate(()=>__bench.state.layers[0].opacity),.88,'the look is copied, not shared');
+ await page.click('#undo');await settle();await page.click('#undo');await settle();}
 await page.evaluate(()=>Object.assign(__bench.state,{neutralWB:0,vibrance:0,roomKelvin:6500,strokeDef:0,strokeSize:.01}));await page.evaluate(()=>document.dispatchEvent(new Event('digilight:settings')));await settle();
 console.log('PASS colour & strokes: no-op when neutral, greys neutral, vibrance spares greys, room light colour, stroke definition exports as previewed, saved and validated, Gallery spot preset, matched looks',JSON.stringify({cast:[+cast(s0).toFixed(2),+cast(s1).toFixed(2)],sat:[+s1.red.sat.toFixed(3),+s2.red.sat.toFixed(3)],sd:[+s0.grey.sd.toFixed(1),+k1.grey.sd.toFixed(1)],export:+ex.mean.toFixed(3),tiled:+tiledEx.toFixed(3)}));}
 // Phase 3 — Colour tool adjustments, eyes, Opacity; overlays (grain, vignette, …); Fine-tune and
