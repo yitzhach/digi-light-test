@@ -109,7 +109,7 @@ export function initStudio(api) {
     b.setAttribute('aria-label', b.title);
     $('photoCompass').append(b);
   }
-  const GRAZE_DEFAULT = { enabled: false, angle: 180, ...grazePresets['Classic raking'] };
+  const GRAZE_DEFAULT = { enabled: false, angle: 180, lift: 0, ...grazePresets['Broad soft raking'] };
   // physical, paintingWidthCm, textureDepthMm and photoDiffuse drive calibrated relief
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { ...LOOK_NEUTRAL, fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,

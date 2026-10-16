@@ -158,15 +158,18 @@ export function lampAngles(lamp, widthCm, aspect, u = 0.5, v = 0.5) {
 export const grazeSize = (soft) => GRAZE_SIZE + Math.min(1, Math.max(0, soft)) * (GRAZE_SIZE_MAX - GRAZE_SIZE);
 
 // Graze presets: starting points for common looks. Each keeps the light's direction;
-// a new graze light starts as Classic raking. Lower angles need more Detail and Clean
+// a new graze light starts as Broad soft raking. Lower angles need more Detail and Clean
 // shadows, or grain turns into glitter.
 export const grazePresets = {
-  'Gentle raking':               { elevation: 6,   detail: 0.006, fine: 1,   reach: 1, clean: 0.15, soft: 0.2, opacity: 0.6 },
-  'Classic raking':              { elevation: 3,   detail: 0.01,  fine: 0.8, reach: 1, clean: 0.3,  soft: 0.2, opacity: 0.75 },
-  'Long shadows':                { elevation: 1.5, detail: 0.01,  fine: 0.6, reach: 1, clean: 0.15, soft: 0.15, opacity: 0.9 },
-  'Long shadows, clean surface': { elevation: 1,   detail: 0.012, fine: 0.5, reach: 1, clean: 0.3,  soft: 0.15, opacity: 0.9 },
-  'Soft strip light':            { elevation: 2.5, detail: 0.01,  fine: 0.7, reach: 1, clean: 0.3,  soft: 0.5, opacity: 0.8 },
-  'Every detail (raw)':          { elevation: 3,   detail: 0,     fine: 1,   reach: 1, clean: 0,    soft: 0,   opacity: 0.75 },
+  'Gentle raking':               { elevation: 6,   detail: 0.006, fine: 1,   reach: 1, clean: 0.15, soft: 0.2, opacity: 0.6, lift: 0 },
+  // The user's own raking light (10-16, from their favourite look): broader shadows only,
+  // little fine glitter, a softer source and a cleaner surface; the default for a new graze light.
+  'Broad soft raking':           { elevation: 4,   detail: 0.02,  fine: 0.15, reach: 1, clean: 0.55, soft: 0.4, opacity: 0.63, lift: 0.13 },
+  'Classic raking':              { elevation: 3,   detail: 0.01,  fine: 0.8, reach: 1, clean: 0.3,  soft: 0.2, opacity: 0.75, lift: 0 },
+  'Long shadows':                { elevation: 1.5, detail: 0.01,  fine: 0.6, reach: 1, clean: 0.15, soft: 0.15, opacity: 0.9, lift: 0 },
+  'Long shadows, clean surface': { elevation: 1,   detail: 0.012, fine: 0.5, reach: 1, clean: 0.3,  soft: 0.15, opacity: 0.9, lift: 0 },
+  'Soft strip light':            { elevation: 2.5, detail: 0.01,  fine: 0.7, reach: 1, clean: 0.3,  soft: 0.5, opacity: 0.8, lift: 0 },
+  'Every detail (raw)':          { elevation: 3,   detail: 0,     fine: 1,   reach: 1, clean: 0,    soft: 0,   opacity: 0.75, lift: 0 },
 };
 
 // Blend layers: copies of the photo composited over the relit result, the way an

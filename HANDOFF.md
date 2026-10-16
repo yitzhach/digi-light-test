@@ -183,18 +183,17 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 
 ## Status
 - **User, 10-16 (later chat), NEXT CHAT START HERE:**
-  1. **User's current favourite:** a project they made by hand (red panel), settings saved as
-     `tools/batches/user-best-10-16.settings.json` (image left out): one 4000 K lamp upper left
-     (x .3, y 1.05, z .8, power 4.5), graze 129° / elev 4 / opacity .63 / lift .13, a Pin light
-     layer of the original at 88%, Texture size 5, strength 3.24, De-light 0.2, depth 3.7 mm,
-     Fine .55 / Mid 1.1 / Broad .55, ambient .22, no colour/strokes. Next: make it a built-in look
-     (or default for Auto), and use it as the base for rounds instead of Matched 05–07. Ask first.
+  1. **User's favourite = built-in look, DONE (10-16):** `Your favourite (10-16)` in Colour ›
+     Matched looks and `Your favourite` in Auto (graze turned across the strokes, LOOK_BIAS −0.64
+     so it lands at exp +0.04 on the painting sample). Its raking light is now the **default graze**
+     (`Broad soft raking`, GRAZE_DEFAULT), which settles raking round R1 (no stars were given;
+     the user's own graze points the same way as R1 #4/#5/#7). Ask how it looks on other photos.
   2. **De-light:** `CRISP.albedoSuppress` is now 0 (done, see Done recently). Still ask: new photos
      (app.js 0.7, studio.js FINE_DEFAULTS 0.7) and Matched looks (presets.js 0.7) to 0 too? Note
      the user's own favourite uses 0.2.
-  3. **Raking round R1:** the user wants a **direct link** to the review page each time; they
-     compare full-res images side by side there. Give the link (artifact N9ceUJPQ3Ui5HeQoWHbeh5,
-     set Raking) and read its ratings next chat.
+  3. **Review pages:** always give the user the **direct link** (e.g.
+     https://claude.ai/artifact/N9ceUJPQ3Ui5HeQoWHbeh5); they compare full-res images there.
+     R1 is settled by their own graze (above); round S (AI match) still unrated.
   4. **MCP setup:** user has a **2014 iMac**. Those top out at macOS Big Sur (11); check their
      macOS version first: current Node LTS and Playwright's Chromium may need macOS 12+, so pick
      an older Node / Playwright that still runs there, then walk them through docs/automation.md.
@@ -330,6 +329,9 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-16 (pushed to `main`): **Your favourite** built-in look (presets.js FAVOURITE; LOOK_KEYS now
+  also carries surface, shadow and layer keys, copied with structuredClone) and **Broad soft
+  raking** as the default graze (every graze preset now names its Shadow lift, 0 except this one).
 - 10-16 (pushed to `main`): **De-light 0 in the crisp looks** (`CRISP.albedoSuppress` 0.4 → 0,
   user's pick of 0.7 / 0.4 / 0). Also fixed **tool search**: picking a hit now closes the search
   bar (it stayed open), and the bar's delayed blur no longer wipes the list after it is
