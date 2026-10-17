@@ -187,10 +187,13 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   lintel; not in the repo, ask to re-attach) rendered with 01/04/05 plus "b" = heightScale 0.001,
   relief.smooth 0.4, relief.fine 0.5, relief.form 1, lift.amount 0.4. Review page:
   https://claude.ai/artifact/SyQNL84Roazo5e7Qpuh18n . Ask for picks.
-  **Speed (user asked):** the MCP `analyze` times out at 60 s (it takes ~190 s without a GPU) and every
-  CLI `render --look` re-runs Analyze, so 12 renders took ~40 min. Fix next: cache the analysis per
-  image (hash) in the headless server / CLI, a batch mode (one analyze, many looks/--set variants
-  in one run), MCP analyze as a background job, and maybe a smaller analysis size.
+  **Speed, DONE (10-17):** `digilight-cli.cjs batch photo --jobs jobs.json` runs Analyze once, then
+  each job from the opened settings (6 renders of a 1000×1500 photo: 6 min, was ~20 min). MCP
+  `analyze` / `apply_look` run Analyze in the background and answer `stillAnalyzing` within 45 s
+  (call again to keep waiting), so the 60 s tool timeout no longer kills it. CLI `--set` now
+  applies after `--look`. Timings (software GL, 4 CPUs): Analyze ~140 s, look + full export
+  ~15 s, ~60 s with Broad form on (wide tile margin). Never run CLIs in parallel (4 CPUs: slower).
+  Ideas if more is needed: cache the analysis per photo on disk; Broad form's margin in export.
 - **User, 10-16 (later chat), NEXT CHAT START HERE:**
   1. **User's favourite = built-in look, DONE (10-16):** `Your favourite (10-16)` in Colour ›
      Matched looks and `Your favourite` in Auto (graze turned across the strokes, LOOK_BIAS −0.64

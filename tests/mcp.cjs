@@ -91,13 +91,15 @@ const full = process.argv.includes('--full');
     console.log('PASS export_image (file, width), save_project, open_project');
 
     if (full) {
-      const a = (await ok('analyze')).json();
+      // Analyze answers within 45 s; while it runs in the background it says so, and calling again keeps waiting.
+      let a = (await ok('analyze')).json(), rounds = 1;
+      while (a.stillAnalyzing) { assert.ok(/still running/.test((await ok("list_looks")).t), 'list_looks while analyzing'); a = (await ok('analyze')).json(); rounds++; }
       assert.ok(a.looks.length >= 8 && a.depthMm > 0, JSON.stringify(a).slice(0, 300));
       const looks = (await ok('list_looks')).json();
       const r = (await ok('apply_look', { look: looks[1].name, strength: 0.5 })).json();
       assert.deepEqual(r, { look: looks[1].name, strength: 0.5 });
       assert.ok(progress > 0, 'progress notifications during analyze');
-      console.log(`PASS analyze (${a.looks.length} looks, ${progress} progress beats), apply_look`);
+      console.log(`PASS analyze (${a.looks.length} looks, ${rounds} calls, ${progress} progress beats), apply_look`);
     }
   } finally {
     await client.close();

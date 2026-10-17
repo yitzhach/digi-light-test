@@ -113,9 +113,10 @@ node tools/digilight-cli.cjs <command> <input> [options]
 
 - **input**: a photo path or http(s) URL, a `.digilight.json` project, or `sample:painting` / `sample:dsc8382`
 - **commands**: `info`, `analyze` (JSON readout and looks), `describe` (settable paths),
-  `get` (settings after the options; `--path a.b` for one), `render` (writes `--out`)
-- **options**, applied in this order: `--preset kind:name` (repeatable), `--set "a=1;b.c=2"` or
-  JSON (repeatable), `--look NAME|N --strength 0..1`; output: `--out FILE.png|.jpg|.webp`,
+  `get` (settings after the options; `--path a.b` for one), `render` (writes `--out`),
+  `batch` (many renders from one Analyze, see below)
+- **options**, applied in this order: `--preset kind:name` (repeatable), `--look NAME|N
+  --strength 0..1`, then `--set "a=1;b.c=2"` or JSON (repeatable; after the look, so it wins); output: `--out FILE.png|.jpg|.webp`,
   `--width N` (else full size), `--preview` (the preview size), `--quality`, `--save-project FILE`
 
 ```
@@ -124,9 +125,21 @@ node tools/digilight-cli.cjs render photo.jpg --look "Matched + raking" --streng
 node tools/digilight-cli.cjs render project.digilight.json --preset "graze:Classic raking" --width 2000 --out raking.jpg
 ```
 
-Prints JSON on stdout; on an error prints it on stderr and exits 1. Full-size exports and
-Analyze are slow in software GL (no GPU): about a minute to start and render, 2–3 minutes
-for Analyze on a 2000 px photo.
+Prints JSON on stdout; on an error prints it on stderr and exits 1. Analyze is slow in
+software GL (no GPU): 2–3 minutes. A full-size export of a 1000×1500 photo takes ~10 s, or
+~60 s with Broad form on (its blur widens every tile's margin).
+
+**Several looks or variants of one photo: use `batch`.** Each `render --look` runs its own
+Analyze; `batch` runs it once and then renders every job from the settings the photo
+opened with (~10 s each instead of ~3 min each). Run one CLI at a time: parallel runs share
+the CPUs and are slower in total.
+
+```
+node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
+```
+`jobs.json`: `[{"out": "01.jpg", "look": 0}, {"out": "05b.jpg", "look": 4, "set": "adjust.relief.smooth=0.4", "quality": 0.9}]`
+(each job: `out`, and any of `look`, `strength`, `preset` (`kind:name` or a list), `set`
+(string, object or a list), `width`, `preview`, `quality`). Prints one JSON line per file.
 
 ## MCP server
 
@@ -213,7 +226,7 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `open_image` | opens a photo (path, URL, `.digilight.json`, or `sample:painting` / `sample:dsc8382`) |
 | `open_project` | opens a saved `.digilight.json` project |
 | `info` | photo and preview size, undo/redo available |
-| `analyze` | Analyze: tone, light, strokes, depth, raking direction and the looks for this photo (1–3 min without a GPU) |
+| `analyze` | Analyze: tone, light, strokes, depth, raking direction and the looks for this photo (1–3 min without a GPU). Runs in the background: if it is not done within 45 s it answers `stillAnalyzing`, and calling `analyze` (or `apply_look`) again keeps waiting on the same run, so assistants that give up on a tool after 60 s still get there |
 | `list_looks` / `apply_look` | the looks from Analyze; apply one by name or number, `strength` 0–1 |
 | `add_light` / `remove_light` | a lamp, or a Shadow light (`shade`: a soft shadow; `negative`: a lamp in reverse) |
 | `list_presets` / `apply_preset` | fixed lighting scenes, graze (raking) presets, matched looks |

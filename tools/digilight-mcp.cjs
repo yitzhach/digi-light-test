@@ -60,6 +60,25 @@ function tool(fn) {
     } finally { if (beat) clearInterval(beat); }
   };
 }
+// Analyze takes 1–3 minutes without a GPU, longer than many assistants wait for one tool
+// call (often 60 s). So it runs in the background: analyze / apply_look wait up to WAIT_MS,
+// then say it is still running; calling again picks up the same run.
+const WAIT_MS = 45000;
+let analyzing = null;
+function startAnalyze(call) {
+  if (!analyzing) {
+    const t0 = Date.now();
+    const a = analyzing = { t0, p: call('analyze') };
+    a.p.catch(() => {}).finally(() => { if (analyzing === a) analyzing = null; });
+  }
+  return analyzing;
+}
+async function waitAnalyze(call) {
+  const a = startAnalyze(call);
+  const r = await Promise.race([a.p, new Promise((res) => setTimeout(() => res(null), WAIT_MS))]);
+  return r || { stillAnalyzing: true, seconds: Math.round((Date.now() - a.t0) / 1000),
+    next: 'Analyze is still running in the background (1–3 minutes without a GPU). Call analyze (or apply_look) again to keep waiting.' };
+}
 const needOpen = async (call) => { if (!(await call('info')).photo) throw new Error('No photo open yet. Use open_image first.'); };
 
 const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
@@ -97,7 +116,7 @@ server.registerTool('analyze', {
   title: 'Analyze the photo',
   description: 'Analyze (the app\'s Auto section): tone, how the photo was lit, stroke direction, suggested texture depth and raking direction, and the one-tap looks made for this photo. Slow without a GPU (1–3 minutes). Needed before apply_look.',
   inputSchema: {},
-}, tool(async ({ call }) => { await needOpen(call); return call('analyze'); }));
+}, tool(async ({ call }) => { await needOpen(call); return waitAnalyze(call); }));
 
 server.registerTool('list_looks', {
   title: 'List looks',
@@ -105,7 +124,7 @@ server.registerTool('list_looks', {
   inputSchema: {},
 }, tool(async ({ call }) => {
   const looks = await call('looks');
-  return looks.length ? looks : 'No looks yet: run analyze first.';
+  return looks.length ? looks : analyzing ? `Analyze is still running (${Math.round((Date.now() - analyzing.t0) / 1000)} s so far); call analyze to wait for it.` : 'No looks yet: run analyze first.';
 }));
 
 server.registerTool('apply_look', {
@@ -115,7 +134,11 @@ server.registerTool('apply_look', {
     look: z.union([z.string(), z.number().int()]).describe('Look name (from list_looks) or index'),
     strength: z.number().min(0).max(1).optional().describe('0–1, default 1'),
   },
-}, tool(async ({ call }, { look, strength }) => { await needOpen(call); return call('applyLook', look, { strength: strength ?? 1 }); }));
+}, tool(async ({ call }, { look, strength }) => {
+  await needOpen(call);
+  if (!(await call('looks')).length || analyzing) { const r = await waitAnalyze(call); if (r.stillAnalyzing) return r; }
+  return call('applyLook', look, { strength: strength ?? 1 });
+}));
 
 server.registerTool('list_presets', {
   title: 'List presets',
