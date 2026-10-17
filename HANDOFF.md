@@ -182,6 +182,15 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-17, NEXT CHAT START HERE:** liked looks 01 Gallery, 04 Matched + raking, 05 Your
+  favourite; the others "have a motion blur look". Two new plaster-door photos (red lintel, wooden
+  lintel; not in the repo, ask to re-attach) rendered with 01/04/05 plus "b" = heightScale 0.001,
+  relief.smooth 0.4, relief.fine 0.5, relief.form 1, lift.amount 0.4. Review page:
+  https://claude.ai/artifact/SyQNL84Roazo5e7Qpuh18n . Ask for picks.
+  **Speed (user asked):** the MCP `analyze` times out at 60 s (it takes ~190 s without a GPU) and every
+  CLI `render --look` re-runs Analyze, so 12 renders took ~40 min. Fix next: cache the analysis per
+  image (hash) in the headless server / CLI, a batch mode (one analyze, many looks/--set variants
+  in one run), MCP analyze as a background job, and maybe a smaller analysis size.
 - **User, 10-16 (later chat), NEXT CHAT START HERE:**
   1. **User's favourite = built-in look, DONE (10-16):** `Your favourite (10-16)` in Colour ›
      Matched looks and `Your favourite` in Auto (graze turned across the strokes, LOOK_BIAS −0.64
