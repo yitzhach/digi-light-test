@@ -169,6 +169,23 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     if (!auto.analysis) throw new Error($('autoReadout')?.textContent || 'Analyze failed.');
     return summary();
   }
+  // The analysis for a cache (tools/digilight-headless.cjs), tagged with what it was made
+  // from: the settings Analyze started from and the preview size. setAnalysis refuses one
+  // made from anything else (it would be another photo's or another setup's looks).
+  const analysisKey = (from = settings()) => JSON.stringify([from, api.canvas.width, api.canvas.height, info().measuredRelief]);
+  function getAnalysis() {
+    const saved = auto.save();
+    if (!saved) throw new Error('No analysis yet: call analyze() first.');
+    return { format: 'digilight-analysis', version: API_VERSION, key: analysisKey(saved.base), analysis: saved };
+  }
+  async function setAnalysis(c) {
+    needPhoto();
+    c = typeof c === 'string' ? JSON.parse(c) : c;
+    if (c?.format !== 'digilight-analysis' || c.version !== API_VERSION || !Array.isArray(c.analysis?.items)) throw new Error('Not a DigiLight analysis.');
+    if (c.key !== analysisKey()) throw new Error('This analysis was made for another photo or other settings.');
+    await auto.load(c.analysis);
+    return summary();
+  }
   async function applyLook(which, opts = {}) {
     if (!auto.analysis) await analyze();
     const list = auto.analysis.items;
@@ -237,6 +254,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     get: (path) => (path == null ? settings() : clone(getPath(snapshot(), path) ?? null)),
     load: serial(load), set: serial(async (p, v) => set(p, v)), setSettings: serial(async (s) => { apply({ ...settings(), ...s }); return settings(); }),
     analyze: serial(analyze), looks, applyLook: serial(applyLook),
+    getAnalysis: serial(async () => getAnalysis()), setAnalysis: serial(setAnalysis),
     presets: () => Object.fromEntries(Object.entries(presets).map(([k, t]) => [k, [...t.names]])), applyPreset: serial(async (k, n) => applyPreset(k, n)),
     addLight: serial(async (k, p) => addLight(k, p)), removeLight: serial(async (i) => removeLight(i)),
     undo: serial(async () => step('undo')), redo: serial(async () => step('redo')),

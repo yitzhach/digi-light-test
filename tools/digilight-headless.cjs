@@ -93,4 +93,39 @@ async function preview(page, call, maxSize = 800, quality = 0.85) {
   }, [url, maxSize, quality]);
 }
 
-module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview };
+// Analyze, cached on disk: DIGILIGHT_CACHE (default ~/.cache/digilight/analysis; "0" = off).
+// The file name hashes the app's code (src/), the input (a file's bytes, else its name) and
+// the page's own key (the settings and preview size the analysis starts from), so a change
+// to any of them misses. A hit loads in a second or two instead of 1–3 minutes.
+const crypto = require('crypto');
+const os = require('os');
+const sha = (...parts) => { const h = crypto.createHash('sha256'); for (const p of parts) h.update(p); return h.digest('hex'); };
+let codeHash = null;
+function code() {
+  if (!codeHash) {
+    const dir = path.join(ROOT, 'src');
+    codeHash = sha(...fs.readdirSync(dir).sort().map((f) => f + fs.readFileSync(path.join(dir, f), 'utf8')));
+  }
+  return codeHash;
+}
+function cacheDir() {
+  const v = process.env.DIGILIGHT_CACHE;
+  return v === '0' ? null : v || path.join(os.homedir(), '.cache', 'digilight', 'analysis');
+}
+const inputId = (input) => { input = String(input || ''); return !/^(sample:|https?:)/.test(input) && fs.existsSync(input) ? sha(fs.readFileSync(input)) : input; };
+
+/** Analyze the open photo (opened from `input`), from the cache when it can. Returns the summary with cached: true|false. */
+async function analyzeCached(call, input, opts = {}) {
+  const dir = cacheDir();
+  if (!dir || input == null) return { ...(await call('analyze')), cached: false };
+  const info = await call('info');
+  const file = path.join(dir, sha(code(), inputId(input), JSON.stringify([await call('settings'), info.preview, info.measuredRelief])) + '.json');
+  if (!opts.fresh && fs.existsSync(file)) {
+    try { return { ...(await call('setAnalysis', fs.readFileSync(file, 'utf8'))), cached: true }; } catch { /* stale or broken: analyze again */ }
+  }
+  const out = await call('analyze');
+  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify(await call('getAnalysis'))); } catch { /* read-only disk: no cache */ }
+  return { ...out, cached: false };
+}
+
+module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached };

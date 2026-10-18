@@ -46,7 +46,13 @@ await page.click('#autoAnalyze');await page.waitForFunction(()=>__studio.auto.an
 const A=await page.evaluate(()=>{const A=__studio.auto.analysis;return {depth:A.depth,rake:A.rake,n:A.items.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:document.querySelector('#autoLooks canvas').width,
   lines:document.querySelectorAll('#autoReadout .autoLine').length,items:A.items.map(i=>({name:i.name,kind:i.kind,exp:i.settings.exposure,depth:i.settings.textureDepthMm,g:i.settings.graze.enabled,angle:i.settings.graze.angle,width:i.settings.paintingWidthCm}))};});
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),pre,'Analyze leaves the settings as they were');assert.equal(await page.evaluate(()=>__studio.history.index),hist);assert.equal(await pixels(),px0);
-assert.ok(A.n>=9&&A.tiles===A.n&&A.thumbW===240&&A.lines===5,JSON.stringify(A));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
+assert.ok(A.n>=9&&A.tiles===A.n&&A.thumbW===240&&A.lines===5,JSON.stringify(A));
+// The analysis saved for the tools' disk cache and loaded back: same looks, no heightmap; refused for other settings.
+const rt=await page.evaluate(async()=>{const dl=window.digilight,c=JSON.parse(JSON.stringify(await dl.getAnalysis())),was=__studio.auto.analysis,size=JSON.stringify(c).length;
+  const s=await dl.setAnalysis(JSON.stringify(c)),now=__studio.auto.analysis;let other='';try{const k=JSON.parse(c.key);k[0].exposure+=1;await dl.setAnalysis({...c,key:JSON.stringify(k)});}catch(e){other=e.message;}
+  return {size,hm:'hm' in (c.analysis.strokes||{}),same:JSON.stringify(now.items.map(i=>i.settings))===JSON.stringify(was.items.map(i=>i.settings))&&now.rake===was.rake&&now.depth===was.depth,
+    looks:s.looks.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:now.items[0].thumb.width,other};});
+assert.ok(rt.same&&!rt.hm&&rt.size<2e6&&rt.looks===A.n&&rt.tiles===A.n&&rt.thumbW===240&&/another photo or other settings/.test(rt.other),JSON.stringify(rt));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
 const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
 await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
@@ -66,7 +72,7 @@ const mix=await page.evaluate(async()=>{const {mixSettings}=await import('/src/a
   angle:mixSettings({...a,graze:{...a.graze,enabled:true}},b,.5).graze.angle};});
 assert.deepEqual(mix,{n:2,x:.5,p:[3,4],g:[10,.4],layers:1,strokes:1,angle:0},JSON.stringify(mix));
 await page.evaluate(p=>{__studio.restore(JSON.parse(p));__studio.checkpoint();},pre);await settle();
-console.log('PASS Auto: Analyze leaves settings, looks for this photo, pick, Strength mix, Undo, saved preset adapted',JSON.stringify({depth:A.depth,rake:A.rake,looks:A.n}));}
+console.log('PASS Auto: Analyze leaves settings, looks for this photo, saved and loaded (cache), pick, Strength mix, Undo, saved preset adapted',JSON.stringify({depth:A.depth,rake:A.rake,looks:A.n}));}
 await page.selectOption('#lightingPreset','Raking light');await settle();const after=await pixels();
 await page.click('#compare');await settle();const before=await pixels();assert.notEqual(after,before);assert.equal(await setting('viewMode'),4);
 await page.click('#compare');await settle();assert.equal(await pixels(),after);

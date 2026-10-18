@@ -182,6 +182,12 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-18, NEXT CHAT START HERE:** plaster doors: **Your favourite (05) is the best on
+  both**, but "the blacks were crushed maybe a little too much and need to be lifted slightly".
+  In progress: a slight lift for the Your favourite look (ambient / shadow / graze.lift, or
+  the Colour tool's Lift darks), measured on the sample painting; the door photos must be
+  re-attached to check on them. **Speed, DONE (10-18): Analyze is cached on disk** (CLI + MCP,
+  see Done recently): same photo again = ~13 s for the whole CLI run instead of ~137 s.
 - **User, 10-17, NEXT CHAT START HERE:** liked looks 01 Gallery, 04 Matched + raking, 05 Your
   favourite; the others "have a motion blur look". Two new plaster-door photos (red lintel, wooden
   lintel; not in the repo, ask to re-attach) rendered with 01/04/05 plus "b" = heightScale 0.001,
@@ -366,6 +372,17 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-18 (pushed to `main`): **Analyze cache.** `tools/digilight-headless.cjs analyzeCached`:
+  CLI (`analyze`, `render --look`, `batch`) and MCP (`analyze`, `apply_look`) keep each finished
+  Analyze in `~/.cache/digilight/analysis/<sha256(src/ code, input bytes, settings + preview
+  size)>.json` (~0.5 MB; the stroke heightmap `strokes.hm`, 37 MB, is left out). `--fresh`
+  re-runs; `DIGILIGHT_CACHE=dir|0`. Page side: auto.js `save()` / `load()` (thumbs as JPEG),
+  automation.js `getAnalysis()` / `setAnalysis()` (key = settings Analyze started from
+  (`A.base`) + preview size + measured relief; refuses a mismatch). Sample painting: 137 s → 13 s
+  (browser start-up is most of the 13 s). Look settings from the cache are identical to a fresh
+  Analyze; the render differs by mean 0.6/255 (speckle in fine texture, max 49): a fresh
+  Analyze leaves some GPU state behind; cached = the same as opening the settings as a project.
+  tests/browser.cjs (Auto) covers the round trip. docs/automation.md documents it.
 - 10-16 (pushed to `main`): **Smooth** (Relief (3D) › Smooth, `adjust.relief.smooth` 0–100%) and
   **Lift darks** (new Colour adjustment `adjust.lift.amount` 0–200%). Smooth scales, without moving
   their sliders: one-photo fine band ×(1−0.55s) (app.js reliefBands), graze Fine ×(1−0.7s), Stroke

@@ -141,6 +141,15 @@ node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
 (each job: `out`, and any of `look`, `strength`, `preset` (`kind:name` or a list), `set`
 (string, object or a list), `width`, `preview`, `quality`). Prints one JSON line per file.
 
+**Analyze is cached on disk.** The CLI and the MCP server keep each finished Analyze in
+`~/.cache/digilight/analysis` (one ~0.5 MB file per photo), so analyzing the same photo
+again, from the same starting settings and the same app code, loads in a second or two
+instead of 2–3 minutes (the JSON says `"cached": true`). Any change to the photo, the
+settings it starts from or the app's `src/` misses and analyzes again. `--fresh` forces a
+new Analyze; `DIGILIGHT_CACHE=/some/folder` moves the cache, `DIGILIGHT_CACHE=0` turns it
+off. In the page: `digilight.getAnalysis()` / `digilight.setAnalysis(saved)` (refused when
+the saved one was made from other settings).
+
 ## MCP server
 
 **What it is, in plain words.** MCP (Model Context Protocol) is the way an AI assistant

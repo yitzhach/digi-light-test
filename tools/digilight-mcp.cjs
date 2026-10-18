@@ -16,7 +16,7 @@ const path = require('path');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
-const { parseSets, fromDataURL, cleanError, launch, openInput, preview } = require('./digilight-headless.cjs');
+const { parseSets, fromDataURL, cleanError, launch, openInput, preview, analyzeCached } = require('./digilight-headless.cjs');
 
 const log = (...a) => process.stderr.write('[digilight] ' + a.join(' ') + '\n');
 const FORMATS = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp' };
@@ -29,8 +29,8 @@ function page() {
   if (!session) {
     log('starting headless DigiLight…');
     session = launch().then((s) => {
-      s.page.on('close', () => { session = null; });
-      s.page.context().browser().on('disconnected', () => { session = null; });
+      s.page.on('close', () => { session = null; opened = null; });
+      s.page.context().browser().on('disconnected', () => { session = null; opened = null; });
       log('ready');
       return s;
     }, (e) => { session = null; throw e; });
@@ -64,11 +64,13 @@ function tool(fn) {
 // call (often 60 s). So it runs in the background: analyze / apply_look wait up to WAIT_MS,
 // then say it is still running; calling again picks up the same run.
 const WAIT_MS = 45000;
-let analyzing = null;
+// A finished Analyze is kept on disk per photo (digilight-headless.cjs), so analyzing a
+// photo again, in this chat or a later one, comes back at once.
+let analyzing = null, opened = null;
 function startAnalyze(call) {
   if (!analyzing) {
     const t0 = Date.now();
-    const a = analyzing = { t0, p: call('analyze') };
+    const a = analyzing = { t0, p: analyzeCached(call, opened) };
     a.p.catch(() => {}).finally(() => { if (analyzing === a) analyzing = null; });
   }
   return analyzing;
@@ -94,7 +96,13 @@ server.registerTool('open_image', {
   title: 'Open a photo',
   description: 'Opens a photo of a painting (replacing the current one) and runs auto setup. source: an absolute path to a .jpg/.png/.webp on this computer, an http(s) image URL, a .digilight.json project, or sample:painting / sample:dsc8382 (built-in samples). Returns the photo and preview sizes.',
   inputSchema: { source: z.string().describe('Photo path, URL, .digilight.json project, or sample:painting / sample:dsc8382') },
-}, tool(async ({ call }, { source }) => openInput(call, /^(sample:|https?:)/.test(source) ? source : filePath(source))));
+}, tool(async ({ call }, { source }) => {
+  const input = /^(sample:|https?:)/.test(source) ? source : filePath(source);
+  opened = null;
+  const out = await openInput(call, input);
+  opened = input;
+  return out;
+}));
 
 server.registerTool('open_project', {
   title: 'Open a project',
@@ -103,7 +111,10 @@ server.registerTool('open_project', {
 }, tool(async ({ call }, { path: p }) => {
   const f = filePath(p);
   if (!fs.existsSync(f)) throw new Error(`No such file: ${f}`);
-  return call('setProject', fs.readFileSync(f, 'utf8'));
+  opened = null;
+  const out = await call('setProject', fs.readFileSync(f, 'utf8'));
+  opened = f;
+  return out;
 }));
 
 server.registerTool('info', {
@@ -114,7 +125,7 @@ server.registerTool('info', {
 
 server.registerTool('analyze', {
   title: 'Analyze the photo',
-  description: 'Analyze (the app\'s Auto section): tone, how the photo was lit, stroke direction, suggested texture depth and raking direction, and the one-tap looks made for this photo. Slow without a GPU (1–3 minutes). Needed before apply_look.',
+  description: 'Analyze (the app\'s Auto section): tone, how the photo was lit, stroke direction, suggested texture depth and raking direction, and the one-tap looks made for this photo. Slow without a GPU (1–3 minutes) the first time; a photo analyzed before (same settings) comes back from the cache in seconds (cached: true). Needed before apply_look.',
   inputSchema: {},
 }, tool(async ({ call }) => { await needOpen(call); return waitAnalyze(call); }));
 

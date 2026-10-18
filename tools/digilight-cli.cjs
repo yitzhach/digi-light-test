@@ -22,17 +22,19 @@
 //   --set "a=1;graze.opacity=0.5"   or JSON '{"exposure":0.3}' (repeatable; after the look, so it wins)
 //   --out FILE (.png/.jpg/.webp)  --width N  --preview  --quality 0..1
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
+//   --fresh   Analyze again even if the cache has this photo (DIGILIGHT_CACHE: the cache
+//             folder, default ~/.cache/digilight/analysis; 0 turns it off)
 // Exit code 1 with the error on stderr when anything fails.
 const fs = require('fs');
 const path = require('path');
-const { parseSets, fromDataURL, cleanError, launch, openInput } = require('./digilight-headless.cjs');
+const { parseSets, fromDataURL, cleanError, launch, openInput, analyzeCached } = require('./digilight-headless.cjs');
 
 function parseArgs(argv) {
   const o = { _: [], set: [], preset: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (k === 'set' || k === 'preset') o[k].push(v); else o[k] = v;
@@ -40,13 +42,13 @@ function parseArgs(argv) {
   return o;
 }
 
-// Preset(s), then the look, then the --set changes. applyLook analyzes only when the page
-// has no analysis yet, so `analyze` asks for a (re)run explicitly.
-async function dress(call, j, analyze) {
+// Preset(s), then the look, then the --set changes. Analyze (from the disk cache when it
+// can, see digilight-headless.cjs) runs for `analyze`, or for a look when the page has none.
+async function dress(call, j, analyze, src = {}) {
   const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
   for (const p of list(j.preset)) { const i = p.indexOf(':'); if (i < 1) throw new Error('--preset is kind:name'); await call('applyPreset', p.slice(0, i), p.slice(i + 1)); }
   let analysis = null;
-  if (analyze) analysis = await call('analyze');
+  if (analyze || (j.look != null && !(await call('looks')).length)) analysis = await analyzeCached(call, src.input, src);
   if (j.look != null) await call('applyLook', /^\d+$/.test(String(j.look)) ? +j.look : j.look, { strength: j.strength != null ? +j.strength : 1 });
   const sets = list(j.set);
   if (sets.length) {
@@ -72,9 +74,9 @@ function readJobs(file) {
 }
 
 // Analyze once (the page keeps it), then each job from the settings the photo opened with.
-async function runJobs(call, jobs) {
+async function runJobs(call, jobs, src) {
   const base = await call('settings');
-  if (jobs.some((j) => j.look != null)) { const t = Date.now(); await call('analyze'); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s\n`); }
+  if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   for (const j of jobs) {
     const t = Date.now();
     await call('setSettings', base);
@@ -87,7 +89,7 @@ async function runJobs(call, jobs) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 25).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 27).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
@@ -96,9 +98,10 @@ async function main() {
   const { call, errors, close } = await launch({ port: +(o.port || 0) });
   try {
     await openInput(call, input);
+    const src = { input, fresh: !!o.fresh };
 
-    if (jobs) { await runJobs(call, jobs); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
-    const analysis = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set }, cmd === 'analyze');
+    if (jobs) { await runJobs(call, jobs, src); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
+    const analysis = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set }, cmd === 'analyze', src);
 
     let out;
     if (cmd === 'info') out = await call('info');

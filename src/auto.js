@@ -341,6 +341,23 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     const ot = $('originalTop'); if (ot) { ot.value = state.originalTop; ot.nextElementSibling.textContent = `${Math.round(state.originalTop * 100)}%`; }
     api.render();
   };
+  // The analysis as plain JSON (thumbnails as small JPEGs), and back: tools cache it on
+  // disk per photo, so a second Analyze of the same photo and settings is instant.
+  function save() {
+    if (!A) return null;
+    const strokes = A.strokes && (({ hm, ...rest }) => rest)(A.strokes);   // not the heightmap (tens of MB)
+    return { ...clone({ ...A, strokes, items: [] }), items: A.items.map(({ thumb, ...it }) => ({ ...clone(it), thumb: thumb.toDataURL('image/jpeg', 0.8) })) };
+  }
+  async function load(saved) {
+    if (running) throw new Error('Analyze is running.');
+    const items = await Promise.all(saved.items.map(async ({ thumb, ...it }) => {
+      const im = new Image(); im.src = thumb; await im.decode();
+      const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0);
+      return { ...clone(it), thumb: c };
+    }));
+    A = { ...clone({ ...saved, items: [] }), items }; active = null;
+    $('autoStrength').disabled = true; drawLooks(); readout();
+  }
   $('autoAnalyze').onclick = () => analyze();
   $('autoUndo').onclick = () => $('undo').click();
   // A new photo makes the looks stale.
@@ -349,5 +366,5 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     A = null; active = null; drawLooks(); $('autoStrength').disabled = true;
     status('New photo: Analyze to make looks for it.');
   });
-  return { analyze, pick, get analysis() { return A; }, get active() { return active; }, setStrength: (s) => { if (active) { $('autoStrength').value = s; apply(s); } } };
+  return { analyze, save, load, pick, get analysis() { return A; }, get active() { return active; }, setStrength: (s) => { if (active) { $('autoStrength').value = s; apply(s); } } };
 }
