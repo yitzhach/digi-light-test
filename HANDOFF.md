@@ -184,9 +184,11 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 ## Status
 - **User, 10-18, NEXT CHAT START HERE:** plaster doors: **Your favourite (05) is the best on
   both**, but "the blacks were crushed maybe a little too much and need to be lifted slightly".
-  In progress: a slight lift for the Your favourite look (ambient / shadow / graze.lift, or
-  the Colour tool's Lift darks), measured on the sample painting; the door photos must be
-  re-attached to check on them. **Speed, DONE (10-18): Analyze is cached on disk** (CLI + MCP,
+  DONE (10-18): the look's blacks lifted (presets.js FAVOURITE ambient 0.22→0.3, shadow
+  0.85→0.75, graze.lift 0.13→0.3; auto.js LOOK_BIAS 'Your favourite' −0.64→−0.56 so Auto's
+  exposure fit keeps the highlights: sample painting darkest 5% 27→34 levels, p50 86→92, p95
+  178→179). Tried and not chosen: Colour › Lift darks 25% (lifts mids too: p50 86→100). Ask the
+  user to re-attach the door photos to check, and whether it is enough (more: ambient 0.35). **Speed, DONE (10-18): Analyze is cached on disk** (CLI + MCP,
   see Done recently): same photo again = ~13 s for the whole CLI run instead of ~137 s.
 - **User, 10-17, NEXT CHAT START HERE:** liked looks 01 Gallery, 04 Matched + raking, 05 Your
   favourite; the others "have a motion blur look". Two new plaster-door photos (red lintel, wooden

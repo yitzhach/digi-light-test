@@ -226,12 +226,14 @@ const ROUND1 = { ambient: 0.06, highlightRolloff: 1, exposure: 0.35, neutralWB: 
 // tools/batches/user-best-10-16.settings.json): the Gallery track lamp with a low raking
 // graze, a Pin light layer of the photo at 88%, bigger texture with less fine detail.
 // It names more than the matched looks (surface, shadow, layers), so LOOK_KEYS carries those too;
-// a look without them leaves them as they are.
-const FAVOURITE = { ambient: 0.22, highlightRolloff: 0.7, exposure: 0.04, ...LOOK_NEUTRAL,
+// a look without them leaves them as they are. 10-18, the user on the plaster doors: "blacks
+// crushed a little too much, lift slightly" → room light 0.22 → 0.3, shadow 0.85 → 0.75,
+// graze lift 0.13 → 0.3 (sample painting: darkest 5% 27 → 35 levels, highlights unchanged).
+const FAVOURITE = { ambient: 0.3, highlightRolloff: 0.7, exposure: 0.04, ...LOOK_NEUTRAL,
   reliefScale: 5, reliefStrength: 3.2375, chromaReject: 0.85, albedoSuppress: 0.2, fineRelief: 0.55, mediumRelief: 1.1, broadRelief: 0.55,
-  roughness: 0.72, specular: 0.45, shadow: 0.85, shadowSoftness: 0.2,
+  roughness: 0.72, specular: 0.45, shadow: 0.75, shadowSoftness: 0.2,
   layers: [{ mode: 'pinLight', source: 'original', opacity: 0.88, enabled: true }], layersOn: 1, originalTop: 0.07,
-  graze: { enabled: true, angle: 129, elevation: 4, opacity: 0.63, detail: 0.02, fine: 0.15, reach: 1, clean: 0.55, soft: 0.4, lift: 0.13 },
+  graze: { enabled: true, angle: 129, elevation: 4, opacity: 0.63, detail: 0.02, fine: 0.15, reach: 1, clean: 0.55, soft: 0.4, lift: 0.3 },
   lights: [L(0.3, 1.05, 0.8, 4.5, 4000, 0.3, 0.55, 0.03)] };
 export const LOOK_KEYS = ['ambient', 'highlightRolloff', 'exposure', 'reliefScale', 'fineRelief', 'albedoSuppress', ...Object.keys(LOOK_NEUTRAL),
   'reliefStrength', 'chromaReject', 'mediumRelief', 'broadRelief', 'roughness', 'specular', 'shadow', 'shadowSoftness', 'layers', 'layersOn', 'originalTop'];
