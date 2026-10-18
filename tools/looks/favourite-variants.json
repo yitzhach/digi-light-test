@@ -1,5 +1,5 @@
 {
- "about": "Variants of the built-in look 'Your favourite' (Auto look 4), round F1 (10-18). Each is applied after the look; 00 is the look itself. Run: node tools/digilight-cli.cjs batch photo.jpg --jobs <made from these>. User picks: review page https://claude.ai/artifact/XZyjaDxxn4zZCQMo9wroeB (db collection picks).",
+ "about": "Variants of the built-in look 'Your favourite' (Auto look 4), round F1 (10-18). Each is applied after the look; 00 is the look itself. Run: node tools/digilight-cli.cjs batch photo.jpg --jobs <made from these>. User picks: review page https://claude.ai/artifact/XZyjaDxxn4zZCQMo9wroeB (db collection picks). exposureRelative: stops added to the exposure the look fits for the photo.",
  "look": "Your favourite",
  "variants": [
   {
@@ -180,9 +180,9 @@
    "set": {
     "graze.reach": 0.4,
     "graze.soft": 0.1,
-    "graze.elevation": 8,
-    "exposure": 0.37
-   }
+    "graze.elevation": 8
+   },
+   "exposureRelative": 0.3
   },
   {
    "id": "18",
@@ -190,9 +190,9 @@
    "set": {
     "graze.reach": 0.4,
     "graze.soft": 0.1,
-    "graze.elevation": 8,
-    "exposure": -0.13
-   }
+    "graze.elevation": 8
+   },
+   "exposureRelative": -0.2
   },
   {
    "id": "19",
