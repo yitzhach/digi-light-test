@@ -182,6 +182,16 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-18 (session 017w…), NEXT CHAT START HERE:** **Look catalog round F1.** The user
+  asked for ~30 versions of Your favourite (light position, intensity, colour; "no
+  blurriness") to build a catalog of default looks and drop the ones that don't work. 31
+  versions × both plaster-door photos (re-rendered on main's lifted-blacks favourite), recipes
+  in tools/looks/favourite-variants.json (01–30 use a crisp graze: reach 0.4, soft 0.1,
+  elevation 8, against the long soft graze that reads as motion blur). Picker page, Keep / Maybe
+  / Drop saved in its db: https://claude.ai/artifact/XZyjaDxxn4zZCQMo9wroeB → ArtifactData list
+  collection "picks", then add the keepers as built-in looks (auto.js BUILT_IN + LOOK_BIAS) and
+  drop the losers. Note: two sessions worked in parallel on 10-18 (both built the analysis
+  cache; main kept session 016B…'s). Fetch before starting.
 - **User, 10-18, NEXT CHAT START HERE:** plaster doors: **Your favourite (05) is the best on
   both**, but "the blacks were crushed maybe a little too much and need to be lifted slightly".
   DONE (10-18): the look's blacks lifted (presets.js FAVOURITE ambient 0.22→0.3, shadow
