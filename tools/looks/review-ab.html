@@ -27,6 +27,8 @@ button{cursor:pointer}
 .layer{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 .layer img{position:absolute;inset:0;width:100%;height:100%;max-width:none;-webkit-user-drag:none;pointer-events:none}
 .layer img.b{opacity:0}
+.layer canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated}
+.stage.showB .layer canvas{display:none}
 .stage.showB .layer img.b{opacity:1}
 .tag{position:absolute;top:10px;left:max(10px,env(safe-area-inset-left,0px));font-family:var(--mono);font-size:.78rem;background:rgba(0,0,0,.62);padding:3px 8px;border-radius:4px;pointer-events:none}
 .stage.showB .tag.a,.tag.b{display:none}.stage.showB .tag.b{display:block}
@@ -37,7 +39,7 @@ button{cursor:pointer}
 .vid{font-family:var(--mono);font-weight:500;color:var(--accent)}
 .vname{font-weight:500;min-width:0}
 .stats{grid-column:1/-1;display:flex;gap:6px 14px;flex-wrap:wrap;font-family:var(--mono);font-size:.76rem;color:var(--muted)}
-.stats b{font-weight:500;color:var(--fg)}.stats .bad b{color:var(--drop)}
+.stats b{font-weight:500;color:var(--fg)}.stats .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}.stats .bad b{color:var(--drop)}
 .verdict{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .vb{background:none;border:1px solid var(--line);border-radius:5px;padding:5px 13px;font-size:.88rem}
 .vb[data-k="keep"][aria-pressed="true"]{background:var(--keep);border-color:var(--keep);color:#111}
@@ -72,13 +74,13 @@ button{cursor:pointer}
 <span class="count" id="count"></span>
 </header>
 <div class="stage" id="stage" tabindex="0" aria-label="Picture. Hold to compare, swipe for the next version, double-tap to zoom.">
-<div class="layer" id="layer"><img class="a" id="imA" alt=""><img class="b" id="imB" alt=""></div>
+<div class="layer" id="layer"><img class="a" id="imA" alt=""><img class="b" id="imB" alt=""><canvas id="clipCv" hidden></canvas></div>
 <div class="tag a" id="tagA"></div><div class="tag b" id="tagB"></div><div class="zoom" id="zoomTag"></div>
 <div class="hint" id="hint">Hold to compare · swipe for next · double-tap to zoom to 100%</div>
 </div>
 <section class="cap" aria-live="polite">
 <div class="title"><span class="vid" id="vid"></span><span class="vname" id="vname"></span></div>
-<div class="verdict"><button class="vb" type="button" data-k="keep">Keep</button><button class="vb" type="button" data-k="maybe">Maybe</button><button class="vb" type="button" data-k="drop">Drop</button><button class="tool" type="button" id="pinBtn" aria-pressed="false">Pin to compare</button></div>
+<div class="verdict"><button class="vb" type="button" data-k="keep">Keep</button><button class="vb" type="button" data-k="maybe">Maybe</button><button class="vb" type="button" data-k="drop">Drop</button><button class="tool" type="button" id="pinBtn" aria-pressed="false">Pin to compare</button><button class="tool" type="button" id="clipBtn" aria-pressed="false" title="Magenta: blown here but not in the photo. Cyan: crushed here but not in the photo.">Clipping</button></div>
 <div class="stats" id="stats"></div>
 <div class="note"><textarea id="note" rows="1" placeholder="Your thoughts on this version (saved as you type)" aria-label="Note on this version"></textarea><span class="saved" id="saved"></span></div>
 </section>
@@ -87,7 +89,7 @@ button{cursor:pointer}
 <div class="help" id="help" hidden>
 <p id="about"></p>
 <p><b>Compare:</b> press and hold the picture (or hold <kbd>Space</kbd>) to flip to the photo, the base look, or a version you pinned. Pick which at the top. <b>Next:</b> swipe left or right, or <kbd>←</kbd> <kbd>→</kbd>. <b>Zoom:</b> double-tap (or <kbd>Z</kbd>) for 100% at that spot, pinch or scroll to zoom, drag to look around. The zoom stays put as you change versions, so you compare the same detail.</p>
-<p><b>Mark:</b> Keep, Maybe, Drop (<kbd>K</kbd> <kbd>M</kbd> <kbd>D</kbd>), and write a note on anything you see. Everything saves automatically. Numbers under the name: <b>whites</b> and <b>blacks</b> are the share of the picture blown to pure white or crushed to pure black (the photo's own in brackets); <b>darks</b> is the brightness of the darkest 5% (0–255); <b>detail</b> is the fine texture beside the photo's (100% = as crisp as the photo).</p>
+<p><b>Mark:</b> Keep, Maybe, Drop (<kbd>K</kbd> <kbd>M</kbd> <kbd>D</kbd>), and write a note on anything you see. Everything saves automatically. Numbers under the name: <b>whites</b> and <b>blacks</b> are the share of the picture blown to pure white or crushed to pure black (the photo's own in brackets); <b>darks</b> is the brightness of the darkest 5% (0–255); <b>detail</b> is the fine texture beside the photo's (100% = as crisp as the photo). <b>Clipping</b> (<kbd>C</kbd>) paints magenta where this version blows whites the photo keeps, cyan where it crushes darks the photo keeps.</p>
 <button class="tool" type="button" id="helpClose">Close</button>
 </div>
 <script>
@@ -129,11 +131,11 @@ function statLine(id){
 }
 function show(){
   const [id,name]=V[st.i],b=bId(),p=st.p;
-  $("imA").src=src(p,id);$("imB").src=src(p,b);
+  $("imA").src=src(p,id);$("imB").src=src(p,b);$("imB").decode?.().catch(()=>{});drawClip();
   $("imA").alt=`${photo()[1]}, ${id}: ${name}`;$("imB").alt=`${photo()[1]}, ${nameOf(b)}`;
   $("tagA").textContent=id==="photo"?"Your photo":id;$("tagB").textContent=b==="photo"?"Your photo":`${b} · ${nameOf(b)}`;
   $("vid").textContent=id==="photo"?"":id;$("vname").textContent=name;
-  $("stats").innerHTML=statLine(id);
+  $("stats").innerHTML=statLine(id)+(clipOn?`<span class="key"><i style="background:#ff00dc"></i>newly blown <i style="background:#00c8ff;margin-left:8px"></i>newly crushed</span>`:"");
   document.querySelectorAll(".vb").forEach(x=>{x.setAttribute("aria-pressed",picks[id]===x.dataset.k);x.disabled=id==="photo"||!db});
   $("pinBtn").setAttribute("aria-pressed",st.pin===id);
   const n=$("note");if(document.activeElement!==n)n.value=notes[id]||"";n.disabled=!db;
@@ -144,6 +146,19 @@ function show(){
   const c={keep:0,maybe:0,drop:0};for(const k of ids)if(picks[k])c[picks[k]]++;
   const n2=ids.filter(k=>k!=="photo").length;
   $("count").textContent=`${st.i+1}/${V.length} · ${c.keep} keep · ${c.maybe} maybe · ${c.drop} drop · ${n2-c.keep-c.maybe-c.drop} to go`;
+}
+// Clipping overlay: pixels this version blows or crushes that the photo does not (as tools/looks/stats.py counts them).
+let clipOn=false;const photoData={};
+async function pixels(url){const im=new Image();im.src=url;await im.decode();const c=document.createElement("canvas");c.width=im.naturalWidth;c.height=im.naturalHeight;
+  const g=c.getContext("2d",{willReadFrequently:true});g.drawImage(im,0,0);return g.getImageData(0,0,c.width,c.height)}
+async function drawClip(){
+  const cv=$("clipCv");cv.hidden=!clipOn;if(!clipOn)return;const id=V[st.i][0],p=st.p,key=p+"/"+id;cv.dataset.key=key;
+  try{photoData[p]??=pixels(src(p,"photo"));const [a,o]=await Promise.all([pixels(src(p,id)),photoData[p]]);if(cv.dataset.key!==key||a.width!==o.width||a.height!==o.height)return;
+    cv.width=a.width;cv.height=a.height;const g=cv.getContext("2d"),out=g.createImageData(a.width,a.height),A=a.data,O=o.data,D=out.data;
+    const hi=(d,i)=>d[i]>=250||d[i+1]>=250||d[i+2]>=250,lo=(d,i)=>d[i]<=5&&d[i+1]<=5&&d[i+2]<=5;
+    for(let i=0;i<A.length;i+=4){const ah=hi(A,i),oh=hi(O,i);
+      if(ah&&!oh){D[i]=255;D[i+2]=220;D[i+3]=255}else if(!ah&&lo(A,i)&&!(oh||lo(O,i))){D[i+1]=200;D[i+2]=255;D[i+3]=255}}
+    g.putImageData(out,0,0)}catch{cv.hidden=true}
 }
 function go(d){st.i=(st.i+d+V.length)%V.length;show()}
 function setB(on){showB=on;$("stage").classList.toggle("showB",on)}
@@ -163,6 +178,7 @@ async function mark(k){
   catch(e){if(was)picks[id]=was;else delete picks[id];show();$("saved").textContent="Not saved: "+(e?.message||"try again")}
 }
 document.querySelectorAll(".vb").forEach(b=>b.onclick=()=>mark(b.dataset.k));
+$("clipBtn").onclick=()=>{clipOn=!clipOn;$("clipBtn").setAttribute("aria-pressed",clipOn);show()};
 $("pinBtn").onclick=()=>{const id=V[st.i][0];st.pin=st.pin===id?null:id;if(st.pin)st.cmp="pin";paintC();show()};
 let noteT=0;
 $("note").oninput=(e)=>{const id=V[st.i][0];notes[id]=e.target.value;$("saved").textContent="…";clearTimeout(noteT);
@@ -189,7 +205,7 @@ stage.addEventListener("wheel",(e)=>{e.preventDefault();zoomAt(e.clientX,e.clien
 stage.addEventListener("contextmenu",(e)=>e.preventDefault());
 addEventListener("keydown",(e)=>{if(e.target.tagName==="TEXTAREA")return;const k=e.key.length===1?e.key.toLowerCase():e.key;
   if(k===" "){e.preventDefault();if(!e.repeat)setB(true);return}
-  const f={ArrowRight:()=>go(1),ArrowLeft:()=>go(-1),k:()=>mark("keep"),m:()=>mark("maybe"),d:()=>mark("drop"),p:()=>$("pinBtn").click(),
+  const f={ArrowRight:()=>go(1),ArrowLeft:()=>go(-1),k:()=>mark("keep"),m:()=>mark("maybe"),d:()=>mark("drop"),p:()=>$("pinBtn").click(),c:()=>$("clipBtn").click(),
     z:()=>{const r=stage.getBoundingClientRect();st.z>1.01?(st.z=1,clamp(),apply()):zoomAt(r.left+r.width/2,r.top+r.height/2,1/(st.fit*(devicePixelRatio||1)))},
     "1":()=>PHOTOS[0]&&$("photos").children[0].click(),"2":()=>PHOTOS[1]&&$("photos").children[1].click(),Escape:()=>{$("help").hidden=true;$("helpBtn").setAttribute("aria-expanded","false")}}[k];
   if(f){e.preventDefault();f()}});
