@@ -32,11 +32,11 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - Commit the scratch `r3stats.py` (numpy and PIL are installed) as `tools/looks/stats.py`.
   - Settle on one rule at full size: white = any channel ≥250, black = all channels ≤5. Today there are three different rules (`photocheck.clipping`, `keepWhites`, `r3stats`).
   - Cost: about an hour.
-- **Speed quick wins.**
-  - Rebuild the relief only when the surface changes: gate `api.refresh` (`src/app.js` 1317) and stop the end of every export (1499) forcing a rebuild. Move `SURFACE` into `presets.js` and add a test per key. About 15 lines, about 15–25% per job. Undo and Strength become instant.
+- **Done 10-19 (second session): speed quick wins.** The relief rebuilds when a setting it is made from changes (`app.js` `surfaceKey`, one test per setting), and an export no longer needs a preview rebuild first (it reuses the preview's measurements). Software GL takes 4096 px tiles (`caps.software`; a GPU keeps 2048, since 4096 tiles need about 2 GB). `export({crop})`, CLI `--crop`, MCP `export_image` `crop`.
+  - Was: rebuild the relief only when the surface changes: gate `api.refresh` (`src/app.js` 1317) and stop the end of every export (1499) forcing a rebuild. Move `SURFACE` into `presets.js` and add a test per key. About 15 lines, about 15–25% per job. Undo and Strength become instant.
   - Default the tile cap to 4096 when headless (`state.maxTile`, `export.js` 73). About 5 lines, about −24% time.
   - Full-resolution crops: `export({rect})` plus a CLI `--crop`, reusing `renderTiles`. About 25 lines, about 5× cheaper than a full render, and gives true 100% loupes for judging crispness.
-- **MCP `export_image` in the background** (`tools/digilight-mcp.cjs` 224), the same way Analyze already runs. Exports of about 70 s now beat the 60 s tool timeout. About 20 lines.
+- **Done 10-19 (second session): MCP `export_image` in the background** (`tools/digilight-mcp.cjs` 224), the same way Analyze already runs. Exports of about 70 s now beat the 60 s tool timeout. About 20 lines.
 
 ## 3. NEXT (1–3 sessions)
 - **Shared metrics (about 1 day).**

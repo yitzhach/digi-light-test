@@ -227,8 +227,22 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     needPhoto();
     if (state.mode !== 'single') throw new Error('Export works on a single photograph here.');
     await idle();
-    const out = opts.width ? await api.renderAt(opts.width) : await api.exportFull();
+    const rect = opts.crop ? cropRect(opts.crop, opts.width) : undefined;
+    const out = opts.width ? await api.renderAt(opts.width, rect) : await api.exportFull(rect);
     return encode(out?.canvas || out, opts);
+  }
+  // crop: {x, y, w, h} in the exported image's pixels (full size, or width px wide), or
+  // "x,y,w,h"; values of 1 or less are fractions of its width / height. Kept inside it.
+  function cropRect(crop, width) {
+    const s = api.source(), fw = s.naturalWidth || s.width, fh = s.naturalHeight || s.height;
+    const W = width ? Math.max(1, Math.min(fw, Math.round(width))) : fw, H = width ? Math.max(1, Math.round(fh * W / fw)) : fh;
+    const v = typeof crop === 'string' ? crop.split(',').map(Number) : [crop.x, crop.y, crop.w, crop.h];
+    if (v.length !== 4 || !v.every(Number.isFinite) || v.some((n) => n < 0)) throw new Error('crop is {x, y, w, h} (or "x,y,w,h") in pixels, or fractions of 1.');
+    const [x, y, w, h] = v.map((n, i) => Math.round(v.every((m) => m <= 1) ? n * (i % 2 ? H : W) : n));
+    const x0 = Math.min(x, W - 1), y0 = Math.min(y, H - 1);
+    const r = { x: x0, y: y0, w: Math.min(w, W - x0), h: Math.min(h, H - y0) };
+    if (r.w < 1 || r.h < 1) throw new Error('crop is empty.');
+    return r;
   }
   async function getProject(opts = {}) {
     needPhoto();

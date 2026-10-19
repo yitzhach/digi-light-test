@@ -79,6 +79,9 @@ const full = process.argv.includes('--full');
     const e = (await ok('export_image', { path: png, width: 320 })).json();
     const b = fs.readFileSync(png);
     assert.ok(e.path === png && b.readUInt32BE(16) === 320 && b.slice(1, 4).toString() === 'PNG', JSON.stringify(e));
+    const crop = path.join(out, 'crop.png');
+    const c = (await ok('export_image', { path: crop, width: 320, crop: { x: 0.5, y: 0, w: 0.5, h: 0.25 } })).json();
+    assert.ok(c.path === crop && fs.readFileSync(crop).readUInt32BE(16) === 160, 'crop: half of 320 px ' + JSON.stringify(c));
     x = await call('export_image', { path: path.join(out, 'relit.gif') });
     assert.ok(x.r.isError && /\.png/.test(x.t));
     const proj = path.join(out, 'mine.digilight.json');
@@ -88,7 +91,7 @@ const full = process.argv.includes('--full');
     await ok('set_settings', { changes: { exposure: -1 } });
     await ok('open_project', { path: proj });
     assert.equal((await ok('get_settings', { path: 'exposure' })).json(), 0.1, 'project reopened');
-    console.log('PASS export_image (file, width), save_project, open_project');
+    console.log('PASS export_image (file, width, crop), save_project, open_project');
 
     if (full) {
       // Analyze answers within 45 s; while it runs in the background it says so, and calling again keeps waiting.

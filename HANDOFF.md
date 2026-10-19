@@ -182,6 +182,25 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **10-19 (second session), on `main`: roadmap speed wins while round 3 waits.** Round 3 had
+  no picks yet (review page LeAKsrXizCyEQUUgDY4MgW, ArtifactData "picks" empty), so the next
+  roadmap NOW items were built instead:
+  - **Relief rebuilt only when its own settings change.** app.js `surfaceKey()` (SURFACE_INPUTS,
+    read after updateDerived) replaces `builtRelief`; `api.refresh` no longer forces a rebuild
+    (single photo). Exports and the sharp zoom set `surfaceClobbered` instead of `dirtySurface`,
+    so an export reuses the preview's heightStats / strokeSpread with no rebuild first (the
+    preview rebuilds on its next frame). Measured on dsc8382: the rebuild was ~2.6 s of a ~9 s
+    job. A test changes each of 15 relief settings and checks exactly one rebuild each, and none
+    for lights / exposure / graze.
+  - **4096 px export tiles in software GL** (`caps.software` from the renderer name, gl.js);
+    GPUs keep 2048 (4096 tiles are ~2 GB of half-float targets). dsc8382 export 9.0 → 7.1 s.
+  - **Crops:** `digilight.export({crop})` (`{x,y,w,h}` or `"x,y,w,h"`, pixels or all-fractions),
+    CLI `--crop` and batch `"crop"`, MCP `export_image` `crop`: true 100% loupes; a crop matches
+    the whole export to 0.013 levels.
+  - **MCP `export_image` runs in the background** past 45 s like Analyze (call again with the
+    same path to wait; a finished one is returned once; tools that change the picture drop it).
+    `DIGILIGHT_WAIT_MS` overrides the wait (tests).
+  - Still to ask the user: round 3 picks (the same review link) and the door photos.
 - **User, 10-19 (late), NEXT CHAT START HERE: round 3 picks.** The user said "go ahead, use
   look-level settings", and asked for high-level thinking on making this a pro-level relighting
   tool, for people uploading photos and for AI agents driving it. Done this session:
@@ -462,6 +481,9 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-19 (second session, on `main`): relief rebuilt only for its own settings, exports reuse
+  the preview, 4096 tiles in software GL, crops (API/CLI/MCP), MCP export in the background.
+  See Status.
 - 10-19 (late, on `main`): round 2 keepers in the favourite looks (look-level), the Pin light
   fit bug, graze side mirroring, CLI `scale`, round 3 + the A/B review page, tools/looks/stats.py,
   docs/roadmap.md. See Status.
@@ -1075,7 +1097,9 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
--5. (10-19) Round 3 picks → fold into the looks; then docs/roadmap.md NOW/NEXT in order.
+-5. (10-19) Round 3 picks → fold into the looks; then docs/roadmap.md NOW/NEXT in order
+   (NOW is done except round 3 and the door photos; next: NEXT › Shared metrics in measure.js,
+   then the one guard after every change, the JSON record per export, look ids, exportMany).
 -4. NEXT CHAT STARTS HERE (10-15): the AI-match work. The user's favourite remains the AI image
    (`samples/painting.jpg` relit by a generative model; the user can re-upload it): "more
    natural texture (a little less fine texture) and a bit more depth". Best DigiLight looks:

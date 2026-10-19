@@ -16,12 +16,13 @@
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
 //              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
 //               "exposureAdd": 0.3, "scale": {"textureDepthMm": 1.2}, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
-//               "width": 800, "preview": false, "quality": 0.9}; each starts from the photo as opened
+//               "width": 800, "crop": "x,y,w,h", "preview": false, "quality": 0.9}; each starts from the photo as opened
 // options (applied in this order):
 //   --preset kind:name   lighting:"Gallery track", graze:"Classic raking", looks:"07 Brighter"
 //   --look NAME|N  [--strength 0..1]   Analyze, then apply that look
 //   --set "a=1;graze.opacity=0.5"   or JSON '{"exposure":0.3}' (repeatable; after the look, so it wins)
 //   --out FILE (.png/.jpg/.webp)  --width N  --preview  --quality 0..1
+//   --crop x,y,w,h   only that part of the export, at full detail (pixels, or fractions of 1)
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
 //   --fresh   Analyze again even if the cache has this photo (DIGILIGHT_CACHE: the cache
 //             folder, default ~/.cache/digilight/analysis; 0 turns it off)
@@ -77,7 +78,7 @@ async function dress(call, j, analyze, src = {}) {
 async function write(call, j) {
   const format = (path.extname(j.out).slice(1) || 'png').toLowerCase();
   const opts = { format, quality: j.quality != null ? +j.quality : 0.92 };
-  const url = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined });
+  const url = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined, crop: j.crop || undefined });
   fs.writeFileSync(j.out, fromDataURL(url));
 }
 
@@ -113,7 +114,7 @@ async function runJobs(call, jobs, src) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 27).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 28).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');

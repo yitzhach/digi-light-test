@@ -69,10 +69,12 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
   // Keep the padded tile inside the driver's texture limit with room to spare;
   // several float targets of this size are alive at once.
   // Overridable so the seam behaviour can be exercised on small test images, and
-  // so a constrained device can be told to use less memory per tile.
+  // so a constrained device can be told to use less memory per tile. Software GL
+  // keeps its targets in system memory, so it takes 4096 px tiles (about 2 GB of
+  // half-float targets): fewer margins to redo, about a fifth less time per export.
   const maxTile = state.maxTile
     ? Math.max(64, state.maxTile)
-    : Math.min(2048, Math.max(256, (caps.maxTexture || 4096) / 2));
+    : Math.min(caps.software ? 4096 : 2048, Math.max(256, (caps.maxTexture || 4096) / 2));
   if (2 * margin + 64 > caps.maxTexture) throw new Error('Surface reach exceeds GPU limits. Reduce texture size or export scale.');
   const interior = Math.max(64, maxTile - 2 * margin);
 
@@ -195,23 +197,25 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
 }
 
 /**
- * The whole image at the source's own resolution. `state` should already be
- * scaled to that resolution (renderState in app.js does it).
+ * The whole image at the source's own resolution, or `job.rect` ({x, y, w, h} in its
+ * pixels) of it: the same pixels a whole export has there, for a fraction of the time.
+ * `state` should already be scaled to that resolution (renderState in app.js does it).
  */
 export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const source = job.mode === 'photometric' ? job.sources[0] : job.source;
   // job.width / height render it smaller than the photo (tiles resample the source).
   const W = job.width || source.width || source.naturalWidth;
   const H = job.height || source.height || source.naturalHeight;
+  const rect = job.rect || { x: 0, y: 0, w: W, h: H };
   const out = document.createElement('canvas');
-  out.width = W; out.height = H;
+  out.width = rect.w; out.height = rect.h;
   const octx = out.getContext('2d', { willReadFrequently: false });
 
   // An export leaves out what only the screen shows: the split and the mask tint.
   const prevExporting = state.exporting;
   state.exporting = true;
   try {
-    await renderTiles(glctx, builders, job, state, { x: 0, y: 0, w: W, h: H }, octx, { onProgress });
+    await renderTiles(glctx, builders, job, state, rect, octx, { onProgress });
   } finally {
     state.exporting = prevExporting;
   }

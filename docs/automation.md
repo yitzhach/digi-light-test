@@ -33,7 +33,7 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
 | `undo()` / `redo()` | `true` if there was a step |
 | `render({format, quality, as})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp |
-| `export({width, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide |
+| `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
 | `setProject(objOrJSON)` | opens a project |
 
@@ -117,7 +117,9 @@ node tools/digilight-cli.cjs <command> <input> [options]
   `batch` (many renders from one Analyze, see below)
 - **options**, applied in this order: `--preset kind:name` (repeatable), `--look NAME|N
   --strength 0..1`, then `--set "a=1;b.c=2"` or JSON (repeatable; after the look, so it wins); output: `--out FILE.png|.jpg|.webp`,
-  `--width N` (else full size), `--preview` (the preview size), `--quality`, `--save-project FILE`
+  `--width N` (else full size), `--crop x,y,w,h` (only that part, at full detail: pixels, or
+  fractions of 1; a true 100% loupe for a fraction of a full export's time), `--preview` (the
+  preview size), `--quality`, `--save-project FILE`
 
 ```
 node tools/digilight-cli.cjs analyze photo.jpg
@@ -127,7 +129,9 @@ node tools/digilight-cli.cjs render project.digilight.json --preset "graze:Class
 
 Prints JSON on stdout; on an error prints it on stderr and exits 1. Analyze is slow in
 software GL (no GPU): 2–3 minutes. A full-size export of a 1000×1500 photo takes ~10 s, or
-~60 s with Broad form on (its blur widens every tile's margin).
+~60 s with Broad form on (its blur widens every tile's margin). In software GL the export
+uses 4096 px tiles (2048 on a GPU), and the relief is rebuilt only when a setting it is made
+from changes, so jobs that differ only in lights, tone or the graze skip that step.
 
 **Several looks or variants of one photo: use `batch`.** Each `render --look` runs its own
 Analyze; `batch` runs it once and then renders every job from the settings the photo
@@ -142,7 +146,7 @@ node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
 (string, object or a list), `exposureAdd` (stops added to the exposure the look fitted, so
 "+0.3" means the same on every photo), `scale` (`{"textureDepthMm": 1.2}`: each setting times a
 factor, on the value the look set, so "20% deeper" means the same on every photo, kept inside the setting's range), `addLights` (a list of `{kind, fields}` as `addLight`),
-`width`, `preview`, `quality`). Prints one JSON line per file.
+`width`, `crop`, `preview`, `quality`). Prints one JSON line per file.
 
 **Analyze is cached on disk.** The CLI and the MCP server keep each finished Analyze in
 `~/.cache/digilight/analysis` (one ~0.5 MB file per photo), so analyzing the same photo
@@ -246,10 +250,12 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |
 | `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800) |
-| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px |
+| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |
 
 The server keeps one DigiLight page open for the whole chat, so each tool works on the
 current photo and settings. Errors come back as tool errors with the reason (a value out of
 range changes nothing). While Analyze or an export runs it sends progress, so the assistant
-waits. Test: `node tests/mcp.cjs` (`--full` adds Analyze).
+waits. Both run in the background past about 45 s (many assistants give up on a tool call
+after 60 s): the answer then says it is still running, and calling `analyze` (or
+`export_image` with the same path) again keeps waiting. Test: `node tests/mcp.cjs` (`--full` adds Analyze).

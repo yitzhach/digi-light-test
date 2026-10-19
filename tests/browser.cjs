@@ -811,5 +811,37 @@ const r=await a.evaluate(async()=>{const d=window.digilight,out={};
  out.slider=!!document.querySelector('#strokeDir');return out;});
 assert.ok(r.offSame,'no effect without Stroke definition');assert.ok(r.changed&&r.followsLamp&&r.isoBack,JSON.stringify(r));assert.match(r.bad,/nothing changed/);assert.ok(r.slider);
 await ctx.close();console.log('PASS Stroke direction follows the main lamp, off at 0 and without Stroke definition, validated');}
+// The relief is rebuilt only when a setting it is made from changes (app.js surfaceKey); an export reuses the
+// preview's measurements without rebuilding it first, and the preview after it matches; a crop is that part of a whole export.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={},n=()=>__bench.surfaceBuilds(),ranges=Object.fromEntries(d.describe().map(x=>[x.path,x]));
+ await d.render();let b=n();
+ await d.set({exposure:0.3,'lights.0.power':2,'graze.enabled':true,'graze.opacity':0.5});await d.render();out.shadeOnly=n()-b;
+ const nudge=(k)=>{const v=d.get(k),x=ranges[k];if(typeof v==='boolean')return !v;const t=v+(x.max-x.min)*0.13;return Math.round((t>x.max?v-(x.max-x.min)*0.13:t)*1e4)/1e4;};
+ out.keys={};
+ for(const k of ['reliefScale','azimuthDeg','integrateTaps','chromaReject','albedoSuppress','fineRelief','mediumRelief','broadRelief','neutralize','photoDiffuse','textureDepthMm','paintingWidthCm','adjust.relief.amount','adjust.relief.fine','adjust.relief.mid']){
+  if(!ranges[k]){out.keys[k]='not settable';continue;}b=n();await d.set(k,nudge(k));await d.render();out.keys[k]=n()-b;}
+ b=n();await d.undo();await d.render();out.undo=n()-b;
+ const px=async(url)=>{const im=new Image();im.src=url;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const g=c.getContext('2d');g.drawImage(im,0,0);return g.getImageData(0,0,im.width,im.height);};
+ const p0=await d.render();b=n();const e1=await d.export();out.exportBuilds=n()-b;const p1=await d.render();out.previewSame=p1===p0;out.rebuiltAfter=n()-b;
+ const e2=await d.export();out.exportSame=e1===e2;
+ const A=await px(e1),W=A.width,H=A.height;out.size=[W,H];
+ const rect={x:Math.round(W*.3),y:Math.round(H*.2),w:Math.round(W*.25),h:Math.round(H*.3)};
+ const C=await px(await d.export({crop:rect}));out.crop=[C.width,C.height];let diff=0;
+ for(let y=0;y<C.height;y++)for(let x=0;x<C.width;x++)for(let ch=0;ch<3;ch++)diff+=Math.abs(C.data[(y*C.width+x)*4+ch]-A.data[((y+rect.y)*W+x+rect.x)*4+ch]);out.cropDiff=diff/(C.width*C.height*3);
+ const F=await px(await d.export({crop:'0.5,0.5,0.5,0.5',width:100}));out.fracCrop=[F.width,F.height];
+ for(const c of ['1,2',{x:-1,y:0,w:5,h:5}])try{await d.export({crop:c});out.badCrop='no error';}catch(e){out.badCrop=e.message;}
+ b=n();await d.set('reliefScale',nudge('reliefScale'));const e3=await d.export();out.exportAfterSurface=[n()-b,e3!==e2];
+ return out;});
+assert.equal(r.shadeOnly,0,'lights, exposure and the graze do not rebuild the relief');
+for(const [k,v] of Object.entries(r.keys))assert.equal(v,1,k+' rebuilds the relief once '+JSON.stringify(r.keys));
+assert.equal(r.undo,1,'undo of a relief setting rebuilds it');
+assert.equal(r.exportBuilds,0,'an export needs no preview rebuild first');assert.ok(r.previewSame&&r.rebuiltAfter===1,'the preview after an export rebuilds and matches '+JSON.stringify(r));
+assert.ok(r.exportSame,'a second export matches the first');
+assert.deepEqual(r.crop,[Math.round(r.size[0]*.25),Math.round(r.size[1]*.3)]);assert.ok(r.cropDiff<0.5,'a crop is that part of the whole export '+r.cropDiff);
+assert.equal(r.fracCrop[0],50,'fractions of a width-scaled export '+JSON.stringify(r.fracCrop));assert.match(r.badCrop,/crop is/);
+assert.ok(r.exportAfterSurface[0]===1&&r.exportAfterSurface[1],'an export after a relief setting rebuilds the preview first '+JSON.stringify(r.exportAfterSurface));
+await ctx.close();console.log('PASS relief rebuilt only for its own settings, exports reuse the preview, crops match the whole export',JSON.stringify({keys:Object.keys(r.keys).length,cropDiff:+r.cropDiff.toFixed(4)}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

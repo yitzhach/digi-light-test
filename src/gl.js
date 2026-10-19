@@ -18,6 +18,9 @@ export function createGL(canvas) {
   const halfFloat = gl.getExtension('EXT_color_buffer_float');
   const linearFloat = gl.getExtension('OES_texture_float_linear');
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  // Software GL (SwiftShader: the headless CLI and MCP server) draws in system memory.
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
 
   return {
     gl,
@@ -25,6 +28,7 @@ export function createGL(canvas) {
       colorBufferFloat: !!halfFloat,
       linearFloat: !!linearFloat,
       maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      software: /swiftshader/i.test(renderer),
     },
   };
 }

@@ -63,7 +63,7 @@ function tool(fn) {
 // Analyze takes 1–3 minutes without a GPU, longer than many assistants wait for one tool
 // call (often 60 s). So it runs in the background: analyze / apply_look wait up to WAIT_MS,
 // then say it is still running; calling again picks up the same run.
-const WAIT_MS = 45000;
+const WAIT_MS = +process.env.DIGILIGHT_WAIT_MS || 45000;   // the env value is for tests
 // A finished Analyze is kept on disk per photo (digilight-headless.cjs), so analyzing a
 // photo again, in this chat or a later one, comes back at once.
 let analyzing = null, opened = null;
@@ -81,6 +81,26 @@ async function waitAnalyze(call) {
   return r || { stillAnalyzing: true, seconds: Math.round((Date.now() - a.t0) / 1000),
     next: 'Analyze is still running in the background (1–3 minutes without a GPU). Call analyze (or apply_look) again to keep waiting.' };
 }
+// Exports likewise (a full-size one is often over a minute without a GPU): export_image
+// waits up to WAIT_MS, then says it is still running; calling it again with the same path
+// keeps waiting, and returns the result once even if it finished in between.
+let exporting = null, exported = null;
+async function waitExport(run, f) {
+  if (exporting && exporting.f !== f) throw new Error(`An export to ${exporting.f} is still running (${Math.round((Date.now() - exporting.t0) / 1000)} s so far); call export_image with that path to wait for it.`);
+  if (!exporting && exported && exported.f === f) { const e = exported; exported = null; return e.r; }
+  if (!exporting) {
+    const e = exporting = { f, t0: Date.now(), p: run() };
+    e.p.then((r) => { exported = { f, r }; }, () => {}).finally(() => { if (exporting === e) exporting = null; });
+  }
+  const e = exporting;
+  let waiting = true;   // a caller that gave up leaves the result for the next call
+  const r = await Promise.race([e.p.then((v) => { if (waiting && exported?.f === f) exported = null; return v; }), new Promise((res) => setTimeout(() => res(null), WAIT_MS))]);
+  waiting = false;
+  return r || { stillExporting: true, path: f, seconds: Math.round((Date.now() - e.t0) / 1000),
+    next: 'The export is still running in the background. Call export_image again with the same path to keep waiting.' };
+}
+// A tool that changes the picture: an export that finished unseen no longer matches it.
+const changing = (fn) => tool(async (...a) => { exported = null; return fn(...a); });
 const needOpen = async (call) => { if (!(await call('info')).photo) throw new Error('No photo open yet. Use open_image first.'); };
 
 const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
@@ -96,7 +116,7 @@ server.registerTool('open_image', {
   title: 'Open a photo',
   description: 'Opens a photo of a painting (replacing the current one) and runs auto setup. source: an absolute path to a .jpg/.png/.webp on this computer, an http(s) image URL, a .digilight.json project, or sample:painting / sample:dsc8382 (built-in samples). Returns the photo and preview sizes.',
   inputSchema: { source: z.string().describe('Photo path, URL, .digilight.json project, or sample:painting / sample:dsc8382') },
-}, tool(async ({ call }, { source }) => {
+}, changing(async ({ call }, { source }) => {
   const input = /^(sample:|https?:)/.test(source) ? source : filePath(source);
   opened = null;
   const out = await openInput(call, input);
@@ -108,7 +128,7 @@ server.registerTool('open_project', {
   title: 'Open a project',
   description: 'Opens a saved DigiLight project (.digilight.json: the photo, every setting and any measured relief), from save_project or the app\'s Save project.',
   inputSchema: { path: z.string().describe('Absolute path to a .digilight.json file') },
-}, tool(async ({ call }, { path: p }) => {
+}, changing(async ({ call }, { path: p }) => {
   const f = filePath(p);
   if (!fs.existsSync(f)) throw new Error(`No such file: ${f}`);
   opened = null;
@@ -145,7 +165,7 @@ server.registerTool('apply_look', {
     look: z.union([z.string(), z.number().int()]).describe('Look name (from list_looks) or index'),
     strength: z.number().min(0).max(1).optional().describe('0–1, default 1'),
   },
-}, tool(async ({ call }, { look, strength }) => {
+}, changing(async ({ call }, { look, strength }) => {
   await needOpen(call);
   if (!(await call('looks')).length || analyzing) { const r = await waitAnalyze(call); if (r.stillAnalyzing) return r; }
   return call('applyLook', look, { strength: strength ?? 1 });
@@ -161,7 +181,7 @@ server.registerTool('apply_preset', {
   title: 'Apply a preset',
   description: 'Applies a fixed preset: kind "lighting" (a lamp scene), "graze" (a raking light preset) or "looks" (a matched look). Names from list_presets.',
   inputSchema: { kind: z.enum(['lighting', 'graze', 'looks']), name: z.string() },
-}, tool(async ({ call }, { kind, name }) => { await needOpen(call); return call('applyPreset', kind, name); }));
+}, changing(async ({ call }, { kind, name }) => { await needOpen(call); return call('applyPreset', kind, name); }));
 
 server.registerTool('describe_settings', {
   title: 'Describe settings',
@@ -184,7 +204,7 @@ server.registerTool('set_settings', {
   title: 'Change settings',
   description: 'Changes settings by dotted path in one undo step, e.g. {"exposure": 0.3, "graze.enabled": true, "graze.opacity": 0.6, "lights.0.kelvin": 3200, "adjust.relief.form": 1.5}. Values are checked like an imported project: on an unknown path or a value out of range nothing changes and the error says why. Returns the new values. describe_settings lists paths and ranges.',
   inputSchema: { changes: z.union([z.record(z.string(), z.any()), z.string()]).describe('{path: value, ...} or "a=1;b.c=0.5"') },
-}, tool(async ({ call }, { changes }) => {
+}, changing(async ({ call }, { changes }) => {
   await needOpen(call);
   const c = typeof changes === 'string' ? parseSets(changes) : changes;
   if (!Object.keys(c).length) throw new Error('No changes given.');
@@ -198,18 +218,18 @@ server.registerTool('add_light', {
     kind: z.enum(['light', 'shade', 'negative']).optional().describe('Default light'),
     fields: z.record(z.string(), z.any()).optional().describe('Any light fields, e.g. {"x": 0.3, "y": 0.7, "aimX": 0.3, "aimY": 0.7, "dark": 0.5, "kelvin": 9000}'),
   },
-}, tool(async ({ call }, { kind, fields }) => { await needOpen(call); return call('addLight', kind || 'light', fields || {}); }));
+}, changing(async ({ call }, { kind, fields }) => { await needOpen(call); return call('addLight', kind || 'light', fields || {}); }));
 
 server.registerTool('remove_light', {
   title: 'Remove a light',
   description: 'Removes light number index (from 0), lamp or shadow. The last one cannot be removed (turn it off instead: lights.0.enabled false).',
   inputSchema: { index: z.number().int().min(0) },
-}, tool(async ({ call }, { index }) => call('removeLight', index)));
+}, changing(async ({ call }, { index }) => call('removeLight', index)));
 
 server.registerTool('undo', { title: 'Undo', description: 'Undoes the last change. Returns false when there is nothing to undo.', inputSchema: {} },
-  tool(async ({ call }) => ({ undone: await call('undo') })));
+  changing(async ({ call }) => ({ undone: await call('undo') })));
 server.registerTool('redo', { title: 'Redo', description: 'Redoes the last undone change. Returns false when there is nothing to redo.', inputSchema: {} },
-  tool(async ({ call }) => ({ redone: await call('redo') })));
+  changing(async ({ call }) => ({ redone: await call('redo') })));
 
 server.registerTool('render_preview', {
   title: 'See the result',
@@ -223,20 +243,24 @@ server.registerTool('render_preview', {
 
 server.registerTool('export_image', {
   title: 'Export the image',
-  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). Slow without a GPU for big photos.',
+  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',
   inputSchema: {
     path: z.string().describe('Absolute path ending .png, .jpg or .webp'),
     width: z.number().int().min(64).max(20000).optional().describe('Width in px; default the photo\'s full size'),
+    crop: z.object({ x: z.number().min(0), y: z.number().min(0), w: z.number().positive(), h: z.number().positive() }).optional()
+      .describe('Part of the image (at that width) to write: pixels, or all four 0–1 as fractions, e.g. {"x":0.4,"y":0.4,"w":0.2,"h":0.2}'),
     quality: z.number().min(0).max(1).optional().describe('JPEG/WebP quality 0–1, default 0.92'),
   },
-}, tool(async ({ call }, { path: p, width, quality }) => {
+}, tool(async ({ call }, { path: p, width, crop, quality }) => {
   await needOpen(call);
   const f = filePath(p), format = FORMATS[path.extname(f).toLowerCase()];
   if (!format) throw new Error('path must end .png, .jpg or .webp.');
   if (!fs.existsSync(path.dirname(f))) throw new Error(`No such folder: ${path.dirname(f)}`);
-  const buf = fromDataURL(await call('export', { format, quality: quality ?? 0.92, width }));
-  fs.writeFileSync(f, buf);
-  return { path: f, bytes: buf.length, ...(await call('info')) };
+  return waitExport(async () => {
+    const t0 = Date.now(), buf = fromDataURL(await call('export', { format, quality: quality ?? 0.92, width, crop }));
+    fs.writeFileSync(f, buf);
+    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(await call('info')) };
+  }, f);
 }));
 
 server.registerTool('save_project', {

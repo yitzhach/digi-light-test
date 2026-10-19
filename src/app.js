@@ -120,7 +120,19 @@ function reliefSpan(st) {
   const b = st.reliefBands;
   return b ? Math.max(b.fine, b.mid) + b.formScale : 1;
 }
-let builtRelief = '';
+// Everything the preview's single-photo relief (gbuf.build) is made from, read after
+// updateDerived. A frame rebuilds the relief only when this changes, so a setting that
+// only shades (a light, exposure, a look's tone) costs one draw. Photometric mode and
+// the measured relief, the photo and the tests' height seam still say so themselves.
+const SURFACE_INPUTS = ['reliefScale', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'azimuthDeg', 'integrateTaps',
+  'reliefBands', 'fineRelief', 'mediumRelief', 'broadRelief', 'physical', 'photoDiffuse', 'neutralize', 'meanLuma'];
+const surfaceKey = () => JSON.stringify(SURFACE_INPUTS.map((k) => state[k] ?? null));
+let builtSurface = '';
+// Export tiles and the sharp zoom build their own surfaces in the preview's targets.
+// What the preview measured (heightStats, strokeSpread) still holds; only its maps are
+// gone, so the next frame rebuilds them but an export does not need to first.
+let surfaceClobbered = false;
+let surfaceBuilds = 0;   // tests count rebuilds
 
 /**
  * The longest shadow any enabled light can cast across the painting: the tallest
@@ -1006,10 +1018,10 @@ function renderNow() {
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
-    // Relief (3D) changes the depth and the bands the relief is built from.
-    const relief = JSON.stringify([reliefBoost(state), state.reliefBands]);
-    if (relief !== builtRelief) { builtRelief = relief; dirtySurface = true; }
-    if (dirtySurface) {
+    const key = surfaceKey();
+    if (key !== builtSurface) { builtSurface = key; dirtySurface = true; }
+    if (dirtySurface || surfaceClobbered) {
+      surfaceBuilds++;
       if (state.mode === 'photometric') {
         const solver = buildSolver(shots.map(shotDir), { fitAmbient: state.psFitAmbient });
         const status = $('psStatus');
@@ -1055,7 +1067,7 @@ function renderNow() {
         state.heightStats = { ...gbuf.heightStats };
         strokeMeasuredAt = NaN;
       }
-      dirtySurface = false;
+      dirtySurface = false; surfaceClobbered = false;
     } else if (state.mode === 'single') {
       gbuf.buildGraze(state.grazeSigmaPx);   // no-op unless the graze Detail changed
       gbuf.buildShadow(state.shadowSigmaPx); // likewise for Shadow smoothing
@@ -1145,7 +1157,7 @@ async function renderSharp() {
   if (!plan) return;
   const job = sharpJob, { outW, outH, rect } = plan;
   // The tiles reuse the preview's surface targets, so the next frame rebuilds them.
-  dirtySurface = true;
+  surfaceClobbered = true;
   let done = false;
   sharp.width = rect.w; sharp.height = rect.h;
   try {
@@ -1304,17 +1316,19 @@ async function boot() {
     },
     sample: () => currentSample,
     heights: readHeights,
-    exportFull: () => exportImage({ mode: 'single', source: fullSource }, null, { viewMode: 0 }),
+    exportFull: (rect) => exportImage({ mode: 'single', source: fullSource, rect }, null, { viewMode: 0 }),
     // The relit painting whole at outW px wide (at most the photo's own width), drawn from
-    // the full photo like the sharp zoom, for previews that stay sharp when zoomed.
-    renderAt: (outW) => {
+    // the full photo like the sharp zoom, for previews that stay sharp when zoomed;
+    // rect ({x, y, w, h} in those pixels) renders only that part.
+    renderAt: (outW, rect) => {
       const width = Math.max(1, Math.min(fullW, Math.round(outW))), height = Math.max(1, Math.round(fullH * width / fullW));
-      return exportImage({ mode: 'single', source: fullSource, width, height }, null, { viewMode: 0 });
+      return exportImage({ mode: 'single', source: fullSource, width, height, rect }, null, { viewMode: 0 });
     },
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
     // A new light, as + Light / + Shadow make it ('light', 'shade' or 'negative').
     makeLight: (kind = 'light') => (kind === 'light' ? newLight(state.lights.length) : { ...newShadow(state.lights.filter(isShadow).length), kind }),
-    refresh: () => { dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
+    // Single photo: the frame rebuilds the relief if a setting it is made from changed (surfaceKey).
+    refresh: () => { if (state.mode !== 'single') dirtySurface = true; rebuildTabs(); rebuildLightPanel(); rebuildHandles(); syncOutputs(); render(); },
     openSource: async image => {
       state.mode = 'single'; $('src').value = 'upload';
       $('synthOpts').style.display = 'none'; $('psOpts').style.display = 'none';
@@ -1337,7 +1351,7 @@ async function boot() {
     shots: () => shots,
     measured: () => measured && { on: measured.on, w: measured.w, h: measured.h, height: measured.height, info: measured.info },
     heights: readHeights,
-    gbuf, glctx,
+    gbuf, glctx, surfaceBuilds: () => surfaceBuilds,
     dirty: () => { dirtySurface = true; },
     measureFit: () => photo.measureResidual(imgW, imgH, residualExclusion()),
     residualTarget: () => photo.targets && photo.targets.residual,
@@ -1487,7 +1501,7 @@ async function exportImage(job, onProgress, extra) {
   // bring the preview up to date first if a setting changed since its last frame.
   if (srcTex && state.mode === 'single') {
     updateDerived(imgW);
-    if (dirtySurface || state.strokeSigmaPx !== strokeMeasuredAt) renderNow();
+    if (dirtySurface || surfaceKey() !== builtSurface || state.strokeSigmaPx !== strokeMeasuredAt) renderNow();
   }
   const st = Object.assign(renderState(job.width || src.width || src.naturalWidth), extra);
   state.exporting = true;
@@ -1496,7 +1510,7 @@ async function exportImage(job, onProgress, extra) {
     return await exportFullRes(glctx, { gbuf, photo, shader }, job, st, onProgress);
   } finally {
     state.exporting = false;
-    dirtySurface = true;
+    surfaceClobbered = true;
   }
 }
 
