@@ -21,11 +21,15 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // The biases are measured on the painting sample (10-15) so that there each look lands
 // at the exposure it was made or approved at (Gallery 0, Matched 07 +0.6, Matched 05
 // +0.35, Your favourite +0.04, the rest 0); on another photo the same offset from its own brightness holds.
+// The three favourite looks' biases moved 10-19, when their fit stopped seeing the favourite's Pin
+// light layer (a built-in look never applies it): the plain fit came out about 0.2 stops brighter on
+// the painting sample, so each bias went down to where the looks still land at the exposures
+// the user approved (-0.33, -0.14, -0.28 there).
 // albedoSuppress (De-light) 0, not the default 0.7: measured on the red panel (10-15) the
 // default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63,
 // 0 keeps 0.92. The user found 0.7 "a bit blurry"; of 0.7 / 0.4 / 0 they picked 0 (10-16).
 export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0 };
-export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.56, 'Favourite, from the left': -0.56, 'Favourite, side lamp left': -0.56, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
+export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.76, 'Favourite, from the left': -0.75, 'Favourite, side lamp left': -0.78, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
@@ -286,13 +290,22 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
 
       // Looks: built-in, then the user's presets and projects.
       const items = [];
-      for (const [name, note, make] of BUILT_IN) { const s = clone(ref); s.exposure = 0; make(s); items.push({ name, note, bias: LOOK_BIAS[name] ?? 0, settings: s, kind: 'built-in' }); }
+      // A built-in look keeps the user's own layers when picked (pick()), so it is made and fitted
+      // with none: the favourite's Pin light layer used to light its thumbnail and exposure fit,
+      // then was dropped from the picture (found 10-19).
+      for (const [name, note, make] of BUILT_IN) { const s = clone(ref); s.exposure = 0; make(s); Object.assign(s, { layers: [], originalTop: 0 }); items.push({ name, note, bias: LOOK_BIAS[name] ?? 0, settings: s, kind: 'built-in' }); }
       try { for (const p of (await userPresets()).slice(0, 8)) items.push({ name: p.name, note: 'Your preset, adapted to this photo', settings: adapted(ref, presetSettings(p)), kind: 'preset' }); } catch { /* storage off */ }
       try {
         const rows = (await userProjects()).filter((p) => p.id !== currentProject()).sort((a, b) => b.updated - a.updated).slice(0, 6);
         for (const p of rows) { try { items.push({ name: p.name, note: 'Your project’s look, adapted to this photo', settings: adapted(ref, projectSettings(p)), kind: 'project' }); } catch { /* not a valid project */ } }
       } catch { /* storage off */ }
       for (const it of items) if (it.settings.lights.length) { keySide(it.settings.lights, side); for (const l of it.settings.lights) api.applyColor(l); }
+      // A graze set at a fixed angle (the favourites' crisp graze from the left) follows the key
+      // light to the photo's lit side, as the lamps do.
+      for (const { settings: { graze: g } } of items) {
+        const c = g?.enabled ? Math.cos(g.angle * Math.PI / 180) : 0;
+        if (side && Math.abs(c) > 0.26 && (side === 'right') !== (c > 0)) g.angle = mirrorAngle(g.angle);
+      }
       // Made in an order that shares G-buffer builds; shown in the order above. Built-in
       // looks fit their exposure; a saved look keeps its own, moved by as much as the
       // Gallery look's fit moved from 0 on this photo (how much brighter or darker it needs).
