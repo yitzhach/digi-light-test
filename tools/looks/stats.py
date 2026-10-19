@@ -17,7 +17,7 @@ import json
 import sys
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image
 
 CLIP_HI, CLIP_LO = 250, 5
 
@@ -29,14 +29,22 @@ def load(path, size=None):
     return im
 
 
+def box(y, r):
+    """Mean over a (2r+1)-square window, edges clamped (as Pillow's BoxBlur)."""
+    for axis in (0, 1):
+        p = np.pad(y, [(r + 1, r) if a == axis else (0, 0) for a in (0, 1)], mode='edge')
+        c = np.cumsum(p, axis=axis, dtype=np.float64)
+        n = y.shape[axis]
+        y = (np.take(c, range(2 * r + 1, 2 * r + 1 + n), axis=axis) - np.take(c, range(0, n), axis=axis)) / (2 * r + 1)
+    return y
+
+
 def metrics(im):
     a = np.asarray(im)
     hi = np.any(a >= CLIP_HI, axis=2)
     lo = np.all(a <= CLIP_LO, axis=2) & ~hi
-    y = (0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]).astype(np.float32)
-    yi = Image.fromarray(y, 'F')
-    b1 = np.asarray(yi.filter(ImageFilter.BoxBlur(1)))
-    b6 = np.asarray(yi.filter(ImageFilter.BoxBlur(6)))
+    y = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
+    b1, b6 = box(y, 1), box(y, 6)
     m = max(1.0, float(y.mean()))
     return {'hi': float(hi.mean()), 'lo': float(lo.mean()),
             'p05': float(np.percentile(y, 5)), 'p50': float(np.percentile(y, 50)), 'p95': float(np.percentile(y, 95)),

@@ -201,7 +201,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
     lift darks, raking from lower left / lower, cool fill, 5000 K, and L12/F07 finer raking
     detail (graze.detail 0.02 → 0.01, fine 0.15 → 0.5: 0.02 is ~16 px of smoothing at full size, a
     likely source of the "motion blur"). Rendered on the code before the Pin light fix (same
-    images: the applied looks never had the layer). Review page REVIEW_URL → ArtifactData list
+    images: the applied looks never had the layer). Review page https://claude.ai/artifact/LeAKsrXizCyEQUUgDY4MgW → ArtifactData list
     collection "picks" (docs {verdict, note, name, at}; notes are new).
   - **New review page** tools/looks/review-ab.html: full-screen, hold to flip to the photo / the
     base look / a pinned version, zoom and pan kept across versions, double-tap = 100%, swipe =
