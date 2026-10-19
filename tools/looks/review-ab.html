@@ -1,0 +1,208 @@
+<title>Lighting Round 3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a one-screen viewer. Top bar (photo, compare-with), the picture filling the middle on a neutral
+   grey surround like a photo editor's, the version's caption, verdict and note under it, a filmstrip at the bottom.
+   Single dark theme on purpose: pictures are judged on a neutral dark surround. */
+:root{--surround:#262626;--panel:#1b1b1b;--line:#3a3a3a;--fg:#ececec;--muted:#a3a3a3;--accent:#e2b65c;
+--keep:#6cc28f;--maybe:#e2b65c;--drop:#e07a7a;
+--ui:"Instrument Sans",system-ui,-apple-system,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+html,body{height:100%}
+body{background:var(--panel);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.4;overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+.app{height:100%;display:grid;grid-template-rows:auto 1fr auto auto}
+button,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line)}
+.top h1{font-size:1rem;font-weight:600;margin:0;letter-spacing:.01em}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 11px;font-size:.85rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--panel)}
+.lbl{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.count{margin-left:auto;font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.stage{position:relative;overflow:hidden;background:var(--surround);touch-action:none;user-select:none;-webkit-user-select:none;min-height:0}
+.layer{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+.layer img{position:absolute;inset:0;width:100%;height:100%;max-width:none;-webkit-user-drag:none;pointer-events:none}
+.layer img.b{opacity:0}
+.stage.showB .layer img.b{opacity:1}
+.tag{position:absolute;top:10px;left:max(10px,env(safe-area-inset-left,0px));font-family:var(--mono);font-size:.78rem;background:rgba(0,0,0,.62);padding:3px 8px;border-radius:4px;pointer-events:none}
+.stage.showB .tag.a,.tag.b{display:none}.stage.showB .tag.b{display:block}
+.zoom{position:absolute;top:10px;right:max(10px,env(safe-area-inset-right,0px));font-family:var(--mono);font-size:.78rem;background:rgba(0,0,0,.62);padding:3px 8px;border-radius:4px;pointer-events:none}
+.hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:.78rem;color:#ddd;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:999px;pointer-events:none;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis}
+.cap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:start;padding-block:10px 6px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-top:1px solid var(--line)}
+.title{display:flex;gap:10px;align-items:baseline;min-width:0;flex-wrap:wrap}
+.vid{font-family:var(--mono);font-weight:500;color:var(--accent)}
+.vname{font-weight:500;min-width:0}
+.stats{grid-column:1/-1;display:flex;gap:6px 14px;flex-wrap:wrap;font-family:var(--mono);font-size:.76rem;color:var(--muted)}
+.stats b{font-weight:500;color:var(--fg)}.stats .bad b{color:var(--drop)}
+.verdict{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.vb{background:none;border:1px solid var(--line);border-radius:5px;padding:5px 13px;font-size:.88rem}
+.vb[data-k="keep"][aria-pressed="true"]{background:var(--keep);border-color:var(--keep);color:#111}
+.vb[data-k="maybe"][aria-pressed="true"]{background:var(--maybe);border-color:var(--maybe);color:#111}
+.vb[data-k="drop"][aria-pressed="true"]{background:var(--drop);border-color:var(--drop);color:#111}
+.tool{background:none;border:1px solid var(--line);border-radius:5px;padding:5px 11px;font-size:.85rem;color:var(--muted)}
+.tool[aria-pressed="true"]{color:var(--fg);border-color:var(--fg)}
+.note{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.note textarea{flex:1;min-width:0;resize:none;height:2.3em;background:var(--surround);border:1px solid var(--line);border-radius:5px;padding:6px 9px;font-size:.88rem}
+.saved{font-size:.75rem;color:var(--muted);white-space:nowrap}
+.strip{display:flex;gap:6px;overflow-x:auto;padding-block:8px calc(8px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-top:1px solid var(--line);scrollbar-width:thin}
+.th{flex:0 0 auto;position:relative;padding:0;border:2px solid transparent;border-radius:4px;background:none;width:58px}
+.th img{display:block;width:100%;height:58px;object-fit:cover;border-radius:2px;background:var(--surround)}
+.th span{position:absolute;left:2px;bottom:2px;font-family:var(--mono);font-size:.62rem;background:rgba(0,0,0,.7);padding:0 3px;border-radius:2px}
+.th[aria-current="true"]{border-color:var(--fg)}
+.th[data-v="keep"]::after,.th[data-v="maybe"]::after,.th[data-v="drop"]::after{content:"";position:absolute;top:4px;right:4px;width:9px;height:9px;border-radius:50%;border:1px solid #111}
+.th[data-v="keep"]::after{background:var(--keep)}.th[data-v="maybe"]::after{background:var(--maybe)}.th[data-v="drop"]::after{background:var(--drop)}
+.th[data-v="drop"] img{opacity:.45}
+.th.pinned span{background:var(--accent);color:#111}
+.help{position:fixed;inset:auto 0 0 0;z-index:20;background:var(--panel);border-top:1px solid var(--line);padding-block:14px calc(14px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:8px;font-size:.88rem;max-height:70%;overflow:auto}
+.help p{margin:0;max-width:70ch;color:var(--muted)}.help b{color:var(--fg);font-weight:500}
+.help kbd{font-family:var(--mono);font-size:.78rem;border:1px solid var(--line);border-radius:3px;padding:0 4px}
+@media (max-width:640px){.cap{grid-template-columns:1fr}.verdict{justify-content:flex-start}.count{margin-left:0}.top h1{flex-basis:100%}}
+@media (prefers-reduced-motion:no-preference){.layer img.b{transition:opacity 60ms linear}}
+</style>
+<div class="app">
+<header class="top">
+<h1 id="h1">Lighting round 3</h1>
+<div class="grp"><span class="lbl">Photo</span><div class="seg" id="photos" role="group" aria-label="Photo"></div></div>
+<div class="grp"><span class="lbl">Hold to see</span><div class="seg" id="cmp" role="group" aria-label="Compare with"></div></div>
+<button class="tool" type="button" id="helpBtn" aria-expanded="false">How to use</button>
+<span class="count" id="count"></span>
+</header>
+<div class="stage" id="stage" tabindex="0" aria-label="Picture. Hold to compare, swipe for the next version, double-tap to zoom.">
+<div class="layer" id="layer"><img class="a" id="imA" alt=""><img class="b" id="imB" alt=""></div>
+<div class="tag a" id="tagA"></div><div class="tag b" id="tagB"></div><div class="zoom" id="zoomTag"></div>
+<div class="hint" id="hint">Hold to compare · swipe for next · double-tap to zoom to 100%</div>
+</div>
+<section class="cap" aria-live="polite">
+<div class="title"><span class="vid" id="vid"></span><span class="vname" id="vname"></span></div>
+<div class="verdict"><button class="vb" type="button" data-k="keep">Keep</button><button class="vb" type="button" data-k="maybe">Maybe</button><button class="vb" type="button" data-k="drop">Drop</button><button class="tool" type="button" id="pinBtn" aria-pressed="false">Pin to compare</button></div>
+<div class="stats" id="stats"></div>
+<div class="note"><textarea id="note" rows="1" placeholder="Your thoughts on this version (saved as you type)" aria-label="Note on this version"></textarea><span class="saved" id="saved"></span></div>
+</section>
+<nav class="strip" id="strip" aria-label="Versions"></nav>
+</div>
+<div class="help" id="help" hidden>
+<p id="about"></p>
+<p><b>Compare:</b> press and hold the picture (or hold <kbd>Space</kbd>) to flip to the photo, the base look, or a version you pinned. Pick which at the top. <b>Next:</b> swipe left or right, or <kbd>←</kbd> <kbd>→</kbd>. <b>Zoom:</b> double-tap (or <kbd>Z</kbd>) for 100% at that spot, pinch or scroll to zoom, drag to look around. The zoom stays put as you change versions, so you compare the same detail.</p>
+<p><b>Mark:</b> Keep, Maybe, Drop (<kbd>K</kbd> <kbd>M</kbd> <kbd>D</kbd>), and write a note on anything you see. Everything saves automatically. Numbers under the name: <b>whites</b> and <b>blacks</b> are the share of the picture blown to pure white or crushed to pure black (the photo's own in brackets); <b>darks</b> is the brightness of the darkest 5% (0–255); <b>detail</b> is the fine texture beside the photo's (100% = as crisp as the photo).</p>
+<button class="tool" type="button" id="helpClose">Close</button>
+</div>
+<script>
+/*DATA*/
+const $=(id)=>document.getElementById(id);
+const st={p:PHOTOS[0][0],i:0,cmp:"photo",pin:null,z:1,x:0,y:0,fit:1};
+const picks={},notes={};let db=null,showB=false;
+const ids=V.map(v=>v[0]);
+const src=(p,id,thumb)=>`${thumb?"t":"img"}/${p}-${id}.jpg`;
+const photo=()=>PHOTOS.find(x=>x[0]===st.p);
+function bId(){const id=V[st.i][0];if(st.cmp==="photo")return"photo";if(st.cmp==="pin")return st.pin||"photo";return BASE[id]||"photo"}
+function nameOf(id){if(id==="photo")return"Your photo";const v=V.find(x=>x[0]===id);return v?v[1]:id}
+function layout(){
+  const s=$("stage").getBoundingClientRect(),[,,w,h]=photo();
+  st.fit=Math.min(s.width/w,s.height/h);
+  const L=$("layer");L.style.width=w*st.fit+"px";L.style.height=h*st.fit+"px";clamp();apply();
+}
+function clamp(){
+  const s=$("stage").getBoundingClientRect(),[,,w,h]=photo(),W=w*st.fit*st.z,H=h*st.fit*st.z;
+  st.x=W<=s.width?(s.width-W)/2:Math.min(0,Math.max(s.width-W,st.x));
+  st.y=H<=s.height?(s.height-H)/2:Math.min(0,Math.max(s.height-H,st.y));
+}
+function apply(){
+  $("layer").style.transform=`translate(${st.x}px,${st.y}px) scale(${st.z})`;
+  const pct=Math.round(st.fit*st.z*100*(devicePixelRatio||1));$("zoomTag").textContent=st.z>1.01?`${pct}%`:"fit";
+}
+function zoomAt(cx,cy,z){
+  const s=$("stage").getBoundingClientRect(),px=cx-s.left,py=cy-s.top;
+  z=Math.max(1,Math.min(z,4/st.fit));
+  const k=z/st.z;st.x=px-(px-st.x)*k;st.y=py-(py-st.y)*k;st.z=z;clamp();apply();
+}
+function statLine(id){
+  const s=STATS[st.p]?.[id],o=STATS[st.p]?.photo;if(!s)return"";
+  const pc=(v)=>(v*100).toFixed(v<0.001?2:1)+"%";
+  const hiBad=s.hi>(o?.hi||0)+0.003,loBad=s.lo>(o?.lo||0)+0.003;
+  const parts=[[`whites ${pc(s.hi)}`,o?` (${pc(o.hi)})`:"",hiBad],[`blacks ${pc(s.lo)}`,o?` (${pc(o.lo)})`:"",loBad],[`darks ${Math.round(s.p05)}`,o?` (${Math.round(o.p05)})`:"",false]];
+  if(id!=="photo"&&o)parts.push([`detail ${Math.round(s.fine/o.fine*100)}%`,"",false]);
+  return parts.map(([a,b,bad])=>`<span class="${bad?"bad":""}"><b>${a}</b>${b}</span>`).join("");
+}
+function show(){
+  const [id,name]=V[st.i],b=bId(),p=st.p;
+  $("imA").src=src(p,id);$("imB").src=src(p,b);
+  $("imA").alt=`${photo()[1]}, ${id}: ${name}`;$("imB").alt=`${photo()[1]}, ${nameOf(b)}`;
+  $("tagA").textContent=id==="photo"?"Your photo":id;$("tagB").textContent=b==="photo"?"Your photo":`${b} · ${nameOf(b)}`;
+  $("vid").textContent=id==="photo"?"":id;$("vname").textContent=name;
+  $("stats").innerHTML=statLine(id);
+  document.querySelectorAll(".vb").forEach(x=>{x.setAttribute("aria-pressed",picks[id]===x.dataset.k);x.disabled=id==="photo"||!db});
+  $("pinBtn").setAttribute("aria-pressed",st.pin===id);
+  const n=$("note");if(document.activeElement!==n)n.value=notes[id]||"";n.disabled=!db;
+  $("saved").textContent=db?"":"Notes and picks save when this page is opened in Claude";
+  document.querySelectorAll(".th").forEach((t,k)=>{t.setAttribute("aria-current",k===st.i);t.dataset.v=picks[ids[k]]||"";t.classList.toggle("pinned",st.pin===ids[k])});
+  const cur=document.querySelectorAll(".th")[st.i];cur?.scrollIntoView({block:"nearest",inline:"nearest"});
+  for(const d of [1,-1]){const j=(st.i+d+V.length)%V.length;new Image().src=src(p,V[j][0])}
+  const c={keep:0,maybe:0,drop:0};for(const k of ids)if(picks[k])c[picks[k]]++;
+  const n2=ids.filter(k=>k!=="photo").length;
+  $("count").textContent=`${st.i+1}/${V.length} · ${c.keep} keep · ${c.maybe} maybe · ${c.drop} drop · ${n2-c.keep-c.maybe-c.drop} to go`;
+}
+function go(d){st.i=(st.i+d+V.length)%V.length;show()}
+function setB(on){showB=on;$("stage").classList.toggle("showB",on)}
+function seg(el,items,get,set){el.textContent="";for(const [k,l] of items){const b=document.createElement("button");b.type="button";b.textContent=l;b.onclick=()=>{set(k);paint()};el.append(b)}
+  const paint=()=>[...el.children].forEach((b,j)=>b.setAttribute("aria-pressed",items[j][0]===get()));paint();return paint}
+const paintP=seg($("photos"),PHOTOS.map(p=>[p[0],p[1]]),()=>st.p,(k)=>{st.p=k;st.z=1;buildStrip();layout();show()});
+const paintC=seg($("cmp"),[["photo","Photo"],["base","Base look"],["pin","Pinned"]],()=>st.cmp,(k)=>{st.cmp=k;show()});
+function buildStrip(){
+  const s=$("strip");s.textContent="";
+  V.forEach(([id,name],k)=>{const b=document.createElement("button");b.type="button";b.className="th";b.title=`${id==="photo"?"":id+" · "}${name}`;
+    b.innerHTML=`<img loading="lazy" alt="" src="${src(st.p,id,1)}"><span>${id==="photo"?"photo":id}</span>`;b.onclick=()=>{st.i=k;show()};s.append(b)});
+}
+async function mark(k){
+  const id=V[st.i][0];if(id==="photo"||!db)return;const was=picks[id];const v=was===k?"":k;
+  if(v)picks[id]=v;else delete picks[id];show();
+  try{const ref=db.doc("picks/"+id);if(v||notes[id])await ref.set({verdict:v,note:notes[id]||"",name:nameOf(id),at:Date.now()});else await ref.delete()}
+  catch(e){if(was)picks[id]=was;else delete picks[id];show();$("saved").textContent="Not saved: "+(e?.message||"try again")}
+}
+document.querySelectorAll(".vb").forEach(b=>b.onclick=()=>mark(b.dataset.k));
+$("pinBtn").onclick=()=>{const id=V[st.i][0];st.pin=st.pin===id?null:id;if(st.pin)st.cmp="pin";paintC();show()};
+let noteT=0;
+$("note").oninput=(e)=>{const id=V[st.i][0];notes[id]=e.target.value;$("saved").textContent="…";clearTimeout(noteT);
+  noteT=setTimeout(async()=>{if(!db)return;try{await db.doc("picks/"+id).set({verdict:picks[id]||"",note:notes[id]||"",name:nameOf(id),at:Date.now()});$("saved").textContent="Saved"}catch(err){$("saved").textContent="Not saved: "+(err?.message||"try again")}},700)};
+// Gestures: hold = compare, swipe = next, double-tap = 100% at the spot, pinch / wheel = zoom, drag = pan when zoomed.
+const P=new Map();let g=null,lastTap=0,holdT=0;
+const stage=$("stage");
+stage.addEventListener("pointerdown",(e)=>{stage.setPointerCapture(e.pointerId);P.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(P.size===1){g={x0:e.clientX,y0:e.clientY,sx:st.x,sy:st.y,moved:false,t:performance.now()};clearTimeout(holdT);holdT=setTimeout(()=>{if(g&&!g.moved)setB(true)},160)}
+  else if(P.size===2){clearTimeout(holdT);setB(false);const [a,b]=[...P.values()];g={pinch:true,d0:Math.hypot(a.x-b.x,a.y-b.y),z0:st.z}}});
+stage.addEventListener("pointermove",(e)=>{if(!P.has(e.pointerId)||!g)return;P.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(g.pinch&&P.size===2){const [a,b]=[...P.values()];zoomAt((a.x+b.x)/2,(a.y+b.y)/2,g.z0*Math.hypot(a.x-b.x,a.y-b.y)/g.d0);return}
+  const dx=e.clientX-g.x0,dy=e.clientY-g.y0;if(Math.hypot(dx,dy)>8){g.moved=true;clearTimeout(holdT)}
+  if(st.z>1.01&&g.moved&&!showB){st.x=g.sx+dx;st.y=g.sy+dy;clamp();apply()}});
+function up(e){if(!P.has(e.pointerId))return;P.delete(e.pointerId);clearTimeout(holdT);
+  if(g&&!g.pinch&&P.size===0){const dx=e.clientX-g.x0,dy=e.clientY-g.y0,dt=performance.now()-g.t;
+    if(showB)setB(false);
+    else if(st.z<=1.01&&Math.abs(dx)>50&&Math.abs(dx)>1.5*Math.abs(dy))go(dx<0?1:-1);
+    else if(!g.moved&&dt<250){const now=performance.now();if(now-lastTap<320){lastTap=0;st.z>1.01?(st.z=1,clamp(),apply()):zoomAt(e.clientX,e.clientY,1/(st.fit*(devicePixelRatio||1)))}else lastTap=now}
+  }
+  if(P.size===0)g=null;else if(P.size===1){const [q]=[...P.values()];g={x0:q.x,y0:q.y,sx:st.x,sy:st.y,moved:true,t:0}}}
+stage.addEventListener("pointerup",up);stage.addEventListener("pointercancel",up);
+stage.addEventListener("wheel",(e)=>{e.preventDefault();zoomAt(e.clientX,e.clientY,st.z*Math.exp(-e.deltaY*0.0015))},{passive:false});
+stage.addEventListener("contextmenu",(e)=>e.preventDefault());
+addEventListener("keydown",(e)=>{if(e.target.tagName==="TEXTAREA")return;const k=e.key.length===1?e.key.toLowerCase():e.key;
+  if(k===" "){e.preventDefault();if(!e.repeat)setB(true);return}
+  const f={ArrowRight:()=>go(1),ArrowLeft:()=>go(-1),k:()=>mark("keep"),m:()=>mark("maybe"),d:()=>mark("drop"),p:()=>$("pinBtn").click(),
+    z:()=>{const r=stage.getBoundingClientRect();st.z>1.01?(st.z=1,clamp(),apply()):zoomAt(r.left+r.width/2,r.top+r.height/2,1/(st.fit*(devicePixelRatio||1)))},
+    "1":()=>PHOTOS[0]&&$("photos").children[0].click(),"2":()=>PHOTOS[1]&&$("photos").children[1].click(),Escape:()=>{$("help").hidden=true;$("helpBtn").setAttribute("aria-expanded","false")}}[k];
+  if(f){e.preventDefault();f()}});
+addEventListener("keyup",(e)=>{if(e.key===" ")setB(false)});
+addEventListener("blur",()=>setB(false));
+$("helpBtn").onclick=()=>{const h=$("help");h.hidden=!h.hidden;$("helpBtn").setAttribute("aria-expanded",String(!h.hidden))};
+$("helpClose").onclick=()=>{$("help").hidden=true;$("helpBtn").setAttribute("aria-expanded","false")};
+$("about").textContent=ABOUT;$("h1").textContent=TITLE;
+new ResizeObserver(layout).observe(stage);
+buildStrip();layout();show();
+setTimeout(()=>{$("hint").hidden=true},6000);
+(async()=>{db=await window.claude?.use?.("db");if(!db){show();return}
+  db.collection("picks").onSnapshot((s)=>{for(const k of Object.keys(picks))delete picks[k];
+    for(const d of s.docs){const x=d.data()||{};if(x.verdict)picks[d.id]=x.verdict;if(typeof x.note==="string"&&!(document.activeElement===$("note")&&V[st.i][0]===d.id))notes[d.id]=x.note}show()});
+})();
+</script>

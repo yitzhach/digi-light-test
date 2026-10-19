@@ -195,6 +195,13 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
   // Shadow lift 0.6, not the favourite's 0.3: the user (10-19) found the darks crushed; on the
   // red-lintel door it takes black clipping from 1.04% to 0.29% (photo 0.17%), whites unchanged.
   const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 8, lift: 0.6 });
+  // Round 2 (10-19): the user kept "deeper relief + crisper texture" on both favourite looks
+  // (A11, A15: Colour › Relief 150%, Fine detail 140%). Built-in looks do not carry the Colour
+  // tool, so the same is made with the look's own settings: texture depth × 1.65 (over the depth
+  // fitted to this photo) and fine relief × 1.4; on the painting sample that is within 2.0 of 255
+  // RMS of the Colour-tool version (depth × 1.5 alone: 5.2).
+  // (At most 10 mm, the Texture depth slider's top.)
+  const deeper = (s) => { s.textureDepthMm = Math.min(10, Math.round(s.textureDepthMm * 1.65 * 100) / 100); s.fineRelief *= 1.4; };
   const BUILT_IN = [
     ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
     ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
@@ -204,8 +211,10 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     // The user's keepers from round F1 (10-19, tools/looks/favourite-variants.json 04 and 11):
     // Your favourite with a crisp graze (short, hard-edged shadows; the long soft one read as
     // motion blur), lit from the left.
-    ['Favourite, from the left', 'Your favourite with a crisp raking light from the left', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 170); }],
-    ['Favourite, side lamp left', 'Your favourite with the lamp low on the left side and a crisp raking light', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 175); Object.assign(s.lights[0], { x: -0.15, y: 0.6, z: 0.6 }); }],
+    // Round 2 keepers folded in: deeper relief + crisper texture on both, and on the side lamp
+    // the lamp lower on the wall (B02: y 0.4) and nearer the painting's edge (B04: x -0.05).
+    ['Favourite, from the left', 'Your favourite with a crisp raking light from the left, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 170); deeper(s); }],
+    ['Favourite, side lamp left', 'Your favourite with the lamp low on the left, near the edge, a crisp raking light, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 175); deeper(s); Object.assign(s.lights[0], { x: -0.05, y: 0.4, z: 0.6 }); }],
     ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
     ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
     ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],

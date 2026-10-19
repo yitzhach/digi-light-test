@@ -54,6 +54,8 @@ const rt=await page.evaluate(async()=>{const dl=window.digilight,c=JSON.parse(JS
     looks:s.looks.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:now.items[0].thumb.width,other};});
 assert.ok(rt.same&&!rt.hm&&rt.size<2e6&&rt.looks===A.n&&rt.tiles===A.n&&rt.thumbW===240&&/another photo or other settings/.test(rt.other),JSON.stringify(rt));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
 const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
+// Round 2's keepers in the favourite looks: deeper relief over the fitted depth (auto.js deeper()).
+for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));}
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
 await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
 const on=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,angle:s.graze.angle,depth:s.textureDepthMm,exp:s.exposure,op:s.graze.opacity,tile:document.querySelector('.autoLook.on span').textContent};});

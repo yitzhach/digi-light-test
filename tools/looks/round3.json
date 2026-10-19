@@ -1,0 +1,24 @@
+{
+ "about": "Round 3 (10-19): the round 2 keepers folded into the two built-in looks with look-level settings (auto.js deeper(): texture depth x1.65 + fine relief x1.4 = A11/A15; side lamp x -0.05, y 0.4 = B02+B04). L = 'Favourite, side lamp left', F = 'Favourite, from the left', both as now built in. 02s are round 2's looks (controls). The rest combine the other keepers: brighter (A03), lift darks (A08, made with room light 0.4 + graze shadow lift 0.9, which match its shadow-to-mid ratio), raking light from lower left (B10), lower (B25), cool fill from the right (B27), 5000 K (maybe A13). exposureAdd skips the whites guard: watch the clip stats. Each job: look, addLights, exposureAdd, scale, set (tools/digilight-cli.cjs batch).",
+ "fill": {"kind": "light", "fields": {"x": 1.15, "y": 0.6, "z": 1.2, "power": 1.2, "kelvin": 5000, "cone": 0.6, "softness": 0.9, "aimX": 0.5, "aimY": 0.5}},
+ "variants": [
+  {"id": "L01", "name": "Side lamp left, new (round 2 keepers in)", "look": "Favourite, side lamp left"},
+  {"id": "L02", "name": "Side lamp left, as in round 2", "look": "Favourite, side lamp left", "scale": {"textureDepthMm": 0.6061, "fineRelief": 0.7143}, "set": {"lights.0.x": -0.15, "lights.0.y": 0.6}},
+  {"id": "L03", "name": "Lamp only half as low and near the edge", "look": "Favourite, side lamp left", "set": {"lights.0.x": -0.1, "lights.0.y": 0.5}},
+  {"id": "L04", "name": "Brighter (+0.3)", "look": "Favourite, side lamp left", "exposureAdd": 0.3},
+  {"id": "L05", "name": "Lift darks", "look": "Favourite, side lamp left", "set": {"ambient": 0.4, "graze.lift": 0.9}},
+  {"id": "L06", "name": "A little brighter (+0.15) + lift darks", "look": "Favourite, side lamp left", "exposureAdd": 0.15, "set": {"ambient": 0.4, "graze.lift": 0.9}},
+  {"id": "L07", "name": "Raking light from lower left (190°)", "look": "Favourite, side lamp left", "set": {"graze.angle": 190}},
+  {"id": "L08", "name": "Raking light lower (6°)", "look": "Favourite, side lamp left", "set": {"graze.elevation": 6}},
+  {"id": "L09", "name": "Plus a cool fill from the right", "look": "Favourite, side lamp left", "fill": true},
+  {"id": "L10", "name": "Raking lower left + lower + lift darks", "look": "Favourite, side lamp left", "set": {"graze.angle": 190, "graze.elevation": 6, "ambient": 0.4, "graze.lift": 0.9}},
+  {"id": "L11", "name": "5000 K lamp + lift darks", "look": "Favourite, side lamp left", "set": {"lights.0.kelvin": 5000, "ambient": 0.4, "graze.lift": 0.9}},
+  {"id": "L12", "name": "Deeper still (+25%)", "look": "Favourite, side lamp left", "scale": {"textureDepthMm": 1.25}},
+  {"id": "F01", "name": "From the left, new (deeper + crisper in)", "look": "Favourite, from the left"},
+  {"id": "F02", "name": "From the left, as in round 2", "look": "Favourite, from the left", "scale": {"textureDepthMm": 0.6061, "fineRelief": 0.7143}},
+  {"id": "F03", "name": "From the left, raking light lower (6°)", "look": "Favourite, from the left", "set": {"graze.elevation": 6}},
+  {"id": "F04", "name": "From the left, plus a cool fill from the right", "look": "Favourite, from the left", "fill": true},
+  {"id": "F05", "name": "From the left, lower raking + cool fill + lift darks", "look": "Favourite, from the left", "fill": true, "set": {"graze.elevation": 6, "ambient": 0.4, "graze.lift": 0.9}},
+  {"id": "F06", "name": "From the left, brighter (+0.3) + lift darks", "look": "Favourite, from the left", "exposureAdd": 0.3, "set": {"ambient": 0.4, "graze.lift": 0.9}}
+ ]
+}

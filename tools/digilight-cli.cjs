@@ -15,7 +15,7 @@
 //   render     write the relit painting to --out (full size unless --preview or --width)
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
 //              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
-//               "exposureAdd": 0.3, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
+//               "exposureAdd": 0.3, "scale": {"textureDepthMm": 1.2}, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
 //               "width": 800, "preview": false, "quality": 0.9}; each starts from the photo as opened
 // options (applied in this order):
 //   --preset kind:name   lighting:"Gallery track", graze:"Classic raking", looks:"07 Brighter"
@@ -43,8 +43,9 @@ function parseArgs(argv) {
   return o;
 }
 
-// Preset(s), then the look, then (batch jobs) added lights and exposureAdd (stops on top of
-// the exposure the look fitted), then the --set changes. Analyze (from the disk cache when it
+// Preset(s), then the look, then (batch jobs) added lights, exposureAdd (stops on top of
+// the exposure the look fitted) and scale (each path times a factor, on the value the look
+// set, so "20% deeper" works on any photo), then the --set changes. Analyze (from the disk cache when it
 // can, see digilight-headless.cjs) runs for `analyze`, or for a look when the page has none.
 async function dress(call, j, analyze, src = {}) {
   const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -54,6 +55,15 @@ async function dress(call, j, analyze, src = {}) {
   if (j.look != null) await call('applyLook', /^\d+$/.test(String(j.look)) ? +j.look : j.look, { strength: j.strength != null ? +j.strength : 1 });
   for (const l of list(j.addLights)) await call('addLight', l.kind || 'light', l.fields || {});
   if (j.exposureAdd != null) await call('set', { exposure: Math.round(((await call('get', 'exposure')) + +j.exposureAdd) * 100) / 100 });
+  if (j.scale) {
+    const changes = {};
+    for (const [p, k] of Object.entries(j.scale)) {
+      const v = await call('get', p);
+      if (typeof v !== 'number') throw new Error(`scale: ${p} is not a number setting`);
+      changes[p] = Math.round(v * +k * 1e4) / 1e4;
+    }
+    await call('set', changes);
+  }
   const sets = list(j.set);
   if (sets.length) {
     const changes = {};
