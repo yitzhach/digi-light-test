@@ -141,7 +141,7 @@ node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
 (each job: `out`, and any of `look`, `strength`, `preset` (`kind:name` or a list), `set`
 (string, object or a list), `exposureAdd` (stops added to the exposure the look fitted, so
 "+0.3" means the same on every photo), `scale` (`{"textureDepthMm": 1.2}`: each setting times a
-factor, on the value the look set, so "20% deeper" means the same on every photo), `addLights` (a list of `{kind, fields}` as `addLight`),
+factor, on the value the look set, so "20% deeper" means the same on every photo, kept inside the setting's range), `addLights` (a list of `{kind, fields}` as `addLight`),
 `width`, `preview`, `quality`). Prints one JSON line per file.
 
 **Analyze is cached on disk.** The CLI and the MCP server keep each finished Analyze in

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Numbers for a round of looks, each render against the photo it was made from.
 
-    python3 tools/looks/stats.py DIR ID1,ID2,...   ->  JSON {ORIG: {...}, ID1: {...}, ...}
+    python3 tools/looks/stats.py DIR ID1,ID2,...   ->  JSON {photo: {...}, ID1: {...}, ...}
 
 DIR holds ORIG.jpg (the photo) and ID.jpg per render (resized to the photo if they differ).
 Per picture:
@@ -17,13 +17,13 @@ import json
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 CLIP_HI, CLIP_LO = 250, 5
 
 
 def load(path, size=None):
-    im = Image.open(path).convert('RGB')
+    im = ImageOps.exif_transpose(Image.open(path)).convert('RGB')
     if size and im.size != size:
         im = im.resize(size, Image.LANCZOS)
     return im
@@ -54,7 +54,7 @@ def metrics(im):
 def main():
     folder, ids = sys.argv[1], [i for i in sys.argv[2].split(',') if i]
     orig = load(f'{folder}/ORIG.jpg')
-    out = {'ORIG': metrics(orig)}
+    out = {'photo': metrics(orig)}
     for i in ids:
         try:
             out[i] = metrics(load(f'{folder}/{i}.jpg', orig.size))

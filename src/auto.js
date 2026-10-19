@@ -211,7 +211,7 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
     ['Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
     ['Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
-    ['Your favourite', 'Your own look (10-16): gallery lamp, low raking graze, Pin light photo layer', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
+    ['Your favourite', 'Your own look (10-16): gallery lamp, low raking graze', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
     // The user's keepers from round F1 (10-19, tools/looks/favourite-variants.json 04 and 11):
     // Your favourite with a crisp graze (short, hard-edged shadows; the long soft one read as
     // motion blur), lit from the left.
@@ -291,9 +291,10 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
       // Looks: built-in, then the user's presets and projects.
       const items = [];
       // A built-in look keeps the user's own layers when picked (pick()), so it is made and fitted
-      // with none: the favourite's Pin light layer used to light its thumbnail and exposure fit,
+      // with those: the favourite's Pin light layer used to light its thumbnail and exposure fit,
       // then was dropped from the picture (found 10-19).
-      for (const [name, note, make] of BUILT_IN) { const s = clone(ref); s.exposure = 0; make(s); Object.assign(s, { layers: [], originalTop: 0 }); items.push({ name, note, bias: LOOK_BIAS[name] ?? 0, settings: s, kind: 'built-in' }); }
+      const ownLayers = { layers: clone(base.layers ?? []), layersOn: base.layersOn, originalTop: base.originalTop ?? 0 };
+      for (const [name, note, make] of BUILT_IN) { const s = clone(ref); s.exposure = 0; make(s); Object.assign(s, clone(ownLayers)); items.push({ name, note, bias: LOOK_BIAS[name] ?? 0, settings: s, kind: 'built-in' }); }
       try { for (const p of (await userPresets()).slice(0, 8)) items.push({ name: p.name, note: 'Your preset, adapted to this photo', settings: adapted(ref, presetSettings(p)), kind: 'preset' }); } catch { /* storage off */ }
       try {
         const rows = (await userProjects()).filter((p) => p.id !== currentProject()).sort((a, b) => b.updated - a.updated).slice(0, 6);

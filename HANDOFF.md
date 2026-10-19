@@ -196,6 +196,11 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
     the painting they land where approved (−0.33/−0.13/−0.27, was −0.33/−0.14/−0.28). What the user
     saw was ~0.2 stops darker than the looks' fit assumed: likely why "brighter +0.3" was kept.
   - A fixed-angle graze (the favourites' 170°/175°) now mirrors to the photo's lit side with the lamps.
+  - A code review (3 lenses + skeptics) of this session's diff found 10 real issues, all fixed:
+    built-in looks are now fitted with the user's own layers (what pick() applies), CLI `scale`
+    clamps to the setting's range, stats.py keys the photo as `photo` and honours EXIF rotation,
+    the review page keeps a note on the version it was typed on (saved when leaving it), zoom holds
+    the same detail when the caption resizes, browser shortcuts (Ctrl/Cmd) are left alone.
   - **Round 3** (tools/looks/round3.json, 19 versions × the two samples, the door photos are
     still not in the repo): L01/F01 = new looks, L02/F02 = round 2's (controls), then brighter,
     lift darks, raking from lower left / lower, cool fill, 5000 K, and L12/F07 finer raking

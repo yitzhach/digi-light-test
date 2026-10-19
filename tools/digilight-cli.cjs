@@ -56,11 +56,12 @@ async function dress(call, j, analyze, src = {}) {
   for (const l of list(j.addLights)) await call('addLight', l.kind || 'light', l.fields || {});
   if (j.exposureAdd != null) await call('set', { exposure: Math.round(((await call('get', 'exposure')) + +j.exposureAdd) * 100) / 100 });
   if (j.scale) {
-    const changes = {};
+    // Kept inside each setting's range (digilight.describe()), so "20% deeper" stops at the top.
+    const changes = {}, ranges = Object.fromEntries((await call('describe')).map((d) => [d.path, d]));
     for (const [p, k] of Object.entries(j.scale)) {
-      const v = await call('get', p);
+      const v = await call('get', p), r = ranges[p] || {};
       if (typeof v !== 'number') throw new Error(`scale: ${p} is not a number setting`);
-      changes[p] = Math.round(v * +k * 1e4) / 1e4;
+      changes[p] = Math.min(r.max ?? Infinity, Math.max(r.min ?? -Infinity, Math.round(v * +k * 1e4) / 1e4));
     }
     await call('set', changes);
   }
