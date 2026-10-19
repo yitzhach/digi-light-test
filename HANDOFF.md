@@ -182,6 +182,43 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-19 (late), NEXT CHAT START HERE: round 3 picks.** The user said "go ahead, use
+  look-level settings", and asked for high-level thinking on making this a pro-level relighting
+  tool, for people uploading photos and for AI agents driving it. Done this session:
+  - **Round 2 keepers folded into the two looks** with look-level settings (auto.js `deeper()`:
+    texture depth ×1.65 over the fitted depth, max 10 mm, + fineRelief ×1.4 = A11/A15 within
+    2.0/255 RMS of the Colour-tool version; side lamp x −0.05, y 0.4 = B02+B04). Lift darks (A08)
+    is made with room light 0.4 + graze.lift 0.9 (same shadow/mid ratio 0.48 vs 0.50); not folded
+    in yet, it is a round 3 variant (A12, brighter + lift, was not picked in round 2).
+  - **Bug fixed: "tapped ≠ applied".** The favourite looks were fitted (thumbnail, exposure,
+    whites guard) with the favourite's Pin light layer at 88%, which pick() never applies. Now
+    built-in looks are made with no layers; their LOOK_BIAS moved −0.56 → −0.76/−0.75/−0.78 so on
+    the painting they land where approved (−0.33/−0.13/−0.27, was −0.33/−0.14/−0.28). What the user
+    saw was ~0.2 stops darker than the looks' fit assumed: likely why "brighter +0.3" was kept.
+  - A fixed-angle graze (the favourites' 170°/175°) now mirrors to the photo's lit side with the lamps.
+  - **Round 3** (tools/looks/round3.json, 19 versions × the two samples, the door photos are
+    still not in the repo): L01/F01 = new looks, L02/F02 = round 2's (controls), then brighter,
+    lift darks, raking from lower left / lower, cool fill, 5000 K, and L12/F07 finer raking
+    detail (graze.detail 0.02 → 0.01, fine 0.15 → 0.5: 0.02 is ~16 px of smoothing at full size, a
+    likely source of the "motion blur"). Rendered on the code before the Pin light fix (same
+    images: the applied looks never had the layer). Review page REVIEW_URL → ArtifactData list
+    collection "picks" (docs {verdict, note, name, at}; notes are new).
+  - **New review page** tools/looks/review-ab.html: full-screen, hold to flip to the photo / the
+    base look / a pinned version, zoom and pan kept across versions, double-tap = 100%, swipe =
+    next, Keep/Maybe/Drop + a note per version, Clipping overlay (magenta newly blown, cyan newly
+    crushed). Build: tools/looks/stats.py (clip counted as the app counts it: any channel ≥250 /
+    all ≤5) + replace `/*DATA*/` with TITLE, ABOUT, PHOTOS [[n,label,w,h]], V [[id,name]], BASE
+    {id: compare id}, STATS {n: {id: stats}}; files img/n-id.jpg and t/n-id.jpg (160 px).
+  - CLI batch `scale` ({"textureDepthMm": 1.2}: relative edits, docs/automation.md).
+  - **docs/roadmap.md**: the plan from a five-lens review (look quality, review flow, AI agents,
+    look system, speed) + a critic. Next steps from it, in order: shared metrics on every render
+    (src/measure.js, returned by render/export/CLI/MCP); one whites/darks guard after every change
+    (today only inside Analyze); a JSON record beside each export; look ids instead of names;
+    relief rebuilt only when the surface changes + many variants per build (rounds ~4× faster);
+    in-app A/B for uploaders; agent tools (region previews with stats, compare).
+  - Ask the user: re-attach the door photos; round 3 picks and notes; the roadmap's questions
+    (lamp photos per piece for measured relief, evenness slider, finer graze, blind voting,
+    phone or iMac, default look for uploaders, 16-bit/TIFF).
 - **User, 10-19, NEXT CHAT START HERE — lighting rounds.** The user will add thoughts on the round 2
   images first; read them, then build round 3. All picks are saved in **tools/looks/picks.json**.
   - **Built-in Auto looks (in auto.js BUILT_IN):** *Favourite, side lamp left* and *Favourite, from the
@@ -420,6 +457,9 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-19 (late, on `main`): round 2 keepers in the favourite looks (look-level), the Pin light
+  fit bug, graze side mirroring, CLI `scale`, round 3 + the A/B review page, tools/looks/stats.py,
+  docs/roadmap.md. See Status.
 - 10-18 (pushed to `main`): **Analyze cache.** `tools/digilight-headless.cjs analyzeCached`:
   CLI (`analyze`, `render --look`, `batch`) and MCP (`analyze`, `apply_look`) keep each finished
   Analyze in `~/.cache/digilight/analysis/<sha256(src/ code, input bytes, settings + preview
@@ -1030,6 +1070,7 @@ To judge it on a real painting, by eye:
 - 09-17: Creative Studio — presets, before/after + split, undo/redo, brushes, saved projects (IndexedDB)
 
 ## Next up (candidates — confirm with user)
+-5. (10-19) Round 3 picks → fold into the looks; then docs/roadmap.md NOW/NEXT in order.
 -4. NEXT CHAT STARTS HERE (10-15): the AI-match work. The user's favourite remains the AI image
    (`samples/painting.jpg` relit by a generative model; the user can re-upload it): "more
    natural texture (a little less fine texture) and a bit more depth". Best DigiLight looks:
