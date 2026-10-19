@@ -182,7 +182,31 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
-- **User, 10-19, NEXT CHAT START HERE:** round F1 picks: keep 04 + 11 (both lit from the left),
+- **User, 10-19, NEXT CHAT START HERE — lighting rounds.** The user will add thoughts on the round 2
+  images first; read them, then build round 3. All picks are saved in **tools/looks/picks.json**.
+  - **Built-in Auto looks (in auto.js BUILT_IN):** *Favourite, side lamp left* and *Favourite, from the
+    left* (the round F1 keepers): the favourite look plus a crisp graze from the left (reach 0.4, soft
+    0.1, elevation 8, lift 0.6). Every built-in look's exposure is guarded so it blows out no more
+    white than the photo + 0.3% (keepWhites).
+  - **Round 2 keepers (10):** A03 brighter +0.3 · A07 crisper fine texture · A08 lift darks · A11
+    deeper relief + crisper texture · A15 the same on *from the left* · B02 side lamp lower on the wall
+    (y 0.4) · B04 side lamp nearer the edge (x −0.05) · B10 raking light from lower left (190°) · B25
+    *from the left* with the raking light lower (6°) · B27 *from the left* + a cool fill light from the
+    right. **Maybes:** A10, A14 (5000 K + wide soft pool), A13 (5000 K + deeper relief + lift darks).
+    Recipes: tools/looks/round2.json. The user never wants: blur/smear, blown whites, crushed darks.
+  - **Pattern:** brighter, lifted darks, crisper and deeper texture, a lamp low on the left, near the
+    edge. Next: fold the clear winners into the two looks (exposure +0.3 via LOOK_BIAS, relief fine
+    1.4 + amount 1.5 where a look can carry it, lamp y 0.4 / x −0.05) and render round 3 combining
+    them (e.g. B02+B04+A11, B10 graze, B27 fill), with clip stats on the page. Note: Colour-tool
+    settings (adjust.*: lift darks, relief amount/fine) are NOT carried by built-in looks (pick()
+    keeps the user's own adjust); to make them defaults use look-level settings (fineRelief,
+    reliefStrength, ambient, graze.lift) or change that rule deliberately.
+  - **Photos:** the two plaster door pieces (red lintel, wooden lintel) are not in the repo; ask
+    the user to re-attach them. Workflow: tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
+    (one Analyze, cached in ~/.cache/digilight; ~35 s per full-size image on 4 CPUs; run one batch
+    at a time). Review page template: copy .review-r2/ from a past session or rebuild (grid of both
+    photos per version, Keep/Maybe/Drop in the page's db collection "picks", clip stats).
+- **User, 10-19 (earlier):** round F1 picks: keep 04 + 11 (both lit from the left),
   maybes 00 06 17 20 22 26 28 29, drop 13 30, 19 unmarked = dropped. DONE: two new built-in Auto
   looks, **Favourite, from the left** and **Favourite, side lamp left** (auto.js BUILT_IN,
   crispGraze: reach 0.4, soft 0.1, elevation 8, **graze.lift 0.6** because the user saw crushed

@@ -1,0 +1,26 @@
+{
+ "about": "The user's Keep / Maybe / Drop picks from the review pages (read with ArtifactData list collection picks). Unmarked = dropped (user, 10-19). Recipes: favourite-variants.json (round F1), round2.json (round 2).",
+ "F1": {
+  "page": "https://claude.ai/artifact/XZyjaDxxn4zZCQMo9wroeB",
+  "date": "2026-10-19",
+  "keep": ["04", "11"],
+  "maybe": ["00", "06", "17", "20", "22", "26", "28", "29"],
+  "drop": ["13", "30"],
+  "note": "04 and 11 became the built-in looks 'Favourite, from the left' and 'Favourite, side lamp left'."
+ },
+ "round2": {
+  "page": "https://claude.ai/artifact/6shVeNG5wpP4dWGqPLMhT3",
+  "date": "2026-10-19",
+  "keep": ["A03", "A07", "A08", "A11", "A15", "B02", "B04", "B10", "B25", "B27"],
+  "maybe": ["A10", "A13", "A14"],
+  "drop": [],
+  "names": {
+   "A03": "Side lamp left, brighter (+0.3)", "A07": "Side lamp left, crisper fine texture", "A08": "Side lamp left, lift darks",
+   "A11": "Side lamp left, deeper relief + crisper texture", "A15": "From the left, deeper relief + crisper texture",
+   "B02": "Side lamp lower on the wall", "B04": "Side lamp nearer the edge", "B10": "Raking light from lower left",
+   "B25": "From the left, raking light lower (6°)", "B27": "From the left, plus a cool fill from the right",
+   "A10": "Side lamp left, 5000 K + wide soft pool", "A13": "Side lamp left, 5000 K + deeper relief + lift darks", "A14": "From the left, 5000 K + wide soft pool"
+  },
+  "note": "Rendered before graze.lift 0.6 (crushed-darks fix) went into the two looks. 28 of 41 unmarked = dropped."
+ }
+}
