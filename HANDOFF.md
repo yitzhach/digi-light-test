@@ -182,6 +182,18 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **User, 10-19, NEXT CHAT START HERE:** round F1 picks: keep 04 + 11 (both lit from the left),
+  maybes 00 06 17 20 22 26 28 29, drop 13 30, 19 unmarked = dropped. DONE: two new built-in Auto
+  looks, **Favourite, from the left** and **Favourite, side lamp left** (auto.js BUILT_IN,
+  crispGraze: reach 0.4, soft 0.1, elevation 8, **graze.lift 0.6** because the user saw crushed
+  darks: red lintel black clip 1.04% → 0.29%, photo 0.17%). **Whites guard**: every built-in look's
+  exposure steps down until it clips no more than the photo + 0.3% (auto.js keepWhites). **Round 2**
+  (tools/looks/round2.json: A = keepers × maybes, B = 30 more variations; B11–13, B17 dropped:
+  graze reach/clean/shadow do nothing without physical depth). Rendered BEFORE the lift 0.6 fix.
+  Picker with clip stats: https://claude.ai/artifact/6shVeNG5wpP4dWGqPLMhT3 → ArtifactData list
+  "picks". CLI batch: `exposureAdd`, `addLights`, a failing job is reported and skipped. Speed
+  notes (4 CPUs, software GL): two renders at once = no gain; preview-size renders are ~17%
+  softer, so review rounds stay full size; per job ~35 s, most of it the relief rebuild.
 - **User, 10-18 (session 017w…), NEXT CHAT START HERE:** **Look catalog round F1.** The user
   asked for ~30 versions of Your favourite (light position, intensity, colour; "no
   blurriness") to build a catalog of default looks and drop the ones that don't work. 31

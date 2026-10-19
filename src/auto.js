@@ -6,7 +6,7 @@
 // depth, exposure set so the render sits at the photo's brightness). One Strength
 // slider mixes the picked look with the settings it replaced.
 import { textureScore, fitDepth } from './texscore.js';
-import { clippingOf, nearerSide } from './photocheck.js';
+import { clipping, clippingOf, nearerSide } from './photocheck.js';
 
 // Depth: the depth at which the relief adds RELIEF_GAIN to the render's stroke contrast,
 // over the same render with almost no relief (DEPTH_FLAT mm), under a plain gallery light.
@@ -25,7 +25,7 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63,
 // 0 keeps 0.92. The user found 0.7 "a bit blurry"; of 0.7 / 0.4 / 0 they picked 0 (10-16).
 export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0 };
-export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.56, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
+export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.56, 'Favourite, from the left': -0.56, 'Favourite, side lamp left': -0.56, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
@@ -160,10 +160,24 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
       const m = meanOf();
       if (!(m.mean > 1e-5)) return m.canvas;
       const e = Math.max(-3, Math.min(3, Math.round((state.exposure + Math.log2(target / m.mean)) * 100) / 100));
-      if (Math.abs(e - state.exposure) < 0.02) return m.canvas;
+      if (Math.abs(e - state.exposure) < 0.02) return keepWhites(m.canvas);
       state.exposure = e;
     }
-    return meanOf().canvas;
+    return keepWhites();
+  }
+  // The user (10-19): "be careful not to let the light source blow out the whites". A look
+  // may clip no more than the photo itself does (+0.3% of the picture): step the exposure
+  // down until it does not.
+  // `canvas`: the thumbnail already rendered at the current exposure, if there is one.
+  function keepWhites(canvas) {
+    const allowed = (A.clip?.hi || 0) + 0.003;
+    const read = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+    let c = canvas || grab(THUMB_W).canvas;
+    for (let i = 0; i < 8 && clipping(read(c)).hi > allowed && state.exposure > -3; i++) {
+      state.exposure = Math.max(-3, Math.round((state.exposure - 0.1) * 100) / 100);
+      c = grab(THUMB_W).canvas;
+    }
+    return c;
   }
 
   // Built-in looks: [name, note, make(settings)]. Each starts from the
@@ -178,12 +192,20 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
   const graze = (s, preset, opacity) => { Object.assign(s.graze, grazePresets[preset], { enabled: true, angle: A.rake, grey: 0 }); if (opacity != null) s.graze.opacity = opacity; delete s.graze.lamp; };
   const look = (s, name, rake) => { const k = looks[name]; s.lights = k.lights.map(makeLight); for (const key of LOOK_KEYS) if (key in k) s[key] = clone(k[key]);
     if (k.graze) { Object.assign(s.graze, k.graze, { enabled: true }); if (rake) s.graze.angle = A.rake; delete s.graze.lamp; } else s.graze.enabled = false; };
+  // Shadow lift 0.6, not the favourite's 0.3: the user (10-19) found the darks crushed; on the
+  // red-lintel door it takes black clipping from 1.04% to 0.29% (photo 0.17%), whites unchanged.
+  const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 8, lift: 0.6 });
   const BUILT_IN = [
     ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
     ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
     ['Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
     ['Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
     ['Your favourite', 'Your own look (10-16): gallery lamp, low raking graze, Pin light photo layer', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
+    // The user's keepers from round F1 (10-19, tools/looks/favourite-variants.json 04 and 11):
+    // Your favourite with a crisp graze (short, hard-edged shadows; the long soft one read as
+    // motion blur), lit from the left.
+    ['Favourite, from the left', 'Your favourite with a crisp raking light from the left', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 170); }],
+    ['Favourite, side lamp left', 'Your favourite with the lamp low on the left side and a crisp raking light', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 175); Object.assign(s.lights[0], { x: -0.15, y: 0.6, z: 0.6 }); }],
     ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
     ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
     ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],

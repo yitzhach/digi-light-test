@@ -15,6 +15,7 @@
 //   render     write the relit painting to --out (full size unless --preview or --width)
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
 //              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
+//               "exposureAdd": 0.3, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
 //               "width": 800, "preview": false, "quality": 0.9}; each starts from the photo as opened
 // options (applied in this order):
 //   --preset kind:name   lighting:"Gallery track", graze:"Classic raking", looks:"07 Brighter"
@@ -42,7 +43,8 @@ function parseArgs(argv) {
   return o;
 }
 
-// Preset(s), then the look, then the --set changes. Analyze (from the disk cache when it
+// Preset(s), then the look, then (batch jobs) added lights and exposureAdd (stops on top of
+// the exposure the look fitted), then the --set changes. Analyze (from the disk cache when it
 // can, see digilight-headless.cjs) runs for `analyze`, or for a look when the page has none.
 async function dress(call, j, analyze, src = {}) {
   const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -50,6 +52,8 @@ async function dress(call, j, analyze, src = {}) {
   let analysis = null;
   if (analyze || (j.look != null && !(await call('looks')).length)) analysis = await analyzeCached(call, src.input, src);
   if (j.look != null) await call('applyLook', /^\d+$/.test(String(j.look)) ? +j.look : j.look, { strength: j.strength != null ? +j.strength : 1 });
+  for (const l of list(j.addLights)) await call('addLight', l.kind || 'light', l.fields || {});
+  if (j.exposureAdd != null) await call('set', { exposure: Math.round(((await call('get', 'exposure')) + +j.exposureAdd) * 100) / 100 });
   const sets = list(j.set);
   if (sets.length) {
     const changes = {};
@@ -74,16 +78,25 @@ function readJobs(file) {
 }
 
 // Analyze once (the page keeps it), then each job from the settings the photo opened with.
+// A job that fails (a bad setting, say) is reported and skipped; the exit code is 1 if any did.
+// (Two pages rendering at once were tried, 10-19: on 4 CPUs no faster in total than one.)
 async function runJobs(call, jobs, src) {
   const base = await call('settings');
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
+  let failed = 0;
   for (const j of jobs) {
     const t = Date.now();
-    await call('setSettings', base);
-    await dress(call, j, false);
-    await write(call, j);
-    process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10 }) + '\n');
+    try {
+      await call('setSettings', base);
+      await dress(call, j, false);
+      await write(call, j);
+      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10 }) + '\n');
+    } catch (e) {
+      failed++;
+      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n');
+    }
   }
+  if (failed) process.exitCode = 1;
 }
 
 async function main() {
