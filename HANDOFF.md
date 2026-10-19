@@ -204,7 +204,7 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
   - **Photos:** the two plaster door pieces (red lintel, wooden lintel) are not in the repo; ask
     the user to re-attach them. Workflow: tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
     (one Analyze, cached in ~/.cache/digilight; ~35 s per full-size image on 4 CPUs; run one batch
-    at a time). Review page template: copy .review-r2/ from a past session or rebuild (grid of both
+    at a time). Review page template: tools/looks/review-template.html (replace `const V=/*DATA*/[];` with `const V=[[id,name],...];const STATS={id:html};`, publish with img/ and t/ folders; grid of both
     photos per version, Keep/Maybe/Drop in the page's db collection "picks", clip stats).
 - **User, 10-19 (earlier):** round F1 picks: keep 04 + 11 (both lit from the left),
   maybes 00 06 17 20 22 26 28 29, drop 13 30, 19 unmarked = dropped. DONE: two new built-in Auto

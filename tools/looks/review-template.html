@@ -1,0 +1,108 @@
+<title>Lighting Round 2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Work+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one row per version, both pieces side by side, verdict buttons under; sticky filter bar; full-screen viewer */
+:root{--bg:#f3f1ed;--card:#fbfaf7;--fg:#24211d;--muted:#6d665d;--line:#d9d3c9;--accent:#a8432a;
+--keep:#2f7a4b;--maybe:#a87a1e;--drop:#9a3a3a;
+--display:"Fraunces",Georgia,serif;--body:"Work Sans",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1816;--card:#22201d;--fg:#ece7df;--muted:#a59d92;--line:#36312c;--accent:#e0805f;--keep:#6cc28f;--maybe:#e0b558;--drop:#e07a7a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1a1816;--card:#22201d;--fg:#ece7df;--muted:#a59d92;--line:#36312c;--accent:#e0805f;--keep:#6cc28f;--maybe:#e0b558;--drop:#e07a7a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+main{max-width:1100px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1{font-family:var(--display);font-weight:500;font-size:2rem;margin:0;text-wrap:balance}
+p{margin:0;color:var(--muted);max-width:68ch}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar .count{margin-left:auto;color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 12px;font-size:.9rem}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.list{display:grid;gap:16px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px}
+.row[data-v="keep"]{border-color:var(--keep)}.row[data-v="drop"]{opacity:.55}
+.head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.num{font-family:var(--display);font-size:1.3rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.name{font-weight:500}
+.pics{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pics button{padding:0;border:0;background:none;cursor:zoom-in;display:block}
+.pics img{display:block;width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--line)}
+.pics button:focus-visible,.vbtn:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.verdict{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.vbtn{border:1px solid var(--line);background:none;color:var(--fg);border-radius:4px;padding:5px 14px;font-size:.9rem}
+.vbtn[data-k="keep"][aria-pressed="true"]{background:var(--keep);border-color:var(--keep);color:var(--card)}
+.vbtn[data-k="maybe"][aria-pressed="true"]{background:var(--maybe);border-color:var(--maybe);color:var(--card)}
+.vbtn[data-k="drop"][aria-pressed="true"]{background:var(--drop);border-color:var(--drop);color:var(--card)}
+.clip{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}.clip b{color:var(--drop);font-weight:600}.sec{font-family:var(--display);font-size:1.3rem;margin:12px 0 0}
+.saved{font-size:.8rem;color:var(--muted)}
+#lb{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column}
+#lbpics{flex:1;min-height:0;display:flex;gap:4px;padding-top:env(safe-area-inset-top,0px)}
+#lbpics img{flex:1;min-width:0;height:100%;object-fit:contain}
+#lbbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));color:#ddd;background:#111}
+#lbbar .vbtn{color:#ddd;border-color:#555}
+#lbcap{flex-basis:100%;text-align:center;font-size:.9rem}
+</style>
+<main>
+<header style="display:grid;gap:10px">
+<h1>Lighting round 2</h1>
+<p>Built on your two keepers, now built-in looks in Auto: <b>Favourite, side lamp left</b> (round 1’s 11) and <b>Favourite, from the left</b> (round 1’s 04). <b>A</b> mixes them with your maybes. <b>B</b> tries 30 more ways to improve the light: lamp placement, raking angle and length, fill and top lights, softer highlights, less sheen, room light and relief.</p>
+<p>Every look now keeps the whites from blowing out: Auto lowers the exposure until no more of the picture clips than in your photo. Each version shows <b>white</b> and <b>black</b> clipping (share of the picture at pure white or pure black) beside your photo’s own, so crushed darks stand out. Left: red lintel. Right: wooden lintel. Mark <b>Keep</b>, <b>Maybe</b> or <b>Drop</b>; picks save automatically.</p>
+</header>
+<div class="bar" role="toolbar" aria-label="Show">
+<button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+<button class="chip" type="button" data-f="open" aria-pressed="false">Not marked</button>
+<button class="chip" type="button" data-f="keep" aria-pressed="false">Keep</button>
+<button class="chip" type="button" data-f="maybe" aria-pressed="false">Maybe</button>
+<button class="chip" type="button" data-f="drop" aria-pressed="false">Drop</button>
+<span class="count" id="count"></span>
+</div>
+<div class="list" id="list"></div>
+</main>
+<div id="lb" hidden><div id="lbpics"><img id="lb1" alt=""><img id="lb2" alt=""></div>
+<div id="lbbar"><button class="vbtn" type="button" id="lbprev">← Prev</button><button class="vbtn" type="button" data-k="keep">Keep</button><button class="vbtn" type="button" data-k="maybe">Maybe</button><button class="vbtn" type="button" data-k="drop">Drop</button><button class="vbtn" type="button" id="lbnext">Next →</button><button class="vbtn" type="button" id="lbclose">Close</button><div id="lbcap"></div></div></div>
+<script>
+const V=/*DATA*/[];
+const picks={};let filter="all",cur=-1,db=null;
+const list=document.getElementById("list");
+function rows(){return V.filter(([k])=>k!=="photo")}
+function render(){
+  list.textContent="";
+  let lastSec="";
+  V.forEach(([k,name],i)=>{
+    const sec=k==="photo"?"":k[0];if(sec&&sec!==lastSec&&filter==="all"){lastSec=sec;const h=document.createElement("h2");h.className="sec";h.textContent=sec==="A"?"A · Your keepers with your maybes":"B · 30 more variations";list.append(h)}
+    const v=picks[k]||"";
+    if(k!=="photo"&&filter!=="all"&&(filter==="open"?v:v!==filter))return;
+    const r=document.createElement("article");r.className="row";r.dataset.v=v;
+    r.innerHTML=`<div class="head"><span class="num">${k==="photo"?"":k}</span><span class="name"></span></div><div class="pics"><button type="button" aria-label="Open full screen"><img loading="lazy" src="t/1-${k}.jpg" alt="Red lintel, ${k}"></button><button type="button" aria-label="Open full screen"><img loading="lazy" src="t/2-${k}.jpg" alt="Wooden lintel, ${k}"></button></div>`;
+    r.querySelector(".name").textContent=name;
+    const st=STATS[k];if(st){const c=document.createElement("div");c.className="clip";c.innerHTML=st;r.querySelector(".head").append(c)}
+    r.querySelectorAll(".pics button").forEach(b=>b.onclick=()=>open(i));
+    if(k!=="photo"){const vd=document.createElement("div");vd.className="verdict";
+      for(const [kk,l] of [["keep","Keep"],["maybe","Maybe"],["drop","Drop"]]){const b=document.createElement("button");b.type="button";b.className="vbtn";b.dataset.k=kk;b.textContent=l;b.setAttribute("aria-pressed",v===kk);b.onclick=()=>mark(k,kk);vd.append(b)}
+      if(!db){const s=document.createElement("span");s.className="saved";s.textContent="Picks can't be saved in this view";vd.append(s)}
+      r.append(vd)}
+    list.append(r)});
+  const n=rows().length,c={keep:0,maybe:0,drop:0};for(const [k] of rows())if(picks[k])c[picks[k]]++;
+  document.getElementById("count").textContent=`${c.keep} keep · ${c.maybe} maybe · ${c.drop} drop · ${n-c.keep-c.maybe-c.drop} to go`;
+}
+async function mark(k,v){
+  const was=picks[k];if(was===v)v="";
+  if(v)picks[k]=v;else delete picks[k];render();syncLb();
+  if(db){try{if(v)await db.doc("picks/"+k).set({verdict:v,name:V.find(x=>x[0]===k)[1],at:Date.now()});else await db.doc("picks/"+k).delete()}catch(e){if(was)picks[k]=was;else delete picks[k];render();syncLb()}}
+}
+document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{filter=c.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",x===c));render()});
+const lb=document.getElementById("lb");
+function open(i){cur=i;lb.hidden=false;syncLb()}
+function syncLb(){if(cur<0)return;const [k,name]=V[cur];document.getElementById("lb1").src=`img/1-${k}.jpg`;document.getElementById("lb2").src=`img/2-${k}.jpg`;
+  document.getElementById("lbcap").textContent=`${k==="photo"?"":k+" · "}${name}${picks[k]?" · "+picks[k]:""}`;
+  lb.querySelectorAll("[data-k]").forEach(b=>{b.setAttribute("aria-pressed",picks[k]===b.dataset.k);b.hidden=k==="photo"})}
+function step(d){cur=(cur+d+V.length)%V.length;syncLb()}
+lb.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>mark(V[cur][0],b.dataset.k));
+document.getElementById("lbprev").onclick=()=>step(-1);document.getElementById("lbnext").onclick=()=>step(1);
+document.getElementById("lbclose").onclick=()=>{lb.hidden=true;cur=-1};
+addEventListener("keydown",e=>{if(cur<0)return;const m={ArrowRight:()=>step(1),ArrowLeft:()=>step(-1),Escape:()=>{lb.hidden=true;cur=-1},k:()=>mark(V[cur][0],"keep"),m:()=>mark(V[cur][0],"maybe"),d:()=>mark(V[cur][0],"drop")}[e.key.length===1?e.key.toLowerCase():e.key];if(m&&!(V[cur][0]==="photo"&&e.key.length===1)){e.preventDefault();m()}});
+render();
+(async()=>{db=await window.claude?.use?.("db");if(!db){render();return}
+  db.collection("picks").onSnapshot(s=>{for(const k of Object.keys(picks))delete picks[k];for(const d of s.docs){const x=d.data();if(x?.verdict)picks[d.id]=x.verdict}render();syncLb()});
+})();
+</script>
