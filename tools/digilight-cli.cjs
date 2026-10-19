@@ -23,6 +23,8 @@
 //   --set "a=1;graze.opacity=0.5"   or JSON '{"exposure":0.3}' (repeatable; after the look, so it wins)
 //   --out FILE (.png/.jpg/.webp)  --width N  --preview  --quality 0..1
 //   --crop x,y,w,h   only that part of the export, at full detail (pixels, or fractions of 1)
+//   render and batch print each picture's metrics against the photo (clipping, darks, detail,
+//   warnings; docs/automation.md); --no-metrics skips them
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
 //   --fresh   Analyze again even if the cache has this photo (DIGILIGHT_CACHE: the cache
 //             folder, default ~/.cache/digilight/analysis; 0 turns it off)
@@ -36,7 +38,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help', 'fresh'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (k === 'set' || k === 'preset') o[k].push(v); else o[k] = v;
@@ -75,11 +77,13 @@ async function dress(call, j, analyze, src = {}) {
   return analysis;
 }
 
-async function write(call, j) {
+// Writes j.out; returns the picture's metrics (null with metrics off).
+async function write(call, j, metrics = true) {
   const format = (path.extname(j.out).slice(1) || 'png').toLowerCase();
-  const opts = { format, quality: j.quality != null ? +j.quality : 0.92 };
-  const url = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined, crop: j.crop || undefined });
-  fs.writeFileSync(j.out, fromDataURL(url));
+  const opts = { format, quality: j.quality != null ? +j.quality : 0.92, metrics };
+  const r = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined, crop: j.crop || undefined });
+  fs.writeFileSync(j.out, fromDataURL(metrics ? r.image : r));
+  return metrics ? r.metrics : null;
 }
 
 function readJobs(file) {
@@ -92,7 +96,7 @@ function readJobs(file) {
 // Analyze once (the page keeps it), then each job from the settings the photo opened with.
 // A job that fails (a bad setting, say) is reported and skipped; the exit code is 1 if any did.
 // (Two pages rendering at once were tried, 10-19: on 4 CPUs no faster in total than one.)
-async function runJobs(call, jobs, src) {
+async function runJobs(call, jobs, src, metrics) {
   const base = await call('settings');
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   let failed = 0;
@@ -101,8 +105,8 @@ async function runJobs(call, jobs, src) {
     try {
       await call('setSettings', base);
       await dress(call, j, false);
-      await write(call, j);
-      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10 }) + '\n');
+      const m = await write(call, j, metrics);
+      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10, ...(m ? { metrics: m } : {}) }) + '\n');
     } catch (e) {
       failed++;
       process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n');
@@ -114,7 +118,7 @@ async function runJobs(call, jobs, src) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 28).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 30).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
@@ -125,7 +129,7 @@ async function main() {
     await openInput(call, input);
     const src = { input, fresh: !!o.fresh };
 
-    if (jobs) { await runJobs(call, jobs, src); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
+    if (jobs) { await runJobs(call, jobs, src, !o['no-metrics']); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
     const analysis = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set }, cmd === 'analyze', src);
 
     let out;
@@ -134,8 +138,8 @@ async function main() {
     else if (cmd === 'describe') out = await call('describe');
     else if (cmd === 'get') out = await call('get', o.path ?? null);
     else {
-      await write(call, o);
-      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null };
+      const m = await write(call, o, !o['no-metrics']);
+      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(m ? { metrics: m } : {}) };
     }
     if (o['save-project']) { fs.writeFileSync(o['save-project'], JSON.stringify(await call('getProject'))); out = { ...out, project: path.resolve(o['save-project']) }; }
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');

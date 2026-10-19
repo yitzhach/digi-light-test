@@ -32,8 +32,8 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `looks()` | the looks from the last Analyze: `[{index, name, kind, note, exposure}]` |
 | `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
 | `undo()` / `redo()` | `true` if there was a step |
-| `render({format, quality, as})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp |
-| `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there |
+| `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below) |
+| `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` as `render` |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
 | `setProject(objOrJSON)` | opens a project |
 
@@ -63,6 +63,31 @@ await digilight.applyLook('Matched + raking', { strength: 0.8 });
 await digilight.set({ 'adjust.relief.form': 1.5, 'adjust.relief.formSize': 0.6 });
 const png = await digilight.export({ format: 'png' });   // data URL, full size
 ```
+
+
+### Metrics
+
+One set of numbers for every picture, the same ones `tools/looks/stats.py` gives the review
+page (`src/measure.js` `imageMetrics`), measured on the render and on the photo drawn at the
+same size and crop. `render({metrics: true})`, `export({metrics: true})`, the CLI's `render` and
+`batch`, and the MCP `render_preview` and `export_image` all return it:
+
+- `render`, `photo`: `hi` / `lo` the share blown (any channel ≥ 250) / crushed (all ≤ 5);
+  `p05` `p50` `p95` luma percentiles (0–255); `fine`, `mid`, `broad` texture per unit
+  brightness at ~3, ~13 and ~27 px (box filters); `thirds` the median luma of the left,
+  centre and right thirds.
+- `vsPhoto`: `newBlown` / `newCrushed` the share of pixels clipped in the render and not in
+  the photo; `darksLift` p05 levels over the photo; `stops` tone shift (p05, p50, p95);
+  `detail` each texture scale as a share of the photo's (1 = the same); `thirds` each third
+  in stops.
+- `warnings`, in words, when a limit is passed (`LIMITS` in measure.js, docs/roadmap.md §5):
+  newly blown over 0.3%, newly crushed over 0.15%, darks below the photo or lifted over 8
+  levels, fine or mid texture under 85% of the photo's.
+- `size`, `crop`, `ms` (time to measure: about 0.6 s per megapixel, the photo's side is kept
+  between calls at the same size and crop).
+
+Measured on the preview it describes the preview; for detail at full resolution, use an
+export (a `crop` is quick).
 
 ## Bridges
 
@@ -120,6 +145,8 @@ node tools/digilight-cli.cjs <command> <input> [options]
   `--width N` (else full size), `--crop x,y,w,h` (only that part, at full detail: pixels, or
   fractions of 1; a true 100% loupe for a fraction of a full export's time), `--preview` (the
   preview size), `--quality`, `--save-project FILE`
+
+`render` and `batch` print each picture's metrics (below); `--no-metrics` skips them.
 
 ```
 node tools/digilight-cli.cjs analyze photo.jpg
@@ -249,8 +276,8 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `describe_settings` | every setting with its range; `filter` narrows it (`graze`, `lights.0`, `relief`) |
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |
-| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800) |
-| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail |
+| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings |
+| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |
 
 The server keeps one DigiLight page open for the whole chat, so each tool works on the

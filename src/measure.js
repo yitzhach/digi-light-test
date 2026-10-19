@@ -120,3 +120,111 @@ export function chromaSignal(rgba, w, h, { sigma = 3, block = 320, blocks = 4 } 
     verdict: ratio < 0.05 ? 'inert' : ratio < 0.15 ? 'weak' : 'usable',
   };
 }
+
+// ------------------------------------------------------------ render metrics
+//
+// One set of numbers for every render, the same ones tools/looks/stats.py gives the
+// review page (same clip rule, percentiles, box filters), so the app, an AI agent
+// and a reviewer judge the same thing. Still descriptive: they say what the pixels
+// are, and the limits below (docs/roadmap.md §5) only flag what the user has said
+// they never want: blown whites, crushed darks, lost texture.
+
+export const CLIP_HI = 250, CLIP_LO = 5;   // any channel >= 250 is blown; all <= 5 crushed (photocheck.js)
+export const LIMITS = { newBlown: 0.003, newCrushed: 0.0015, darksLift: [0, 8], detailDrop: 0.85 };
+
+/** Mean over a (2r+1)-square window, edges clamped (stats.py box, Pillow's BoxBlur). */
+function box(src, w, h, r) {
+  const n = 2 * r + 1, t = new Float64Array(w * h), o = new Float64Array(w * h);
+  const run = (get, set, len, count) => {
+    for (let line = 0; line < count; line++) {
+      let s = 0;
+      for (let i = -r - 1; i < r; i++) s += get(line, Math.min(len - 1, Math.max(0, i)));
+      for (let i = 0; i < len; i++) {
+        s += get(line, Math.min(len - 1, i + r)) - get(line, Math.max(0, i - r - 1));
+        set(line, i, s / n);
+      }
+    }
+  };
+  run((y, x) => src[y * w + x], (y, x, v) => { t[y * w + x] = v; }, w, h);
+  run((x, y) => t[y * w + x], (x, y, v) => { o[y * w + x] = v; }, h, w);
+  return o;
+}
+
+/** numpy.percentile (linear) of a sorted array, p in 0..100. */
+function pct(sorted, p) {
+  const k = (sorted.length - 1) * p / 100, f = Math.floor(k), c = Math.min(sorted.length - 1, f + 1);
+  return sorted[f] + (sorted[c] - sorted[f]) * (k - f);
+}
+
+const r4 = (v) => Math.round(v * 1e4) / 1e4, r2 = (v) => Math.round(v * 100) / 100;
+// Stops between two 0-255 sRGB levels, in linear light.
+const stops = (a, b) => r2(Math.log2(Math.max(LIN[Math.round(Math.max(0, Math.min(255, a)))], 1e-4) / Math.max(LIN[Math.round(Math.max(0, Math.min(255, b)))], 1e-4)));
+
+/**
+ * The numbers for one picture (RGBA bytes): shares blown / crushed (hi, lo), luma
+ * percentiles p05 p50 p95 (0-255), texture per unit brightness at three scales
+ * (fine: |Y - box3|, mid: box3 - box13, broad: box13 - box27, over mean luma; fine
+ * and mid are stats.py's), and the median luma of the left, centre and right thirds.
+ */
+export function pictureStats(rgba, w, h) {
+  const n = w * h, y = new Float64Array(n), hiMask = new Uint8Array(n);
+  let hi = 0, lo = 0, sum = 0;
+  for (let i = 0, p = 0; i < n; i++, p += 4) {
+    const r = rgba[p], g = rgba[p + 1], b = rgba[p + 2];
+    const H = r >= CLIP_HI || g >= CLIP_HI || b >= CLIP_HI;
+    if (H) { hi++; hiMask[i] = 1; } else if (r <= CLIP_LO && g <= CLIP_LO && b <= CLIP_LO) { lo++; hiMask[i] = 2; }
+    sum += (y[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b);
+  }
+  const sorted = Float64Array.from(y).sort();
+  const b1 = box(y, w, h, 1), b6 = box(y, w, h, 6), b13 = box(y, w, h, 13);
+  let fine = 0, mid = 0, broad = 0;
+  for (let i = 0; i < n; i++) { fine += Math.abs(y[i] - b1[i]); mid += Math.abs(b1[i] - b6[i]); broad += Math.abs(b6[i] - b13[i]); }
+  const m = Math.max(1, sum / n) * n;
+  const thirds = [0, 1, 2].map((t) => {
+    const x0 = Math.round(t * w / 3), x1 = Math.round((t + 1) * w / 3), v = new Float64Array((x1 - x0) * h);
+    let k = 0;
+    for (let yy = 0; yy < h; yy++) for (let x = x0; x < x1; x++) v[k++] = y[yy * w + x];
+    return r2(pct(v.sort(), 50));
+  });
+  return {
+    stats: { hi: r4(hi / n), lo: r4(lo / n), p05: r2(pct(sorted, 5)), p50: r2(pct(sorted, 50)), p95: r2(pct(sorted, 95)),
+      fine: r4(fine / m), mid: r4(mid / m), broad: r4(broad / m), thirds },
+    clip: hiMask,
+  };
+}
+
+/**
+ * A render's numbers, and with the photo it was made from (same size) the
+ * differences that matter: pixels newly blown / crushed (clipped in the render, not
+ * in the photo), how far the darks moved (p05 levels) and the tones (stops), detail
+ * kept per scale (1 = the photo's), and each third's brightness in stops. `warnings`
+ * lists what passes the LIMITS, in words.
+ */
+export function imageMetrics(rgba, w, h, photo) {
+  const R = pictureStats(rgba, w, h);
+  const out = { size: [w, h], render: R.stats };
+  if (!photo) return out;
+  // The photo as RGBA bytes, or its pictureStats() kept from an earlier call.
+  const P = photo.stats ? photo : pictureStats(photo, w, h), r = R.stats, p = P.stats;
+  let blown = 0, crushed = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (R.clip[i] === 1 && P.clip[i] !== 1) blown++;
+    else if (R.clip[i] === 2 && P.clip[i] !== 2) crushed++;
+  }
+  const keep = (k) => r2(r[k] / Math.max(p[k], 1e-6));
+  const vs = {
+    newBlown: r4(blown / (w * h)), newCrushed: r4(crushed / (w * h)),
+    darksLift: r2(r.p05 - p.p05),
+    stops: { p05: stops(r.p05, p.p05), p50: stops(r.p50, p.p50), p95: stops(r.p95, p.p95) },
+    detail: { fine: keep('fine'), mid: keep('mid'), broad: keep('broad') },
+    thirds: r.thirds.map((v, i) => stops(v, p.thirds[i])),
+  };
+  const warnings = [];
+  const pc = (v) => `${(v * 100).toFixed(2)}%`;
+  if (vs.newBlown > LIMITS.newBlown) warnings.push(`whites: ${pc(vs.newBlown)} of the picture newly blown (limit ${pc(LIMITS.newBlown)})`);
+  if (vs.newCrushed > LIMITS.newCrushed) warnings.push(`darks: ${pc(vs.newCrushed)} newly crushed to black (limit ${pc(LIMITS.newCrushed)})`);
+  if (vs.darksLift < LIMITS.darksLift[0]) warnings.push(`darks: ${-vs.darksLift} levels darker than the photo (p05)`);
+  if (vs.darksLift > LIMITS.darksLift[1]) warnings.push(`darks: lifted ${vs.darksLift} levels over the photo (p05), may look milky`);
+  for (const k of ['fine', 'mid']) if (vs.detail[k] < LIMITS.detailDrop) warnings.push(`${k} texture: ${Math.round(vs.detail[k] * 100)}% of the photo's (soft or smeared?)`);
+  return { ...out, photo: p, vsPhoto: vs, warnings };
+}

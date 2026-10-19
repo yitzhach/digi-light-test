@@ -48,7 +48,9 @@ const full = process.argv.includes('--full');
     assert.ok(jpg[0] === 0xff && jpg[1] === 0xd8 && jpg.length > 5000, 'a JPEG');
     const w = jpg.readUInt16BE(jpg.indexOf(Buffer.from([0xff, 0xc0])) + 7), h = jpg.readUInt16BE(jpg.indexOf(Buffer.from([0xff, 0xc0])) + 5);
     assert.ok(Math.max(w, h) === 400, `preview ${w}x${h}`);
-    console.log('PASS describe_settings filter, list_presets, render_preview image');
+    const pm = JSON.parse((await ok('render_preview', { max_size: 400 })).r.content[1].text).metrics;
+    assert.ok(pm.render.p50 > 0 && pm.photo && pm.vsPhoto.detail.fine > 0 && Array.isArray(pm.warnings), 'render_preview metrics ' + JSON.stringify(pm));
+    console.log('PASS describe_settings filter, list_presets, render_preview image and metrics');
 
     const set = (await ok('set_settings', { changes: { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 } })).json();
     assert.deepEqual(set, { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 });
@@ -82,6 +84,7 @@ const full = process.argv.includes('--full');
     const crop = path.join(out, 'crop.png');
     const c = (await ok('export_image', { path: crop, width: 320, crop: { x: 0.5, y: 0, w: 0.5, h: 0.25 } })).json();
     assert.ok(c.path === crop && fs.readFileSync(crop).readUInt32BE(16) === 160, 'crop: half of 320 px ' + JSON.stringify(c));
+    assert.ok(c.metrics.size[0] === 160 && c.metrics.crop && e.metrics.vsPhoto, 'export metrics ' + JSON.stringify(c.metrics));
     x = await call('export_image', { path: path.join(out, 'relit.gif') });
     assert.ok(x.r.isError && /\.png/.test(x.t));
     const proj = path.join(out, 'mine.digilight.json');

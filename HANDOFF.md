@@ -182,6 +182,19 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **10-19 (third session), on `main`: shared metrics on every render** (user: "go ahead with
+  the shared metrics"). `src/measure.js` `imageMetrics` / `pictureStats` (DOM-free): the same
+  numbers as tools/looks/stats.py (checked equal on samples/painting.jpg: hi, lo, p05/50/95,
+  fine, mid), plus `broad` (box13 vs box27), left/centre/right median, and against the photo
+  at the same size and crop: newBlown / newCrushed (pixel-wise), darksLift, stops, detail kept
+  per scale, thirds in stops, and `warnings` in words from `LIMITS` (roadmap §5). Returned by
+  `digilight.render/export({metrics: true})` → `{image, metrics}`, CLI `render` / `batch`
+  (`--no-metrics` to skip), MCP `render_preview` (a text block after the image) and
+  `export_image`. ~0.6 s per megapixel; the photo's side is cached per source, size and crop.
+  Test: with Original on top at 100% the render measures as the photo (detail 1.00, 0 stops)
+  for the preview, a scaled export and a crop. Not built yet from §5: edge width, smear index,
+  colour hue shift, mean |Δ| between neighbouring variants; the review page still reads
+  stats.py (could show broad / thirds / warnings next).
 - **10-19 (second session), on `main`: roadmap speed wins while round 3 waits.** Round 3 had
   no picks yet (review page LeAKsrXizCyEQUUgDY4MgW, ArtifactData "picks" empty), so the next
   roadmap NOW items were built instead:
@@ -481,6 +494,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-19 (third session, on `main`): shared metrics (measure.js imageMetrics) from render /
+  export / CLI / MCP, with warnings. See Status.
 - 10-19 (second session, on `main`): relief rebuilt only for its own settings, exports reuse
   the preview, 4096 tiles in software GL, crops (API/CLI/MCP), MCP export in the background.
   See Status.
@@ -1098,8 +1113,9 @@ To judge it on a real painting, by eye:
 
 ## Next up (candidates — confirm with user)
 -5. (10-19) Round 3 picks → fold into the looks; then docs/roadmap.md NOW/NEXT in order
-   (NOW is done except round 3 and the door photos; next: NEXT › Shared metrics in measure.js,
-   then the one guard after every change, the JSON record per export, look ids, exportMany).
+   (NOW is done except round 3 and the door photos; Shared metrics done 10-19; next: the one
+   guard after every change (can now use imageMetrics at full size), the JSON record per
+   export (settings + metrics), look ids, exportMany).
 -4. NEXT CHAT STARTS HERE (10-15): the AI-match work. The user's favourite remains the AI image
    (`samples/painting.jpg` relit by a generative model; the user can re-upload it): "more
    natural texture (a little less fine texture) and a bit more depth". Best DigiLight looks:

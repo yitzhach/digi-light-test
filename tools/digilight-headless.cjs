@@ -81,16 +81,18 @@ async function openInput(call, input) {
   return call('load', dataURL(input));
 }
 
-/** The preview, shrunk to fit `maxSize` px on its long side, as a JPEG data URL. */
-async function preview(page, call, maxSize = 800, quality = 0.85) {
-  const url = await call('render', { format: 'png' });
-  return page.evaluate(async ([u, m, q]) => {
+/** The preview, shrunk to fit `maxSize` px on its long side, as a JPEG data URL; with
+ *  `metrics` it returns {url, metrics} (measured at the preview's own size). */
+async function preview(page, call, maxSize = 800, quality = 0.85, metrics = false) {
+  const r = await call('render', { format: 'png', metrics });
+  const url = await page.evaluate(async ([u, m, q]) => {
     const im = new Image(); im.src = u; await im.decode();
     const k = Math.min(1, m / Math.max(im.width, im.height));
     const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
     const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', q);
-  }, [url, maxSize, quality]);
+  }, [metrics ? r.image : r, maxSize, quality]);
+  return metrics ? { url, metrics: r.metrics } : url;
 }
 
 // Analyze, cached on disk: DIGILIGHT_CACHE (default ~/.cache/digilight/analysis; "0" = off).

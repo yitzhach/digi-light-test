@@ -108,7 +108,7 @@ const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
     'DigiLight relights a photo of a painting with virtual lamps over its estimated paint relief (impasto).',
     'Typical flow: open_image → analyze (slow: 1–3 min) → apply_look → render_preview to see it → set_settings to adjust → render_preview again → export_image.',
     'Fixed presets (apply_preset) need no analyze. describe_settings lists every setting with its range; set_settings checks values and changes nothing on an error.',
-    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks.',
+    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture).',
   ].join(' '),
 });
 
@@ -233,17 +233,17 @@ server.registerTool('redo', { title: 'Redo', description: 'Redoes the last undon
 
 server.registerTool('render_preview', {
   title: 'See the result',
-  description: 'Renders the relit painting at preview size and returns it as an image (JPEG, max_size px on its long side, default 800) so you can see it. Use it after changes, before describing the result.',
+  description: 'Renders the relit painting at preview size and returns it as an image (JPEG, max_size px on its long side, default 800) so you can see it, plus its metrics against the photo (measured at preview size): newly blown / crushed share, darks lift, tone shift in stops, detail kept per scale (1 = the photo\'s), left/centre/right brightness, and warnings in words. Use it after changes, before describing the result; read the warnings too, the user never wants blown whites, crushed darks or blur.',
   inputSchema: { max_size: z.number().int().min(128).max(2000).optional() },
 }, tool(async ({ page: pg, call }, { max_size }) => {
   await needOpen(call);
-  const url = await preview(pg, call, max_size || 800);
-  return { content: [{ type: 'image', data: url.split(',')[1], mimeType: 'image/jpeg' }] };
+  const { url, metrics } = await preview(pg, call, max_size || 800, 0.85, true);
+  return { content: [{ type: 'image', data: url.split(',')[1], mimeType: 'image/jpeg' }, { type: 'text', text: JSON.stringify({ metrics }, null, 1) }] };
 }));
 
 server.registerTool('export_image', {
   title: 'Export the image',
-  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',
+  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Returns the file\'s metrics against the photo at the same size (as render_preview\'s, at full detail). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',
   inputSchema: {
     path: z.string().describe('Absolute path ending .png, .jpg or .webp'),
     width: z.number().int().min(64).max(20000).optional().describe('Width in px; default the photo\'s full size'),
@@ -257,9 +257,9 @@ server.registerTool('export_image', {
   if (!format) throw new Error('path must end .png, .jpg or .webp.');
   if (!fs.existsSync(path.dirname(f))) throw new Error(`No such folder: ${path.dirname(f)}`);
   return waitExport(async () => {
-    const t0 = Date.now(), buf = fromDataURL(await call('export', { format, quality: quality ?? 0.92, width, crop }));
+    const t0 = Date.now(), r = await call('export', { format, quality: quality ?? 0.92, width, crop, metrics: true }), buf = fromDataURL(r.image);
     fs.writeFileSync(f, buf);
-    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(await call('info')) };
+    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(await call('info')), metrics: r.metrics };
   }, f);
 }));
 

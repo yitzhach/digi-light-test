@@ -12,6 +12,7 @@
 // error}). tools/digilight-cli.cjs drives the same API headless. See docs/automation.md.
 import { ADJUSTMENTS } from './adjust.js';
 import { OVERLAYS } from './overlays.js';
+import { imageMetrics, pictureStats } from './measure.js';
 
 export const API_VERSION = 1;
 const clone = (v) => structuredClone(v);
@@ -215,13 +216,33 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     if (opts.as === 'blob') return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('Could not encode the image.'))), type, q));
     return canvas.toDataURL(type, q);
   }
+  // metrics: true → {image, metrics}: the render's numbers against the photo at the same
+  // size and crop (measure.js imageMetrics), measured on the pixels before encoding.
+  let photoCache = null;   // the last photo measured: {src, key, stats}
+  function measure(canvas, whole, rect) {
+    const t0 = performance.now(), w = canvas.width, h = canvas.height;
+    const px = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    const s = api.source(), fw = s.naturalWidth || s.width;
+    const key = [whole[0], whole[1], rect ? [rect.x, rect.y, rect.w, rect.h] : ''].join('|');
+    if (!photoCache || photoCache.src !== s || photoCache.key !== key) {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently: true }), k = fw / whole[0], r = rect || { x: 0, y: 0, w, h };
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(s, r.x * k, r.y * k, r.w * k, r.h * k, 0, 0, w, h);
+      photoCache = { src: s, key, stats: pictureStats(px(c), w, h) };
+    }
+    const m = imageMetrics(px(canvas), w, h, photoCache.stats);
+    return { ...m, crop: rect || null, ms: Math.round(performance.now() - t0) };
+  }
   async function render(opts = {}) {
     needPhoto();
     await idle();
     api.renderNow();
     const c = document.createElement('canvas'); c.width = api.canvas.width; c.height = api.canvas.height;
     c.getContext('2d').drawImage(api.canvas, 0, 0);
-    return encode(c, opts);
+    if (!opts.metrics) return encode(c, opts);
+    const metrics = measure(c, [c.width, c.height]);
+    return { image: await encode(c, opts), metrics };
   }
   async function exportImage(opts = {}) {
     needPhoto();
@@ -229,7 +250,12 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     await idle();
     const rect = opts.crop ? cropRect(opts.crop, opts.width) : undefined;
     const out = opts.width ? await api.renderAt(opts.width, rect) : await api.exportFull(rect);
-    return encode(out?.canvas || out, opts);
+    const c = out?.canvas || out;
+    if (!opts.metrics) return encode(c, opts);
+    const s = api.source(), fw = s.naturalWidth || s.width, fh = s.naturalHeight || s.height;
+    const W = opts.width ? Math.max(1, Math.min(fw, Math.round(opts.width))) : fw;
+    const metrics = measure(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect);
+    return { image: await encode(c, opts), metrics };
   }
   // crop: {x, y, w, h} in the exported image's pixels (full size, or width px wide), or
   // "x,y,w,h"; values of 1 or less are fractions of its width / height. Kept inside it.

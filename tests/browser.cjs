@@ -18,6 +18,7 @@ await page.click('#toolRail .railAll');console.log('PASS opens on Setup with Ana
 {const relit=await pixels();await page.evaluate(()=>{document.querySelector('#layersSection').open=true;});await slider('originalTop',1);assert.equal(await setting('originalTop'),1);await page.click('#compare');const orig=await pixels();await page.click('#compare');await settle();assert.equal(await pixels(),orig);await slider('originalTop',.5);const half=await pixels();assert.notEqual(half,relit);assert.notEqual(half,orig);await slider('originalTop',0);await settle();assert.equal(await pixels(),relit);await page.evaluate(()=>{document.querySelector('#layersSection').open=false;});console.log('PASS Original on top layer opacity');}
 {assert.ok(await page.locator('#toolSearchInput').isHidden(),'search bar hidden until the icon');await page.click('#searchBtn');assert.ok(await page.locator('#toolSearchInput').isVisible()&&await page.evaluate(()=>document.activeElement.id==='toolSearchInput'),'search icon opens and focuses it');
 await page.fill('#toolSearchInput','batch');await settle();assert.ok(await page.locator('#toolSearchList li').count()>0);await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#saveSection').open&&!document.querySelector('[data-pane=batch]').hidden));
+await page.waitForFunction(()=>!document.body.classList.contains('searchOpen'));// the pick closed it (blur, 150 ms later)
 await page.evaluate(()=>document.body.classList.add('searchOpen'));await page.fill('#toolSearchInput','graze opac');await settle();await page.fill('#toolSearchInput','Shadow lift');await settle();await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#grazeSection').open||[...document.querySelectorAll('details')].some(d=>d.open)));
 await page.locator('#saveSection .subTabs [data-pane=image]').click();console.log('PASS tool search opens sections and Save & export tabs');}
 // Tool rail (desktop): a vertical rail between painting and panel; All (default) shows every section, a tool only its own.
@@ -299,7 +300,8 @@ assert.ok(r.edges.every(e=>Math.abs(e)<3),'overlay lies over the visible part '+
 await page.selectOption('#grazePreset','Long shadows');await settle();assert.equal((await setting('graze')).enabled,true);await page.waitForFunction(()=>__bench.sharp());{const g=await compareSharp();assert.ok(g.diff<0.5,'graze overlay vs export '+g.diff);assert.deepEqual(g.rect,r.rect,'same region');console.log('graze overlay diff',+g.diff.toFixed(4));}
 await page.evaluate(()=>{document.querySelector('#sharp').style.display='none';});await page.screenshot({path:outputDir+'/zoom-400-preview.png'});await page.evaluate(()=>{document.querySelector('#sharp').style.display='';});
 await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));assert.equal(await page.evaluate(()=>__bench.sharp()),null,'scrolling hides it');
-await page.waitForFunction(()=>__bench.sharp());await slider('fineRelief',1.1);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'a slider hides it');
+// Checked as the slider moves: the overlay comes back 250 ms after the view is still again.
+await page.waitForFunction(()=>__bench.sharp());assert.equal(await page.locator('#fineRelief').evaluate(el=>{el.value=1.1;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return __bench.sharp();}),null,'a slider hides it');await settle();
 await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});
@@ -843,5 +845,27 @@ assert.deepEqual(r.crop,[Math.round(r.size[0]*.25),Math.round(r.size[1]*.3)]);as
 assert.equal(r.fracCrop[0],50,'fractions of a width-scaled export '+JSON.stringify(r.fracCrop));assert.match(r.badCrop,/crop is/);
 assert.ok(r.exportAfterSurface[0]===1&&r.exportAfterSurface[1],'an export after a relief setting rebuilds the preview first '+JSON.stringify(r.exportAfterSurface));
 await ctx.close();console.log('PASS relief rebuilt only for its own settings, exports reuse the preview, crops match the whole export',JSON.stringify({keys:Object.keys(r.keys).length,cropDiff:+r.cropDiff.toFixed(4)}));}
+// Metrics (measure.js imageMetrics) with render / export: against the photo at the same size and crop. With the
+// photo on top at 100% the render is the photo, so every difference is ~0; brighter blows whites, darker crushes darks.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={};
+ const plain=await d.render();const m=await d.render({metrics:true});out.same=m.image===plain;out.m=m.metrics;
+ await d.set('originalTop',1);
+ out.photoPreview=(await d.render({metrics:true})).metrics.vsPhoto;
+ out.photoExport=(await d.export({width:120,metrics:true})).metrics;
+ out.photoCrop=(await d.export({crop:'0.2,0.3,0.5,0.4',metrics:true})).metrics;
+ await d.set('originalTop',0);
+ await d.set('exposure',2.5);out.bright=(await d.render({metrics:true})).metrics;
+ await d.set('exposure',d.describe().find(x=>x.path==='exposure').min);out.dark=(await d.render({metrics:true})).metrics;
+ return out;});
+const near0=(v)=>[v.newBlown,v.newCrushed,v.darksLift,v.stops.p05,v.stops.p50,v.stops.p95,...v.thirds].every(x=>Math.abs(x)<=0.6)&&Object.values(v.detail).every(x=>Math.abs(x-1)<0.05);
+assert.ok(r.same,'metrics leave the image as it was');
+assert.ok(r.m.render.p50>0&&r.m.photo.p50>0&&r.m.size[0]>0&&r.m.render.thirds.length===3&&Array.isArray(r.m.warnings)&&r.m.ms>=0,JSON.stringify(r.m));
+for(const [k,v] of [['preview',r.photoPreview],['export',r.photoExport.vsPhoto],['crop',r.photoCrop.vsPhoto]])assert.ok(near0(v),'the photo measures as the photo: '+k+' '+JSON.stringify(v));
+assert.equal(r.photoExport.size[0],120);assert.ok(r.photoCrop.crop&&r.photoCrop.warnings.length===0,JSON.stringify(r.photoCrop));
+assert.ok(r.bright.vsPhoto.newBlown>0.003&&r.bright.warnings.some(w=>/whites/.test(w))&&r.bright.vsPhoto.stops.p50>0,JSON.stringify(r.bright.vsPhoto));
+assert.ok(r.dark.vsPhoto.stops.p50<0&&r.dark.warnings.some(w=>/darks/.test(w)),JSON.stringify(r.dark));
+await ctx.close();console.log('PASS metrics: render / export / crop against the photo, the photo measures as itself, warnings for blown whites and dark',JSON.stringify({preview:r.photoPreview.detail,bright:r.bright.vsPhoto.newBlown,ms:r.m.ms}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

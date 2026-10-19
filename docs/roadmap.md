@@ -39,7 +39,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
 - **Done 10-19 (second session): MCP `export_image` in the background** (`tools/digilight-mcp.cjs` 224), the same way Analyze already runs. Exports of about 70 s now beat the 60 s tool timeout. About 20 lines.
 
 ## 3. NEXT (1–3 sessions)
-- **Shared metrics (about 1 day).**
+- **Done 10-19 (third session): shared metrics** (`measure.js` `imageMetrics`; clipping, darks, tone, detail at three scales, thirds, warnings; edge width, smear and hue shift not yet).
+  - Was: **Shared metrics (about 1 day).**
   - Extend `src/measure.js`: it is DOM-free and Node can test it, but keep it descriptive, not predictive.
   - Return a `metrics` block from `digilight.render` and `export`, the CLI `batch`, and MCP `render_preview` / `export_image`. The review page shows it beside each image.
 - **One guard after every change**, not only inside Analyze. Move it out of `keepWhites`.
