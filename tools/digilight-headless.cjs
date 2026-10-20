@@ -69,11 +69,12 @@ async function launch(opts = {}) {
   } catch (e) { await close(); throw e; }
 }
 
-/** Opens a photo path, http(s) URL, .digilight.json project or sample:name. Returns info(). */
+/** Opens a photo path, http(s) URL, data: image URL, .digilight.json project or sample:name. Returns info(). */
 async function openInput(call, input) {
   input = String(input || '').trim();
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (/^sample:/.test(input)) return call('load', { sample: input.slice(7) });
+  if (/^data:image\/(jpeg|png|webp);base64,/i.test(input)) return call('load', input);
   if (/^https?:/.test(input)) return /\.json(\?|$)/i.test(input) ? call('setProject', await (await fetch(input)).text()) : call('load', input);
   if (!fs.existsSync(input)) throw new Error(`No such file: ${input}`);
   if (/\.json$/i.test(input)) return call('setProject', fs.readFileSync(input, 'utf8'));
@@ -114,7 +115,8 @@ function cacheDir() {
   const v = process.env.DIGILIGHT_CACHE;
   return v === '0' ? null : v || path.join(os.homedir(), '.cache', 'digilight', 'analysis');
 }
-const inputId = (input) => { input = String(input || ''); return !/^(sample:|https?:)/.test(input) && fs.existsSync(input) ? sha(fs.readFileSync(input)) : input; };
+// A file's or a data URL's sha256 (the cache and records key photos by their bytes); else the name.
+const inputId = (input) => { input = String(input || ''); if (/^data:/.test(input)) return sha(input); return !/^(sample:|https?:)/.test(input) && fs.existsSync(input) ? sha(fs.readFileSync(input)) : input; };
 
 /** Analyze the open photo (opened from `input`), from the cache when it can. Returns the summary with cached: true|false. */
 async function analyzeCached(call, input, opts = {}) {
@@ -135,7 +137,8 @@ async function analyzeCached(call, input, opts = {}) {
  *  it (`job`), the output, the guard's note and the metrics. Written as FILE.json beside FILE.jpg. */
 async function writeRecord(call, file, { input, job, output, guard, metrics, base } = {}) {
   const id = inputId(input);
-  const extra = { code: code(), input: input == null ? null : { name: String(input), ...(id !== String(input) ? { sha256: id } : {}) },
+  const name = /^data:/.test(String(input)) ? String(input).slice(0, String(input).indexOf(',')) : String(input);   // not the image itself
+  const extra = { code: code(), input: input == null ? null : { name, ...(id !== String(input) ? { sha256: id } : {}) },
     job: job || null, output: { file: path.basename(file), ...(output || {}) }, guard: guard || null, metrics: metrics || null };
   // `base`: a digilight.record() taken earlier, while this picture's settings were the page's.
   const rec = base ? { ...base, ...extra, settings: base.settings } : await call('record', extra);

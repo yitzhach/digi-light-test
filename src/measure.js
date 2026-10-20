@@ -132,28 +132,54 @@ export function chromaSignal(rgba, w, h, { sigma = 3, block = 320, blocks = 4 } 
 export const CLIP_HI = 250, CLIP_LO = 5;   // any channel >= 250 is blown; all <= 5 crushed (photocheck.js)
 export const LIMITS = { newBlown: 0.003, newCrushed: 0.0015, darksLift: [0, 8], detailDrop: 0.85 };
 
-/** Mean over a (2r+1)-square window, edges clamped (stats.py box, Pillow's BoxBlur). */
+/** Mean over a (2r+1)-square window, edges clamped (stats.py box, Pillow's BoxBlur). Running
+ *  sums: along each row, then down the columns a row at a time (cache-friendly). */
 function box(src, w, h, r) {
   const n = 2 * r + 1, t = new Float64Array(w * h), o = new Float64Array(w * h);
-  const run = (get, set, len, count) => {
-    for (let line = 0; line < count; line++) {
-      let s = 0;
-      for (let i = -r - 1; i < r; i++) s += get(line, Math.min(len - 1, Math.max(0, i)));
-      for (let i = 0; i < len; i++) {
-        s += get(line, Math.min(len - 1, i + r)) - get(line, Math.max(0, i - r - 1));
-        set(line, i, s / n);
-      }
+  const cx = (x) => (x < 0 ? 0 : x >= w ? w - 1 : x), cy = (y) => (y < 0 ? 0 : y >= h ? h - 1 : y);
+  for (let y = 0, row = 0; y < h; y++, row += w) {
+    let s = 0;
+    for (let i = -r - 1; i < r; i++) s += src[row + cx(i)];
+    for (let x = 0; x < w; x++) {
+      s += src[row + (x + r >= w ? w - 1 : x + r)] - src[row + (x - r - 1 < 0 ? 0 : x - r - 1)];
+      t[row + x] = s / n;
     }
-  };
-  run((y, x) => src[y * w + x], (y, x, v) => { t[y * w + x] = v; }, w, h);
-  run((x, y) => t[y * w + x], (x, y, v) => { o[y * w + x] = v; }, h, w);
+  }
+  const col = new Float64Array(w);
+  for (let i = -r - 1; i < r; i++) { const row = cy(i) * w; for (let x = 0; x < w; x++) col[x] += t[row + x]; }
+  for (let y = 0, out = 0; y < h; y++, out += w) {
+    const add = cy(y + r) * w, sub = cy(y - r - 1) * w;
+    for (let x = 0; x < w; x++) { col[x] += t[add + x] - t[sub + x]; o[out + x] = col[x] / n; }
+  }
   return o;
 }
 
-/** numpy.percentile (linear) of a sorted array, p in 0..100. */
-function pct(sorted, p) {
-  const k = (sorted.length - 1) * p / 100, f = Math.floor(k), c = Math.min(sorted.length - 1, f + 1);
-  return sorted[f] + (sorted[c] - sorted[f]) * (k - f);
+/** The k-th smallest of `a` (0-based), reordering `a` in place: quickselect, linear on average. */
+function kth(a, k) {
+  let lo = 0, hi = a.length - 1;
+  while (hi > lo) {
+    const mid = (lo + hi) >> 1;
+    // median of three as the pivot, so a sorted or flat input does not degrade
+    const x = a[lo], y = a[mid], z = a[hi];
+    const piv = x < y ? (y < z ? y : x < z ? z : x) : (x < z ? x : y < z ? z : y);
+    let i = lo, j = hi;
+    while (i <= j) {
+      while (a[i] < piv) i++;
+      while (a[j] > piv) j--;
+      if (i <= j) { const t = a[i]; a[i] = a[j]; a[j] = t; i++; j--; }
+    }
+    if (k <= j) hi = j; else if (k >= i) lo = i; else break;
+  }
+  return a[k];
+}
+/** numpy.percentile (linear) of `a` (reordered in place), p in 0..100. */
+function pct(a, p) {
+  const k = (a.length - 1) * p / 100, f = Math.floor(k);
+  const lo = kth(a, f);
+  if (f + 1 >= a.length || k === f) return lo;
+  let next = Infinity;   // the (f+1)-th smallest: the least of what quickselect left above f
+  for (let i = f + 1; i < a.length; i++) if (a[i] < next) next = a[i];
+  return lo + (next - lo) * (k - f);
 }
 
 const r4 = (v) => Math.round(v * 1e4) / 1e4, r2 = (v) => Math.round(v * 100) / 100;
@@ -175,7 +201,7 @@ export function pictureStats(rgba, w, h) {
     if (H) { hi++; hiMask[i] = 1; } else if (r <= CLIP_LO && g <= CLIP_LO && b <= CLIP_LO) { lo++; hiMask[i] = 2; }
     sum += (y[i] = 0.2126 * r + 0.7152 * g + 0.0722 * b);
   }
-  const sorted = Float64Array.from(y).sort();
+  const lum = Float64Array.from(y);   // reordered by pct()
   const b1 = box(y, w, h, 1), b6 = box(y, w, h, 6), b13 = box(y, w, h, 13);
   let fine = 0, mid = 0, broad = 0;
   for (let i = 0; i < n; i++) { fine += Math.abs(y[i] - b1[i]); mid += Math.abs(b1[i] - b6[i]); broad += Math.abs(b6[i] - b13[i]); }
@@ -184,10 +210,10 @@ export function pictureStats(rgba, w, h) {
     const x0 = Math.round(t * w / 3), x1 = Math.round((t + 1) * w / 3), v = new Float64Array((x1 - x0) * h);
     let k = 0;
     for (let yy = 0; yy < h; yy++) for (let x = x0; x < x1; x++) v[k++] = y[yy * w + x];
-    return r2(pct(v.sort(), 50));
+    return r2(pct(v, 50));
   });
   return {
-    stats: { hi: r4(hi / n), lo: r4(lo / n), p05: r2(pct(sorted, 5)), p50: r2(pct(sorted, 50)), p95: r2(pct(sorted, 95)),
+    stats: { hi: r4(hi / n), lo: r4(lo / n), p05: r2(pct(lum, 5)), p50: r2(pct(lum, 50)), p95: r2(pct(lum, 95)),
       fine: r4(fine / m), mid: r4(mid / m), broad: r4(broad / m), thirds },
     clip: hiMask,
   };

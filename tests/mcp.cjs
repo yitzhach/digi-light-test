@@ -34,6 +34,9 @@ const full = process.argv.includes('--full');
     assert.ok(start.photo && start.sample === null, 'starts on the synthetic test painting ' + JSON.stringify(start));
     let x = await call('open_image', { source: '/nope/missing.jpg' });
     assert.ok(x.r.isError && /No such file/.test(x.t));
+    // A photo given inline, as a data: URL.
+    const inline = (await ok('open_image', { source: 'data:image/jpeg;base64,' + fs.readFileSync(path.join(__dirname, '..', 'samples', 'painting.jpg')).toString('base64') })).json();
+    assert.ok(inline.photo && inline.photo.width > 1000, 'data URL ' + JSON.stringify(inline));
     const info = (await ok('open_image', { source: 'sample:painting' })).json();
     assert.ok(info.photo.width > 1000 && info.preview.width > 0 && info.sample === 'painting', JSON.stringify(info));
     console.log('PASS open_image sample, errors as tool errors');
