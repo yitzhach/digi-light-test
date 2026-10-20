@@ -15,6 +15,12 @@
 import { CLIP_HI, CLIP_LO, LIMITS } from './measure.js';
 
 const AMBIENT_MAX = 0.6;
+const WHITES = ['highlightRolloff', 'exposure'], DARKS = ['graze.lift', 'ambient'];
+// How far each may go, and its step: [to, grid].
+const MOVES = {
+  highlightRolloff: () => [1, 0.02], exposure: () => [-3, 0.05],
+  'graze.lift': () => [1, 0.02], ambient: (s, max) => [Math.max(s.ambient, max), 0.02],
+};
 const STEPS = 7;   // bisection steps per setting: 1/128 of its span
 
 export function initGuard({ state, api, snapshot, restore, history, historyUI, $ }) {
@@ -59,7 +65,7 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
   function nearest(base, path, from, to, ok, grid) {
     const snap = (v) => Math.round(v / grid) * grid;
     let m = tryValue(base, path, to);
-    if (!ok(m)) return { value: to, m };
+    if (!ok(m)) { put(base, path, to); return { value: to, m }; }   // all it may: the next setting starts from here
     let good = to, bad = from, goodM = m;
     for (let i = 0; i < STEPS && Math.abs(snap(good) - snap(bad)) > grid / 2; i++) {
       const mid = snap((good + bad) / 2);
@@ -86,28 +92,28 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     quiet = true;
     try { const r = guard(opts); api_.last = r && { ...r, seq: ++seq }; return r; } finally { quiet = false; clearTimeout(timer); }
   }
-  function guard({ fix = true, amend = true } = {}) {
+  // whites / darks: which settings it moves, in order (WHITES / DARKS by default); ambientMax caps
+  // the room light. Kept as options so alternatives can be rendered side by side for the user.
+  function guard({ fix = true, amend = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX } = {}) {
     if (!api.source() || state.mode !== 'single' || state.exporting) return null;
     const before = check();
     if (!before) return null;
     if (whitesOK(before) && darksOK(before)) return { ok: true, fixed: false, before, after: before, changes: {}, note: '' };
     if (!fix) return { ok: false, fixed: false, before, after: before, changes: {}, note: describe(before) };
     const base = snapshot(), changes = {};
-    const move = (path, to, ok, grid) => {
+    const move = (path, to, grid, ok) => {
       const from = get(base, path);
       if (from == null || (to - from) * Math.sign(to - from) <= 0) return null;
       const r = nearest(base, path, from, to, ok, grid);
-      if (Math.abs(r.value - from) > grid / 2) changes[path] = [from, r.value];
+      if (Math.abs(r.value - from) > 1e-9) changes[path] = [from, r.value];
       return r.m;
     };
     let m = before;
     if (!whitesOK(m)) {
-      m = move('highlightRolloff', 1, whitesOK, 0.02) || m;
-      if (!whitesOK(m)) m = move('exposure', -3, whitesOK, 0.05) || m;
+      for (const p of whites) if (!whitesOK(m)) m = move(p, ...MOVES[p](base, ambientMax), whitesOK) || m;
     }
     if (!darksOK(m)) {
-      if (base.graze?.enabled && base.graze.opacity > 0) m = move('graze.lift', 1, darksOK, 0.02) || m;
-      if (!darksOK(m)) m = move('ambient', Math.max(base.ambient, AMBIENT_MAX), darksOK, 0.02) || m;
+      for (const p of darks) if (!darksOK(m) && (p !== 'graze.lift' || (base.graze?.enabled && base.graze.opacity > 0))) m = move(p, ...MOVES[p](base, ambientMax), darksOK) || m;
     }
     restore(base);
     const after = check();

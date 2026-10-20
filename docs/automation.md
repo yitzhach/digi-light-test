@@ -100,7 +100,9 @@ the guard moves settings just far enough to stop it, in the same undo step: High
 light (Ambient, at most 0.6), for darks. `set` returns the values after it, `lastGuard()` what it
 did (`{ok, fixed, before, after, changes: {path: [from, to]}, note}`, e.g. "Guard: exposure +2.50
 → +1.95"), and `applyLook` / `applyPreset` add `guard: note`. `guard({fix})` checks the picture as
-it stands (`fix: false` only reports); `setGuard(false)` turns it off. In the app, tapped looks
+it stands (`fix: false` only reports; `whites` / `darks` name the settings to move, in order, and
+`ambientMax` caps the room light, for trying other ways); `setGuard(false)` turns it off. When even
+the furthest a setting may go is not enough, the guard still applies it and says it fell short. In the app, tapped looks
 and presets are guarded the same way; a hand-moved slider never is: a chip on the picture says
 what clips, with Fix. The CLI guards each job once after all its options (`"guard"` in the
 output line; `--no-guard`, or `"guard": false` in a job, to skip); the MCP server has `guard` and

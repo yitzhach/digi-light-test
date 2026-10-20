@@ -885,6 +885,8 @@ const r=await a.evaluate(async()=>{const d=window.digilight,out={},wait=(ms)=>ne
  await d.undo();out.fixUndone=d.get('exposure');
  await d.set({exposure:0,highlightRolloff:out.start[1],ambient:0.3});out.darkBefore=await d.guard({fix:false});
  d.setGuard(true);await d.set({ambient:0,exposure:-1.5});out.dark=d.lastGuard();out.darkNow=[d.get('ambient'),d.get('exposure')];
+ // Short of the limit (room light capped at 0.01): it still applies all it may, and says it fell short.
+ d.setGuard(false);await d.set({ambient:0,exposure:-1.5});out.short=await d.guard({darks:['ambient'],ambientMax:0.01});out.shortAmbient=d.get('ambient');d.setGuard(true);
  return out;});
 assert.ok(r.clean.ok&&!r.clean.fixed,'the synthetic painting starts clean '+JSON.stringify(r.clean));
 assert.ok(r.g.fixed&&r.g.ok&&r.g.after.newBlown<=0.003&&r.g.before.newBlown>0.003,'guarded '+JSON.stringify(r.g));assert.equal(r.steps,1,'change and fix: one undo step');
@@ -894,6 +896,7 @@ assert.equal(r.unguarded,2.5);assert.ok(!r.check.ok&&!r.check.fixed,JSON.stringi
 assert.ok(!r.chip[0]&&/newly blown/.test(r.chip[1]),'chip shows what clips '+JSON.stringify(r.chip));
 assert.ok((r.fix[0]<2.5||r.fix[1]>r.start[1])&&r.fix[2]===1&&/Fixed/.test(r.fix[3]),'Fix: one undo step '+JSON.stringify(r.fix));assert.equal(r.fixUndone,2.5);
 assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&/room light|shadow lift/.test(r.dark.note),'darks lifted '+JSON.stringify(r.dark));
+assert.ok(!r.short.ok&&r.short.fixed&&r.shortAmbient===0.01&&r.short.after.newCrushed<r.short.before.newCrushed&&/still over the limit/.test(r.short.note),'short of the limit: applied '+JSON.stringify([r.shortAmbient,r.short]));
 await ctx.close();console.log('PASS guard: whites and darks brought back in the same undo step, off switch, chip and Fix',JSON.stringify({note:r.g.note,dark:r.dark&&r.dark.note}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

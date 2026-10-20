@@ -182,6 +182,20 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **10-20 (later): guard options for the user to judge, NEXT CHAT START HERE.** The user did not
+  know what the chip is (screenshots sent: it sits at the top of the picture) and wants to choose
+  the guard's order and the room-light cap by eye. Review page
+  https://claude.ai/artifact/KReiYc3BimztEmr1HzPgQg (ArtifactData "picks", as before; recipes
+  tools/looks/guard-options.cjs): W0 too bright / W1 guard now (soften highlights, then exposure) /
+  W2 exposure only; D0 too dark / D1 guard now (raking shadow lift, then room light ≤ 0.6) / D2 room
+  light only ≤ 0.6 / D3 ≤ 0.3 / D4 ≤ 1.0, on the red panel and DSC_8382 (its W versions are the
+  same: no new white even at full exposure). By eye: D1 lifts the raking shadows to 100% and turns
+  the panel bright and orange, losing the raking drama; room light alone keeps the mood but leaves
+  some black. Read the picks, then set guard.js WHITES / DARKS / AMBIENT_MAX to match.
+  **Bug fixed on the way:** when even the furthest a setting may go was not enough, the guard
+  reported the move but restored the old value (whites then over-cut exposure: +2.50 → +1.95, now
+  +2.30; darks did nothing at all on real photos). Now it applies it and moves on; a test covers it.
+  The chip lets clicks through to a light's dot under it (only Fix takes them).
 - **10-20, on `main`: round 3 picks folded in + the guard.** Round 3 keepers (ArtifactData
   picks): L08, L12, F03, F07 = raking light lower (6°) and finer raking detail, on both
   favourite looks, nothing else. auto.js `crispGraze` now elevation 6 (was 8), detail 0.01 (was

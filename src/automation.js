@@ -307,7 +307,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     render: serial(render), export: serial(exportImage),
     // The guard: guard({fix}) checks (and with fix, the default, repairs as its own undo
     // step) the picture as it stands; setGuard(false) stops changes being guarded.
-    guard: serial(async (o = {}) => { needPhoto(); return guard.run({ fix: o.fix !== false, amend: false }); }),
+    guard: serial(async (o = {}) => { needPhoto(); return guard.run({ ...o, fix: o.fix !== false, amend: false }); }),
     lastGuard: () => guard.last, setGuard: (on) => { guard.enabled = !!on; return guard.enabled; },
     getProject: serial(getProject), setProject: serial(setProject),
   };
