@@ -29,7 +29,13 @@ export const RELIEF_GAIN = 1.21, DEPTH_FLAT = 0.25, DEPTH_MIN = 0.3, DEPTH_MAX =
 // default keeps 0.43 of the photo's fine detail per unit brightness (photo 0.74), 0.4 keeps 0.63,
 // 0 keeps 0.92. The user found 0.7 "a bit blurry"; of 0.7 / 0.4 / 0 they picked 0 (10-16).
 export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSuppress: 0 };
-export const LOOK_BIAS = { 'Gallery': -1.03, 'Gallery spot': -1.48, 'Matched': -1.18, 'Matched + raking': -1.28, 'Your favourite': -0.76, 'Favourite, from the left': -0.75, 'Favourite, side lamp left': -0.78, 'Raking texture': -0.8, 'Long shadows': -0.56, 'Soft window': -0.83, 'Museum spot': -1.75 };
+// Keyed by the look's id (BUILT_IN), which stays when a name changes; every built-in look must
+// have one (a missing bias is an error, not 0).
+export const LOOK_BIAS = { 'gallery': -1.03, 'gallery-spot': -1.48, 'matched': -1.18, 'matched-raking': -1.28, 'favourite': -0.76, 'favourite-left': -0.75, 'favourite-side-lamp': -0.78, 'raking-texture': -0.8, 'long-shadows': -0.56, 'soft-window': -0.83, 'museum-spot': -1.75 };
+// Each built-in look's recipe version, raised whenever its recipe changes, so a record or a pick
+// says which recipe made a picture. favourite-left / -side-lamp: 1 round F1 (10-19), 2 round 2
+// keepers (deeper, lamp low near the edge), 3 round 3 keepers (raking 6°, finer detail, 10-20).
+export const LOOK_VERSION = { 'favourite-left': 3, 'favourite-side-lamp': 3 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
@@ -184,7 +190,7 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     return c;
   }
 
-  // Built-in looks: [name, note, make(settings)]. Each starts from the
+  // Built-in looks: [id, name, note, make(settings)]. Each starts from the
   // analysed base and its own lighting; the key light goes to the photo's lit side.
   const scene = (s, name) => { const sc = lighting[name]; s.lights = sc.lights.map(makeLight); s.ambient = sc.ambient; for (const k of ['shadow', 'shadowSoftness', ...Object.keys(LOOK_NEUTRAL)]) if (k in sc) s[k] = sc[k]; };
   const neutral = (s) => { Object.assign(s, LOOK_NEUTRAL); s.graze.enabled = false; };
@@ -210,22 +216,22 @@ const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, 
   // (At most 10 mm, the Texture depth slider's top.)
   const deeper = (s) => { s.textureDepthMm = Math.min(10, Math.round(s.textureDepthMm * 1.65 * 100) / 100); s.fineRelief *= 1.4; };
   const BUILT_IN = [
-    ['Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
-    ['Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
-    ['Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
-    ['Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
-    ['Your favourite', 'Your own look (10-16): gallery lamp, low raking graze', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
+    ['gallery', 'Gallery', 'Even gallery track light', (s) => { neutral(s); scene(s, 'Gallery track'); crisp(s); }],
+    ['gallery-spot', 'Gallery spot', 'One warm spot, greys kept neutral, strokes defined', (s) => { neutral(s); scene(s, 'Gallery spot, upper right'); }],
+    ['matched', 'Matched', 'Matched look 07 (the brightest pick)', (s) => { neutral(s); look(s, 'Brighter (07)'); }],
+    ['matched-raking', 'Matched + raking', 'Matched look 05, its graze across the strokes', (s) => { neutral(s); look(s, 'Raking graze (05)', true); }],
+    ['favourite', 'Your favourite', 'Your own look (10-16): gallery lamp, low raking graze', (s) => { neutral(s); look(s, 'Your favourite (10-16)', true); }],
     // The user's keepers from round F1 (10-19, tools/looks/favourite-variants.json 04 and 11):
     // Your favourite with a crisp graze (short, hard-edged shadows; the long soft one read as
     // motion blur), lit from the left.
     // Round 2 keepers folded in: deeper relief + crisper texture on both, and on the side lamp
     // the lamp lower on the wall (B02: y 0.4) and nearer the painting's edge (B04: x -0.05).
-    ['Favourite, from the left', 'Your favourite with a crisp raking light from the left, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 170); deeper(s); }],
-    ['Favourite, side lamp left', 'Your favourite with the lamp low on the left, near the edge, a crisp raking light, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 175); deeper(s); Object.assign(s.lights[0], { x: -0.05, y: 0.4, z: 0.6 }); }],
-    ['Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
-    ['Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
-    ['Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],
-    ['Museum spot', 'A tight spot, darker room', (s) => { neutral(s); scene(s, 'Museum spotlight'); crisp(s); }],
+    ['favourite-left', 'Favourite, from the left', 'Your favourite with a crisp raking light from the left, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 170); deeper(s); }],
+    ['favourite-side-lamp', 'Favourite, side lamp left', 'Your favourite with the lamp low on the left, near the edge, a crisp raking light, deeper relief', (s) => { neutral(s); look(s, 'Your favourite (10-16)'); crispGraze(s, 175); deeper(s); Object.assign(s.lights[0], { x: -0.05, y: 0.4, z: 0.6 }); }],
+    ['raking-texture', 'Raking texture', 'Gallery light plus Classic raking across the strokes', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Classic raking', 0.5); crisp(s); }],
+    ['long-shadows', 'Long shadows', 'Clean long graze shadows over a gallery light', (s) => { neutral(s); scene(s, 'Gallery track'); graze(s, 'Long shadows, clean surface', 0.6); crisp(s); }],
+    ['soft-window', 'Soft window', 'Big soft daylight from the side', (s) => { neutral(s); scene(s, 'Soft window'); crisp(s); }],
+    ['museum-spot', 'Museum spot', 'A tight spot, darker room', (s) => { neutral(s); scene(s, 'Museum spotlight'); crisp(s); }],
   ];
 
   // A saved preset or project on this image: its tone, colour and lighting relations kept;
@@ -297,7 +303,11 @@ const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, 
       // with those: the favourite's Pin light layer used to light its thumbnail and exposure fit,
       // then was dropped from the picture (found 10-19).
       const ownLayers = { layers: clone(base.layers ?? []), layersOn: base.layersOn, originalTop: base.originalTop ?? 0 };
-      for (const [name, note, make] of BUILT_IN) { const s = clone(ref); s.exposure = 0; make(s); Object.assign(s, clone(ownLayers)); items.push({ name, note, bias: LOOK_BIAS[name] ?? 0, settings: s, kind: 'built-in' }); }
+      for (const [id, name, note, make] of BUILT_IN) {
+        if (!(id in LOOK_BIAS)) throw new Error(`Look ${id} has no exposure bias (LOOK_BIAS).`);
+        const s = clone(ref); s.exposure = 0; make(s); Object.assign(s, clone(ownLayers));
+        items.push({ id, version: LOOK_VERSION[id] || 1, name, note, bias: LOOK_BIAS[id], settings: s, kind: 'built-in' });
+      }
       try { for (const p of (await userPresets()).slice(0, 8)) items.push({ name: p.name, note: 'Your preset, adapted to this photo', settings: adapted(ref, presetSettings(p)), kind: 'preset' }); } catch { /* storage off */ }
       try {
         const rows = (await userProjects()).filter((p) => p.id !== currentProject()).sort((a, b) => b.updated - a.updated).slice(0, 6);
@@ -319,7 +329,7 @@ const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, 
         const it = items[i], s = it.settings;
         status(`Making looks: ${n + 1} of ${items.length} · ${it.name}`); await frame();
         put(plain(s));
-        if (it.kind === 'built-in') { it.thumb = fitExposure(it.bias); if (it.name === 'Gallery') shift = state.exposure; }
+        if (it.kind === 'built-in') { it.thumb = fitExposure(it.bias); if (it.id === 'gallery') shift = state.exposure; }
         else { state.exposure = Math.max(-3, Math.min(3, Math.round(((s.exposure ?? 0) + shift) * 100) / 100)); it.thumb = grab(THUMB_W).canvas; }
         s.exposure = state.exposure;
         if (dressed(s)) { put(s); it.thumb = grab(THUMB_W).canvas; }

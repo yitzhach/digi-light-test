@@ -37,10 +37,20 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     photo = { src: s, w, h, clip: clipMask(g.getImageData(0, 0, w, h).data) };
     return photo.clip;
   }
-  // Share of pixels blown / crushed in the preview and not in the photo, as it stands.
-  function check() {
-    if (!api.source() || state.mode !== 'single') return null;
-    api.renderNow();
+  // The relit picture is what is judged, whatever the screen shows (Split, Original, a diagnostic
+  // view): run() switches to it for its checks and back after.
+  const relitShown = () => state.viewMode === 0 && !(state.compareSplit >= 0);
+  function relit(fn) {
+    if (relitShown()) return fn();
+    const view = { viewMode: state.viewMode, compareSplit: state.compareSplit };
+    Object.assign(state, { viewMode: 0, compareSplit: -1 });
+    try { return fn(); } finally { Object.assign(state, view); api.renderNow(); }
+  }
+  // Share of pixels blown / crushed in the preview and not in the photo, as it stands. `render`
+  // false reads the frame already on screen (the chip: no extra render while someone works).
+  function check({ render = true } = {}) {
+    if (!api.source() || state.mode !== 'single' || !relitShown()) return null;
+    if (render) api.renderNow();
     const cv = api.canvas, w = cv.width, h = cv.height;
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(cv, 0, 0);
@@ -90,7 +100,7 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
    */
   function run(opts) {
     quiet = true;
-    try { const r = guard(opts); api_.last = r && { ...r, seq: ++seq }; return r; } finally { quiet = false; clearTimeout(timer); }
+    try { const r = relit(() => guard(opts)); api_.last = r && { ...r, seq: ++seq }; return r; } finally { quiet = false; clearTimeout(timer); }
   }
   // whites / darks: which settings it moves, in order (WHITES / DARKS by default); ambientMax caps
   // the room light. Kept as options so alternatives can be rendered side by side for the user.
@@ -158,11 +168,14 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     chip.hidden = !bad;
     if (bad) chip.firstChild.textContent = '⚠ ' + describe(m);
   }
-  // Checked once the picture has been still for a moment, so dragging stays smooth.
+  // Checked once the picture has been still for a moment and the page is idle, on the frame
+  // already drawn (no render of its own), so dragging and tapping stay smooth; not checked
+  // while another view than the relit picture is on screen.
   document.addEventListener('digilight:render', () => {
     if (quiet) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (state.exporting) return; quiet = true; try { show(check()); } finally { quiet = false; } }, 700);
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 0));
+    timer = setTimeout(() => idle(() => { if (state.exporting || quiet) return; show(check({ render: false })); }, { timeout: 2000 }), 700);
   });
 
   // enabled: one-tap changes are guarded (digilight.setGuard turns it off); last: what the

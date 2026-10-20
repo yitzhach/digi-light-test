@@ -81,6 +81,8 @@ const full = process.argv.includes('--full');
     const e = (await ok('export_image', { path: png, width: 320 })).json();
     const b = fs.readFileSync(png);
     assert.ok(e.path === png && b.readUInt32BE(16) === 320 && b.slice(1, 4).toString() === 'PNG', JSON.stringify(e));
+    const rec = JSON.parse(fs.readFileSync(path.join(out, 'relit.json'), 'utf8'));
+    assert.ok(e.record === path.join(out, 'relit.json') && rec.format === 'digilight-record' && rec.settings.exposure === 0.1 && rec.output.file === 'relit.png' && rec.output.width === 320 && /^[0-9a-f]{64}$/.test(rec.code) && rec.input.name === 'sample:painting' && rec.metrics.vsPhoto, 'record beside the export ' + JSON.stringify({ ...rec, settings: undefined, metrics: undefined }));
     const crop = path.join(out, 'crop.png');
     const c = (await ok('export_image', { path: crop, width: 320, crop: { x: 0.5, y: 0, w: 0.5, h: 0.25 } })).json();
     assert.ok(c.path === crop && fs.readFileSync(crop).readUInt32BE(16) === 160, 'crop: half of 320 px ' + JSON.stringify(c));
@@ -94,7 +96,7 @@ const full = process.argv.includes('--full');
     await ok('set_settings', { changes: { exposure: -1 } });
     await ok('open_project', { path: proj });
     assert.equal((await ok('get_settings', { path: 'exposure' })).json(), 0.1, 'project reopened');
-    console.log('PASS export_image (file, width, crop), save_project, open_project');
+    console.log('PASS export_image (file, width, crop, record beside it), save_project, open_project');
 
     if (full) {
       // Analyze answers within 45 s; while it runs in the background it says so, and calling again keeps waiting.

@@ -29,6 +29,7 @@ export function createGL(canvas) {
       linearFloat: !!linearFloat,
       maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
       software: /swiftshader/i.test(renderer),
+      renderer,
     },
   };
 }

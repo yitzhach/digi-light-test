@@ -1,0 +1,2842 @@
+[
+ {
+  "id": "gallery",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0,
+   "ambient": 0.22,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": -0.03,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": false,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": 0.3,
+     "y": 1.05,
+     "z": 0.8
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "gallery-spot",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.5,
+   "ambient": 0.12,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": -0.09,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": false,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4300,
+     "power": 4,
+     "rgb": [
+      1.342298,
+      0.937951,
+      0.606718
+     ],
+     "size": 0.02,
+     "softness": 0.5,
+     "useKelvin": true,
+     "x": -0.22,
+     "y": 0.75,
+     "z": 0.45
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.7,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.35
+  },
+  "version": 1
+ },
+ {
+  "id": "matched",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.7,
+   "ambient": 0.06,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": 0.35,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": false,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 1,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4300,
+     "power": 4,
+     "rgb": [
+      1.342298,
+      0.937951,
+      0.606718
+     ],
+     "size": 0.02,
+     "softness": 0.5,
+     "useKelvin": true,
+     "x": -0.22,
+     "y": 0.75,
+     "z": 0.45
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "matched-raking",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.7,
+   "ambient": 0.06,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": 0.1,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 3,
+    "enabled": true,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.3,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 1,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4300,
+     "power": 4,
+     "rgb": [
+      1.342298,
+      0.937951,
+      0.606718
+     ],
+     "size": 0.02,
+     "softness": 0.5,
+     "useKelvin": true,
+     "x": -0.22,
+     "y": 0.75,
+     "z": 0.45
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "favourite",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.2,
+   "ambient": 0.3,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.55,
+   "chromaReject": 0.85,
+   "exposure": -0.23,
+   "fineHidden": null,
+   "fineRelief": 0.55,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": true,
+    "fine": 0.15,
+    "lift": 0.3,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": 0.3,
+     "y": 1.05,
+     "z": 0.8
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 1.1,
+   "metallic": 0,
+   "neutralWB": 0,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 5,
+   "reliefStrength": 3.2375,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.75,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0
+  },
+  "version": 1
+ },
+ {
+  "id": "favourite-left",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.2,
+   "ambient": 0.3,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.55,
+   "chromaReject": 0.85,
+   "exposure": -0.24,
+   "fineHidden": null,
+   "fineRelief": 0.77,
+   "graze": {
+    "angle": 170,
+    "clean": 0.55,
+    "detail": 0.01,
+    "elevation": 6,
+    "enabled": true,
+    "fine": 0.5,
+    "lift": 0.6,
+    "opacity": 0.63,
+    "reach": 0.4,
+    "soft": 0.1
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": 0.3,
+     "y": 1.05,
+     "z": 0.8
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 1.1,
+   "metallic": 0,
+   "neutralWB": 0,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 5,
+   "reliefStrength": 3.2375,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.75,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 9.9,
+   "vibrance": 0
+  },
+  "version": 3
+ },
+ {
+  "id": "favourite-side-lamp",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0.2,
+   "ambient": 0.3,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.55,
+   "chromaReject": 0.85,
+   "exposure": -0.44,
+   "fineHidden": null,
+   "fineRelief": 0.77,
+   "graze": {
+    "angle": 175,
+    "clean": 0.55,
+    "detail": 0.01,
+    "elevation": 6,
+    "enabled": true,
+    "fine": 0.5,
+    "lift": 0.6,
+    "opacity": 0.63,
+    "reach": 0.4,
+    "soft": 0.1
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": -0.05,
+     "y": 0.4,
+     "z": 0.6
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 1.1,
+   "metallic": 0,
+   "neutralWB": 0,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 5,
+   "reliefStrength": 3.2375,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.75,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 9.9,
+   "vibrance": 0
+  },
+  "version": 3
+ },
+ {
+  "id": "raking-texture",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0,
+   "ambient": 0.22,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": 0.34,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.3,
+    "detail": 0.01,
+    "elevation": 3,
+    "enabled": true,
+    "fine": 0.8,
+    "grey": 0,
+    "lift": 0,
+    "opacity": 0.5,
+    "reach": 1,
+    "soft": 0.2
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": 0.3,
+     "y": 1.05,
+     "z": 0.8
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "long-shadows",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0,
+   "ambient": 0.22,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": 0.89,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.3,
+    "detail": 0.012,
+    "elevation": 1,
+    "enabled": true,
+    "fine": 0.5,
+    "grey": 0,
+    "lift": 0,
+    "opacity": 0.6,
+    "reach": 1,
+    "soft": 0.15
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.3,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 4000,
+     "power": 4.5,
+     "rgb": [
+      1.414805,
+      0.923799,
+      0.533397
+     ],
+     "size": 0.03,
+     "softness": 0.55,
+     "useKelvin": true,
+     "x": 0.3,
+     "y": 1.05,
+     "z": 0.8
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "soft-window",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0,
+   "ambient": 0.25,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": 0.13,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": false,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 6500,
+     "power": 6,
+     "rgb": [
+      1.042633,
+      0.983786,
+      1.03508
+     ],
+     "size": 0.8,
+     "softness": 0.95,
+     "useKelvin": true,
+     "x": -0.3,
+     "y": 0.75,
+     "z": 0.9
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ },
+ {
+  "id": "museum-spot",
+  "settings": {
+   "adjust": {
+    "balance": {
+     "hCR": 0,
+     "hMG": 0,
+     "hYB": 0,
+     "mCR": 0,
+     "mMG": 0,
+     "mYB": 0,
+     "on": 1,
+     "preserve": 1,
+     "sCR": 0,
+     "sMG": 0,
+     "sYB": 0
+    },
+    "brightness": {
+     "brightness": 0,
+     "contrast": 0,
+     "on": 1
+    },
+    "bw": {
+     "blues": 20,
+     "cyans": 60,
+     "greens": 40,
+     "magentas": 80,
+     "on": 0,
+     "reds": 40,
+     "tint": 0,
+     "tintHue": 35,
+     "tintSat": 0.25,
+     "yellows": 60
+    },
+    "curves": {
+     "b": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "g": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "on": 1,
+     "r": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ],
+     "rgb": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       1
+      ]
+     ]
+    },
+    "exposure": {
+     "exposure": 0,
+     "gamma": 1,
+     "offset": 0,
+     "on": 1
+    },
+    "hueSat": {
+     "hue": 0,
+     "lightness": 0,
+     "on": 1,
+     "saturation": 0
+    },
+    "levels": {
+     "gamma": 1,
+     "inBlack": 0,
+     "inWhite": 1,
+     "on": 1,
+     "outBlack": 0,
+     "outWhite": 1
+    },
+    "lift": {
+     "amount": 0,
+     "on": 1
+    },
+    "mixer": {
+     "bB": 100,
+     "bC": 0,
+     "bG": 0,
+     "bR": 0,
+     "gB": 0,
+     "gC": 0,
+     "gG": 100,
+     "gR": 0,
+     "mono": 0,
+     "on": 1,
+     "rB": 0,
+     "rC": 0,
+     "rG": 0,
+     "rR": 100
+    },
+    "on": 1,
+    "opacity": 1,
+    "relief": {
+     "amount": 1,
+     "fine": 1,
+     "form": 0,
+     "formSize": 1,
+     "mid": 1,
+     "on": 1,
+     "smooth": 0
+    },
+    "vibrance": {
+     "on": 1,
+     "saturation": 0
+    }
+   },
+   "albedoSuppress": 0,
+   "ambient": 0.08,
+   "ao": 0.4,
+   "azimuthDeg": 141,
+   "broadRelief": 0.15,
+   "chromaReject": 0.85,
+   "exposure": -0.2,
+   "fineHidden": null,
+   "fineRelief": 0.65,
+   "graze": {
+    "angle": 180,
+    "clean": 0.55,
+    "detail": 0.02,
+    "elevation": 4,
+    "enabled": false,
+    "fine": 0.15,
+    "lift": 0.13,
+    "opacity": 0.63,
+    "reach": 1,
+    "soft": 0.4
+   },
+   "heightScale": 0.001667,
+   "highlightRolloff": 0.7,
+   "integrateTaps": 8,
+   "layers": [],
+   "layersOn": 1,
+   "lights": [
+    {
+     "aimX": 0.5,
+     "aimY": 0.5,
+     "cone": 0.8,
+     "enabled": true,
+     "falloff": 2,
+     "hex": "#ffffff",
+     "kelvin": 3000,
+     "power": 5.5,
+     "rgb": [
+      1.766837,
+      0.845477,
+      0.272653
+     ],
+     "size": 0.015,
+     "softness": 0.4,
+     "useKelvin": true,
+     "x": 0.5,
+     "y": 1.15,
+     "z": 0.9
+    }
+   ],
+   "meanLuma": 0.117553,
+   "mediumRelief": 0.8,
+   "metallic": 0,
+   "neutralWB": 0.6,
+   "neutralize": 0,
+   "originalTop": 0,
+   "overlays": {
+    "grain": {
+     "colour": 0,
+     "mode": "overlay",
+     "on": 0,
+     "opacity": 0.35,
+     "seed": 1,
+     "size": 1
+    },
+    "leak": {
+     "angle": 45,
+     "hex": "#ff8a3d",
+     "mode": "screen",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.55
+    },
+    "on": 1,
+    "pool": {
+     "hex": "#ffe2b3",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.6,
+     "size": 0.38,
+     "soft": 0.6,
+     "surround": 0.5,
+     "x": 0.5,
+     "y": 0.55
+    },
+    "vignette": {
+     "feather": 0.55,
+     "hex": "#000000",
+     "mode": "multiply",
+     "on": 0,
+     "opacity": 0.5,
+     "size": 0.45
+    },
+    "window": {
+     "angle": 135,
+     "hex": "#fff3e0",
+     "mode": "softLight",
+     "on": 0,
+     "opacity": 0.55,
+     "reach": 0.2,
+     "soft": 0.8
+    }
+   },
+   "paintingWidthCm": 60,
+   "photoDiffuse": 0,
+   "physical": 1,
+   "reliefAmount": 1,
+   "reliefScale": 3,
+   "reliefStrength": 0.2,
+   "roomKelvin": 6500,
+   "roughness": 0.72,
+   "selected": 0,
+   "shadow": 0.85,
+   "shadowDetail": 0.004,
+   "shadowSoftness": 0.2,
+   "shadowSpread": 4,
+   "specular": 0.45,
+   "strokeDef": 0.5,
+   "strokeDir": 0,
+   "strokeSize": 0.01,
+   "strokes": [],
+   "textureDepthMm": 6,
+   "vibrance": 0.4
+  },
+  "version": 1
+ }
+]

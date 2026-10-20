@@ -166,7 +166,8 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       strokes: { contrast: r3(A.photoScore), directionDeg: A.strokes ? Math.round(A.strokes.strokeDeg) : null, coherence: A.strokes ? r3(A.strokes.coherence) : null },
       rakeDeg: Math.round(A.rake), depthMm: A.depth, depthWhy: A.depthWhy, measuredRelief: A.measured, ms: A.ms, looks: looks() };
   }
-  const looks = () => (auto.analysis?.items || []).map((it, index) => ({ index, name: it.name, kind: it.kind, note: it.note, exposure: it.settings.exposure }));
+  // A built-in look has a fixed id (auto.js BUILT_IN) and a recipe version; prefer the id in jobs.
+  const looks = () => (auto.analysis?.items || []).map((it, index) => ({ index, ...(it.id ? { id: it.id, version: it.version } : {}), name: it.name, kind: it.kind, note: it.note, exposure: it.settings.exposure }));
   async function analyze() {
     needPhoto();
     if (state.mode !== 'single') throw new Error('Analyze works on a single photograph.');
@@ -194,15 +195,16 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   async function applyLook(which, opts = {}) {
     if (!auto.analysis) await analyze();
     const list = auto.analysis.items;
-    const i = typeof which === 'number' ? which : list.findIndex((it) => it.name.toLowerCase() === String(which).toLowerCase());
-    if (!(i >= 0 && i < list.length)) throw new Error(`No look "${which}". Looks: ${list.map((it) => it.name).join(', ')}.`);
+    const w = String(which).toLowerCase();
+    const i = typeof which === 'number' ? which : list.findIndex((it) => it.id === which) >= 0 ? list.findIndex((it) => it.id === which) : list.findIndex((it) => it.name.toLowerCase() === w);
+    if (!(i >= 0 && i < list.length)) throw new Error(`No look "${which}". Looks: ${list.map((it) => it.id ? `${it.name} (${it.id})` : it.name).join(', ')}.`);
     const s = opts.strength ?? 1;
     if (!(s >= 0 && s <= 1)) throw new Error('strength is 0–1.');
     auto.pick(i);   // guards the look itself
     let g = guard?.enabled ? guard.last : null;
     if (s !== 1) { auto.setStrength(s); checkpoint(); g = guarded(); }
     await idle();
-    return { look: list[i].name, strength: s, ...(g?.fixed ? { guard: g.note } : {}) };
+    return { look: list[i].name, ...(list[i].id ? { id: list[i].id, version: list[i].version } : {}), strength: s, ...(g?.fixed ? { guard: g.note } : {}) };
   }
   // Fixed presets: lighting scenes, graze (raking) presets, matched looks. No Analyze needed.
   function applyPreset(kind, name) {
@@ -276,6 +278,19 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     if (r.w < 1 || r.h < 1) throw new Error('crop is empty.');
     return r;
   }
+  // What a picture was made from, to keep beside it (the CLI and the MCP server write it as a
+  // .json next to each export): the settings (setSettings() takes them back), the look applied
+  // and whether it was changed since, the photo's size, what drew it, when. `extra` is merged
+  // in: the guard's note and the metrics, which only the caller knows belong to this picture.
+  function record(extra = {}) {
+    needPhoto();
+    const s = api.source(), a = auto.active, it = a && auto.analysis?.items?.[a.index];
+    const look = it ? { name: it.name, kind: it.kind, ...(it.id ? { id: it.id, version: it.version } : {}), strength: +($('autoStrength')?.value ?? 1),
+      changedSince: JSON.stringify(snapshot()) !== a.applied } : null;
+    return { format: 'digilight-record', version: 1, api: API_VERSION, at: new Date().toISOString(),
+      renderer: api.renderer?.() || null, photo: { width: s.naturalWidth || s.width, height: s.naturalHeight || s.height, sample: api.sample?.() || null },
+      look, ...clone(extra), settings: settings() };
+  }
   async function getProject(opts = {}) {
     needPhoto();
     const p = await project();
@@ -309,6 +324,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     // step) the picture as it stands; setGuard(false) stops changes being guarded.
     guard: serial(async (o = {}) => { needPhoto(); return guard.run({ ...o, fix: o.fix !== false, amend: false }); }),
     lastGuard: () => guard.last, setGuard: (on) => { guard.enabled = !!on; return guard.enabled; },
+    record: serial(async (extra) => record(extra)),
     getProject: serial(getProject), setProject: serial(setProject),
   };
   window.digilight = digilight;

@@ -130,4 +130,16 @@ async function analyzeCached(call, input, opts = {}) {
   return { ...out, cached: false };
 }
 
-module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached };
+/** The record to keep beside an exported picture (digilight.record() plus what only the caller
+ *  knows): the app's code hash, the input (name and, for a file, its sha256), the recipe that made
+ *  it (`job`), the output, the guard's note and the metrics. Written as FILE.json beside FILE.jpg. */
+async function writeRecord(call, file, { input, job, output, guard, metrics } = {}) {
+  const id = inputId(input);
+  const rec = await call('record', { code: code(), input: input == null ? null : { name: String(input), ...(id !== String(input) ? { sha256: id } : {}) },
+    job: job || null, output: { file: path.basename(file), ...(output || {}) }, guard: guard || null, metrics: metrics || null });
+  const out = file.replace(/\.[^./\\]+$/, '') + '.json';
+  fs.writeFileSync(out, JSON.stringify(rec, null, 1));
+  return out;
+}
+
+module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord, codeHash: () => code(), inputId };

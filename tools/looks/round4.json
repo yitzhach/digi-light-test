@@ -1,0 +1,19 @@
+{
+ "title": "Round 4: the round 3 keepers together",
+ "pageTitle": "Lighting Round 4",
+ "about": "Round 4 (10-20). In round 3 you kept 'raking light lower (6°)' and 'finer raking detail' on both looks, each on its own. Both are now in the two built-in looks together (L01, F01); this round checks the pair. L = 'Favourite, side lamp left', F = 'Favourite, from the left'. 02 and 03 are round 3's single changes again (lower only, finer only), to compare against. 04 goes lower still (5°), 05 finer still (smoothing 0.008 instead of 0.01, fine texture 0.65 instead of 0.5), 06 both. Hold the picture to flip to 01 (for 02–06) or to the photo (for 01). Each version is guarded against blown whites and crushed blacks, as the app now does.",
+ "variants": [
+  {"id": "L01", "name": "Side lamp left, new: lower and finer raking together", "look": "Favourite, side lamp left"},
+  {"id": "L02", "name": "Round 3's lower raking only (old smoothing)", "look": "Favourite, side lamp left", "set": {"graze.detail": 0.02, "graze.fine": 0.15}, "base": "L01"},
+  {"id": "L03", "name": "Round 3's finer raking only (old angle, 8°)", "look": "Favourite, side lamp left", "set": {"graze.elevation": 8}, "base": "L01"},
+  {"id": "L04", "name": "Lower still (5°)", "look": "Favourite, side lamp left", "set": {"graze.elevation": 5}, "base": "L01"},
+  {"id": "L05", "name": "Finer still (smoothing 0.008, fine 0.65)", "look": "Favourite, side lamp left", "set": {"graze.detail": 0.008, "graze.fine": 0.65}, "base": "L01"},
+  {"id": "L06", "name": "Lower (5°) and finer still", "look": "Favourite, side lamp left", "set": {"graze.elevation": 5, "graze.detail": 0.008, "graze.fine": 0.65}, "base": "L01"},
+  {"id": "F01", "name": "From the left, new: lower and finer raking together", "look": "Favourite, from the left"},
+  {"id": "F02", "name": "From the left, round 3's lower raking only", "look": "Favourite, from the left", "set": {"graze.detail": 0.02, "graze.fine": 0.15}, "base": "F01"},
+  {"id": "F03", "name": "From the left, round 3's finer raking only (8°)", "look": "Favourite, from the left", "set": {"graze.elevation": 8}, "base": "F01"},
+  {"id": "F04", "name": "From the left, lower still (5°)", "look": "Favourite, from the left", "set": {"graze.elevation": 5}, "base": "F01"},
+  {"id": "F05", "name": "From the left, finer still (0.008, 0.65)", "look": "Favourite, from the left", "set": {"graze.detail": 0.008, "graze.fine": 0.65}, "base": "F01"},
+  {"id": "F06", "name": "From the left, lower (5°) and finer still", "look": "Favourite, from the left", "set": {"graze.elevation": 5, "graze.detail": 0.008, "graze.fine": 0.65}, "base": "F01"}
+ ]
+}

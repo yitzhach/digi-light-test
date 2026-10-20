@@ -182,6 +182,24 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **10-20 (overnight, user asleep, asked for continuous refinement), on `main`:**
+  - **Records:** `digilight.record(extra)`; the CLI writes `FILE.json` beside every picture
+    (settings, look id/version, recipe, input + sha256, code hash, renderer, guard, metrics;
+    `--no-record`), the MCP `export_image` too (`record: false`). `setSettings(record.settings)`
+    makes the same picture again (tested).
+  - **Look ids:** built-in looks have fixed ids (gallery, gallery-spot, matched, matched-raking,
+    favourite, favourite-left, favourite-side-lamp, raking-texture, long-shadows, soft-window,
+    museum-spot) and recipe versions (LOOK_VERSION; the two favourites are v3 = round 3);
+    LOOK_BIAS is keyed by id and a missing bias is an error; applyLook / CLI / MCP take ids.
+  - **Goldens:** tests/goldens/looks.json holds every built-in look's recipe on the test fixture;
+    a look change fails the test with a readable diff; `UPDATE_GOLDENS=1 node tests/browser.cjs`
+    accepts an intended change (commit the file with it).
+  - **Guard fixes:** the chip's check no longer renders (it read back a fresh render 700 ms after
+    each change, blocking the page: a phone tap test failed); it reads the frame on screen when
+    the page is idle, and only in the relit view. The guard now judges the relit picture even in
+    Split / Original / diagnostic views (it measured the screen) and puts the view back.
+  - **tools/looks/make_round.py:** a round spec → CLI batch per photo → stats → filled review
+    page (`--skip-existing` resumes). Round 4 spec: tools/looks/round4.json.
 - **10-20 (later): guard options for the user to judge, NEXT CHAT START HERE.** The user did not
   know what the chip is (screenshots sent: it sits at the top of the picture) and wants to choose
   the guard's order and the room-light cap by eye. Review page

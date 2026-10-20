@@ -26,21 +26,23 @@
 //   render and batch print each picture's metrics against the photo (clipping, darks, detail,
 //   warnings; docs/automation.md); --no-metrics skips them. After the options the guard brings
 //   blown whites / crushed darks back under the limits and says how ("guard"); --no-guard
-//   (or a job's "guard": false) leaves the picture as set
+//   (or a job's "guard": false) leaves the picture as set. Each picture gets a record beside it
+//   (FILE.json: settings, look, recipe, input, code hash, guard, metrics); --no-record (or a
+//   job's "record": false) skips it
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
 //   --fresh   Analyze again even if the cache has this photo (DIGILIGHT_CACHE: the cache
 //             folder, default ~/.cache/digilight/analysis; 0 turns it off)
 // Exit code 1 with the error on stderr when anything fails.
 const fs = require('fs');
 const path = require('path');
-const { parseSets, fromDataURL, cleanError, launch, openInput, analyzeCached } = require('./digilight-headless.cjs');
+const { parseSets, fromDataURL, cleanError, launch, openInput, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
 
 function parseArgs(argv) {
   const o = { _: [], set: [], preset: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (k === 'set' || k === 'preset') o[k].push(v); else o[k] = v;
@@ -100,7 +102,11 @@ function readJobs(file) {
 // Analyze once (the page keeps it), then each job from the settings the photo opened with.
 // A job that fails (a bad setting, say) is reported and skipped; the exit code is 1 if any did.
 // (Two pages rendering at once were tried, 10-19: on 4 CPUs no faster in total than one.)
-async function runJobs(call, jobs, src, metrics, noGuard) {
+// The recipe part of a job, for its record.
+const recipe = (j) => Object.fromEntries(['look', 'strength', 'preset', 'set', 'exposureAdd', 'scale', 'addLights', 'width', 'crop', 'preview', 'guard'].filter((k) => j[k] != null).map((k) => [k, j[k]]));
+const outputOf = (j) => ({ format: path.extname(j.out).slice(1).toLowerCase(), ...(j.preview ? { preview: true } : {}), ...(j.width ? { width: +j.width } : {}), ...(j.crop ? { crop: j.crop } : {}) });
+
+async function runJobs(call, jobs, src, metrics, noGuard, noRecord) {
   const base = await call('settings');
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   let failed = 0;
@@ -110,7 +116,8 @@ async function runJobs(call, jobs, src, metrics, noGuard) {
       await call('setSettings', base);
       const { guard } = await dress(call, { ...j, guard: noGuard ? false : j.guard }, false);
       const m = await write(call, j, metrics);
-      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10, ...(guard ? { guard } : {}), ...(m ? { metrics: m } : {}) }) + '\n');
+      const rec = noRecord || j.record === false ? null : await writeRecord(call, path.resolve(j.out), { input: src.input, job: recipe(j), output: outputOf(j), guard, metrics: m });
+      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), ...(m ? { metrics: m } : {}) }) + '\n');
     } catch (e) {
       failed++;
       process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n');
@@ -122,7 +129,7 @@ async function runJobs(call, jobs, src, metrics, noGuard) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 32).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 35).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
@@ -134,7 +141,7 @@ async function main() {
     await call('setGuard', false);   // guarded once per job, after all its changes (dress)
     const src = { input, fresh: !!o.fresh };
 
-    if (jobs) { await runJobs(call, jobs, src, !o['no-metrics'], !!o['no-guard']); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
+    if (jobs) { await runJobs(call, jobs, src, !o['no-metrics'], !!o['no-guard'], !!o['no-record']); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
     const { analysis, guard } = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set, guard: o['no-guard'] || !['render', 'get'].includes(cmd) ? false : undefined }, cmd === 'analyze', src);
 
     let out;
@@ -144,7 +151,9 @@ async function main() {
     else if (cmd === 'get') out = await call('get', o.path ?? null);
     else {
       const m = await write(call, o, !o['no-metrics']);
-      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(m ? { metrics: m } : {}) };
+      const job = recipe({ ...o, set: o.set.length ? o.set : undefined, preset: o.preset.length ? o.preset : undefined });
+      const rec = o['no-record'] ? null : await writeRecord(call, path.resolve(o.out), { input, job, output: outputOf(o), guard, metrics: m });
+      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), ...(m ? { metrics: m } : {}) };
     }
     if (o['save-project']) { fs.writeFileSync(o['save-project'], JSON.stringify(await call('getProject'))); out = { ...out, project: path.resolve(o['save-project']) }; }
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');

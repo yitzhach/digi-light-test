@@ -108,6 +108,18 @@ what clips, with Fix. The CLI guards each job once after all its options (`"guar
 output line; `--no-guard`, or `"guard": false` in a job, to skip); the MCP server has `guard` and
 `set_guard` and adds the note to a change's answer.
 
+
+### Record
+
+`record(extra)` says what the picture was made from: `{format: 'digilight-record', version, at,
+renderer {name, software}, photo {width, height, sample}, look {name, kind, strength,
+changedSince} | null, settings, ...extra}`. `setSettings(record.settings)` on the same photo makes
+the same picture again. The CLI writes one beside every picture it renders (`FILE.json` next to
+`FILE.jpg`), adding the app's code hash (sha256 of `src/`), the input (name, and a file's sha256),
+the recipe (`job`: look, preset, set, exposureAdd, scale, addLights, width, crop), the output,
+what the guard did and the metrics; `--no-record` (or a job's `"record": false`) skips it. The MCP
+`export_image` writes one too (`record: false` skips it).
+
 ## Bridges
 
 ### URL parameters (run once on open)
@@ -297,7 +309,7 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `undo` / `redo` | one step per change |
 | `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
 | `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings |
-| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics |
+| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`) |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |
 
 The server keeps one DigiLight page open for the whole chat, so each tool works on the

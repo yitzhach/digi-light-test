@@ -16,7 +16,7 @@ const path = require('path');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
-const { parseSets, fromDataURL, cleanError, launch, openInput, preview, analyzeCached } = require('./digilight-headless.cjs');
+const { parseSets, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
 
 const log = (...a) => process.stderr.write('[digilight] ' + a.join(' ') + '\n');
 const FORMATS = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp' };
@@ -161,7 +161,7 @@ server.registerTool('analyze', {
 
 server.registerTool('list_looks', {
   title: 'List looks',
-  description: 'The looks from the last analyze: index, name, kind and a note on each.',
+  description: 'The looks from the last analyze: index, id and recipe version (built-in looks), name, kind and a note on each.',
   inputSchema: {},
 }, tool(async ({ call }) => {
   const looks = await call('looks');
@@ -170,9 +170,9 @@ server.registerTool('list_looks', {
 
 server.registerTool('apply_look', {
   title: 'Apply a look',
-  description: 'Applies one of the looks made by analyze (runs analyze first if needed), by name or index. strength 0–1 mixes from the settings before the look (1 = the full look).',
+  description: 'Applies one of the looks made by analyze (runs analyze first if needed), by id (built-in looks: e.g. favourite-side-lamp, favourite-left, gallery; list_looks shows them), name or index. strength 0–1 mixes from the settings before the look (1 = the full look).',
   inputSchema: {
-    look: z.union([z.string(), z.number().int()]).describe('Look name (from list_looks) or index'),
+    look: z.union([z.string(), z.number().int()]).describe('Look id or name (from list_looks), or index'),
     strength: z.number().min(0).max(1).optional().describe('0–1, default 1'),
   },
 }, changing(async ({ call }, { look, strength }) => {
@@ -265,15 +265,16 @@ server.registerTool('render_preview', {
 
 server.registerTool('export_image', {
   title: 'Export the image',
-  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Returns the file\'s metrics against the photo at the same size (as render_preview\'s, at full detail). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',
+  description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Returns the file\'s metrics against the photo at the same size (as render_preview\'s, at full detail), and writes a record beside it (same name, .json: the settings, look, guard and metrics that made it, so it can be made again; record false skips it). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',
   inputSchema: {
     path: z.string().describe('Absolute path ending .png, .jpg or .webp'),
     width: z.number().int().min(64).max(20000).optional().describe('Width in px; default the photo\'s full size'),
     crop: z.object({ x: z.number().min(0), y: z.number().min(0), w: z.number().positive(), h: z.number().positive() }).optional()
       .describe('Part of the image (at that width) to write: pixels, or all four 0–1 as fractions, e.g. {"x":0.4,"y":0.4,"w":0.2,"h":0.2}'),
     quality: z.number().min(0).max(1).optional().describe('JPEG/WebP quality 0–1, default 0.92'),
+    record: z.boolean().optional().describe('Write FILE.json beside it (default true)'),
   },
-}, tool(async ({ call }, { path: p, width, crop, quality }) => {
+}, tool(async ({ call }, { path: p, width, crop, quality, record }) => {
   await needOpen(call);
   const f = filePath(p), format = FORMATS[path.extname(f).toLowerCase()];
   if (!format) throw new Error('path must end .png, .jpg or .webp.');
@@ -281,7 +282,8 @@ server.registerTool('export_image', {
   return waitExport(async () => {
     const t0 = Date.now(), r = await call('export', { format, quality: quality ?? 0.92, width, crop, metrics: true }), buf = fromDataURL(r.image);
     fs.writeFileSync(f, buf);
-    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(await call('info')), metrics: r.metrics };
+    const rec = record === false ? null : await writeRecord(call, f, { input: opened, job: { width, crop }, output: { format, ...(width ? { width } : {}), ...(crop ? { crop } : {}) }, metrics: r.metrics });
+    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(rec ? { record: rec } : {}), ...(await call('info')), metrics: r.metrics };
   }, f);
 }));
 

@@ -49,7 +49,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - Darks: raise `graze.lift`, then `ambient`.
   - Measure at full resolution, not the 240 px thumbnail, and report what it did ("wanted +0.30, capped at +0.12").
   - Today `exposureAdd` and `set` skip the guard.
-- **A record with every export.** A JSON sidecar holding the settings, look id and version, code hash, GPU or SwiftShader, what the guard did, and the metrics. Cheap; makes any image reproducible.
+- **Done 10-20: a record with every export** (`digilight.record()`, `FILE.json` beside every CLI picture and MCP export).
+  - Was: **A record with every export.** A JSON sidecar holding the settings, look id and version, code hash, GPU or SwiftShader, what the guard did, and the metrics. Cheap; makes any image reproducible.
 - **Stable look ids.**
   - Key `LOOK_BIAS` by id plus version, not display name: today it falls back to `?? 0`, so a renamed look silently loses its exposure. Jobs should name looks by id, not index.
   - Done 10-19: mirror the graze angle with `keySide`: `crispGraze(s,170|175)` is fixed, so a photo lit from the right gets the wrong graze side.

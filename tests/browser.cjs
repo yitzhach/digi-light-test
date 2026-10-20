@@ -57,6 +57,29 @@ const rt=await page.evaluate(async()=>{const dl=window.digilight,c=JSON.parse(JS
     looks:s.looks.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:now.items[0].thumb.width,other};});
 assert.ok(rt.same&&!rt.hm&&rt.size<2e6&&rt.looks===A.n&&rt.tiles===A.n&&rt.thumbW===240&&/another photo or other settings/.test(rt.other),JSON.stringify(rt));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
 const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
+// Goldens: each built-in look's recipe as Analyze makes it on this fixture (tests/goldens/looks.json), so a change to
+// any look shows as a diff. Exposure is fitted by rendering, so it may move 0.06; everything else must match.
+// An intended change: UPDATE_GOLDENS=1 node tests/browser.cjs rewrites the file (commit it with the change).
+{const fs=require('fs'),file=require('path').join(__dirname,'goldens','looks.json');
+ const now=await page.evaluate(()=>__studio.auto.analysis.items.filter(i=>i.kind==='built-in').map(i=>({id:i.id,version:i.version,settings:i.settings})));
+ const round=(v)=>typeof v==='number'?Math.round(v*1e6)/1e6:Array.isArray(v)?v.map(round):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,round(v[k])])):v;
+ const cur=round(now);
+ if(process.env.UPDATE_GOLDENS==='1'||!fs.existsSync(file)){fs.mkdirSync(require('path').dirname(file),{recursive:true});fs.writeFileSync(file,JSON.stringify(cur,null,1)+'\n');console.log('  (goldens written: tests/goldens/looks.json)');}
+ const gold=JSON.parse(fs.readFileSync(file,'utf8')),diffs=[];
+ const walk=(a,b,p)=>{if(diffs.length>20)return;if(typeof a==='number'&&typeof b==='number'){if(Math.abs(a-b)>(/\.exposure$/.test(p)?0.06:1e-6))diffs.push(`${p}: ${b} → ${a}`);return;}
+  if(a&&b&&typeof a==='object'&&typeof b==='object'){for(const k of new Set([...Object.keys(a),...Object.keys(b)]))walk(a[k],b[k],p+'.'+k);return;}
+  if(JSON.stringify(a)!==JSON.stringify(b))diffs.push(`${p}: ${JSON.stringify(b)} → ${JSON.stringify(a)}`);};
+ walk(Object.fromEntries(cur.map(l=>[l.id,l])),Object.fromEntries(gold.map(l=>[l.id,l])),'look');
+ assert.deepEqual(diffs,[],'built-in looks changed (UPDATE_GOLDENS=1 to accept):\n'+diffs.join('\n'));
+ console.log('PASS built-in looks match their goldens',cur.length);}
+// Built-in looks have fixed ids and recipe versions (jobs, records and LOOK_BIAS use them); applyLook takes an id.
+{const L=await page.evaluate(async()=>{const d=window.digilight,out={ids:d.looks().filter(l=>l.kind==='built-in').map(l=>[l.id,l.version])};
+  try{await d.applyLook('nope');}catch(e){out.bad=e.message;}
+  const h=__studio.history.index;out.applied=await d.applyLook('raking-texture');out.angle=__bench.state.graze.angle;out.steps=__studio.history.index-h;await d.undo();out.back=JSON.stringify(__studio.snapshot());return out;});
+ assert.deepEqual(L.ids.map(l=>l[0]),['gallery','gallery-spot','matched','matched-raking','favourite','favourite-left','favourite-side-lamp','raking-texture','long-shadows','soft-window','museum-spot']);
+ assert.deepEqual(L.ids.find(l=>l[0]==='favourite-side-lamp'),['favourite-side-lamp',3]);assert.match(L.bad,/No look "nope".*Raking texture \(raking-texture\)/);
+ assert.ok(L.applied.id==='raking-texture'&&L.applied.look==='Raking texture'&&L.angle===A.rake&&L.steps===1,JSON.stringify(L.applied));assert.equal(L.back,pre,'undo');
+ console.log('PASS built-in looks: fixed ids and versions, applyLook by id');}
 // Round 2's keepers in the favourite looks: deeper relief over the fitted depth (auto.js deeper()).
 for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,0.01,0.5],'round 3: lower, finer raking '+n);}
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
@@ -870,6 +893,18 @@ assert.equal(r.photoExport.size[0],120);assert.ok(r.photoCrop.crop&&r.photoCrop.
 assert.ok(r.bright.vsPhoto.newBlown>0.003&&r.bright.warnings.some(w=>/whites/.test(w))&&r.bright.vsPhoto.stops.p50>0,JSON.stringify(r.bright.vsPhoto));
 assert.ok(r.dark.vsPhoto.stops.p50<0&&r.dark.warnings.some(w=>/darks/.test(w)),JSON.stringify(r.dark));
 await ctx.close();console.log('PASS metrics: render / export / crop against the photo, the photo measures as itself, warnings for blown whites and dark',JSON.stringify({preview:r.photoPreview.detail,bright:r.bright.vsPhoto.newBlown,ms:r.m.ms}));}
+// Record (digilight.record): what a picture was made from; its settings make the same picture again.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight;
+ await d.applyPreset('graze','Classic raking');await d.set({exposure:0.2,'lights.0.kelvin':3600});const img=await d.render();
+ const rec=await d.record({metrics:{probe:1}});await d.set({exposure:-1,'graze.enabled':false});const changed=(await d.render())!==img;
+ await d.setSettings(rec.settings);const again=(await d.render())===img;
+ return {rec:{format:rec.format,version:rec.version,at:typeof rec.at,renderer:rec.renderer,photo:rec.photo,look:rec.look,metrics:rec.metrics,exposure:rec.settings.exposure},changed,again,json:JSON.stringify(rec).length};});
+assert.equal(r.rec.format,'digilight-record');assert.equal(r.rec.version,1);assert.equal(r.rec.at,'string');assert.ok(r.rec.renderer&&r.rec.renderer.software===true&&r.rec.renderer.name,'renderer '+JSON.stringify(r.rec.renderer));
+assert.ok(r.rec.photo.width>0&&r.rec.photo.height>0);assert.equal(r.rec.look,null,'no look applied');assert.deepEqual(r.rec.metrics,{probe:1});assert.equal(r.rec.exposure,0.2);
+assert.ok(r.changed&&r.again,'the record\'s settings make the same picture again '+JSON.stringify(r));
+await ctx.close();console.log('PASS record: renderer, photo, look, extras, settings that make the same picture again',r.json+' bytes');}
 // Guard (guard.js): a change that blows whites is brought back (rolloff, then exposure) in the same undo step and says so;
 // with the guard off it stays, the chip says what clips and Fix repairs it as its own step; crushed darks are lifted.
 {const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
@@ -880,7 +915,9 @@ const r=await a.evaluate(async()=>{const d=window.digilight,out={},wait=(ms)=>ne
  out.now=[d.get('exposure'),d.get('highlightRolloff')];
  await d.undo();out.undone=[d.get('exposure'),d.get('highlightRolloff')];
  d.setGuard(false);await d.set('exposure',2.5);out.unguarded=d.get('exposure');out.check=await d.guard({fix:false});
- __bench.render();await wait(1200);const chip=document.getElementById('guardChip');out.chip=[chip.hidden,chip.textContent];
+ // Measured on the relit picture whatever the screen shows: Split view gives the same numbers and is left as it was.
+ __bench.state.compareSplit=0.5;out.split=await d.guard({fix:false});out.splitKept=__bench.state.compareSplit;__bench.state.compareSplit=-1;
+ __bench.render();const chip=document.getElementById('guardChip');for(let t=0;t<50&&chip.hidden;t++)await wait(100);out.chip=[chip.hidden,chip.textContent];
  const u1=__studio.history.index;chip.querySelector('button').click();out.fix=[d.get('exposure'),d.get('highlightRolloff'),__studio.history.index-u1,chip.textContent];
  await d.undo();out.fixUndone=d.get('exposure');
  await d.set({exposure:0,highlightRolloff:out.start[1],ambient:0.3});out.darkBefore=await d.guard({fix:false});
@@ -893,6 +930,7 @@ assert.ok(r.g.fixed&&r.g.ok&&r.g.after.newBlown<=0.003&&r.g.before.newBlown>0.00
 assert.match(r.g.note,/Guard: (highlight rolloff|exposure)/);assert.ok(r.now[0]<2.5||r.now[1]>r.start[1],JSON.stringify(r.now));assert.deepEqual(r.set.exposure,r.now[0],'set returns the guarded value');
 assert.deepEqual(r.undone,r.start,'one undo takes change and fix back');
 assert.equal(r.unguarded,2.5);assert.ok(!r.check.ok&&!r.check.fixed,JSON.stringify(r.check));
+assert.deepEqual(r.split.before,r.check.before,'Split view: the relit picture is judged');assert.equal(r.splitKept,0.5,'and the view is left as it was');
 assert.ok(!r.chip[0]&&/newly blown/.test(r.chip[1]),'chip shows what clips '+JSON.stringify(r.chip));
 assert.ok((r.fix[0]<2.5||r.fix[1]>r.start[1])&&r.fix[2]===1&&/Fixed/.test(r.fix[3]),'Fix: one undo step '+JSON.stringify(r.fix));assert.equal(r.fixUndone,2.5);
 assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&/room light|shadow lift/.test(r.dark.note),'darks lifted '+JSON.stringify(r.dark));

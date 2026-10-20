@@ -1304,6 +1304,8 @@ async function boot() {
     state, canvas, render, renderNow, applyColor,
     source: () => fullSource,
     dirty: () => { dirtySurface = true; },
+    // What draws: the GPU's name, and whether it is software GL (SwiftShader).
+    renderer: () => ({ name: glctx.caps.renderer, software: !!glctx.caps.software }),
     setZoom,
     // Measured relief: set(height, w, h, info) / set(null), use(on), info.
     measured: {
