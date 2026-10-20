@@ -28,12 +28,16 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
   let timer = 0, quiet = false;   // the chip's delayed check; quiet while the guard itself renders
   let seq = 0;                    // counts runs, so a caller can tell a new result from the last
 
+  // The photo exactly as the preview starts from it (app.js previewSource), so an unchanged
+  // picture counts nothing: resampling the full photo another way moves pixels by a level or
+  // two, and on a bright painting that alone flipped 0.5% of it across the white limit.
   function photoClip(w, h) {
-    const s = api.source();
+    const pv = api.previewSource?.(), s = pv && pv.width === w && pv.height === h ? pv : api.source();
     if (photo && photo.src === s && photo.w === w && photo.h === h) return photo.clip;
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d', { willReadFrequently: true });
-    g.imageSmoothingQuality = 'high'; g.drawImage(s, 0, 0, w, h);
+    if (s !== pv) g.imageSmoothingQuality = 'high';
+    g.drawImage(s, 0, 0, w, h);
     photo = { src: s, w, h, clip: clipMask(g.getImageData(0, 0, w, h).data) };
     return photo.clip;
   }

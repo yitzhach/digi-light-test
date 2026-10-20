@@ -3,7 +3,7 @@
 
     python3 tools/looks/make_round.py SPEC.json --photo ID:LABEL:INPUT [--photo ...] --out DIR [--width 1600] [--skip-existing]
 
-SPEC is a round file like tools/looks/round4.json: {title, about, fill?, variants: [{id, name,
+SPEC is a round file like tools/looks/round4.json: {title, about, fill?, guard?, variants: [{id, name,
 look?, set?, fill?, exposureAdd?, scale?, addLights?, guard?, base?}]} ("fill": true adds the
 spec's fill light; "base" is the version Hold compares against, default the photo). INPUT is
 what the CLI opens: sample:painting, a photo path or a .digilight.json project.
@@ -33,6 +33,8 @@ def jobs_for(spec, folder, width):
     jobs = [{'out': os.path.join(folder, 'ORIG.jpg'), 'set': {'originalTop': 1}, 'guard': False, 'width': width, 'quality': 0.92}]
     for v in spec['variants']:
         j = {'out': os.path.join(folder, v['id'] + '.jpg'), 'width': width, 'quality': 0.92}
+        if 'guard' in spec:   # round-wide: "guard": false renders the versions as set
+            j['guard'] = spec['guard']
         for k in ('look', 'strength', 'preset', 'set', 'exposureAdd', 'scale', 'guard'):
             if k in v:
                 j[k] = v[k]
@@ -112,7 +114,7 @@ def main():
         notes = [f"{i}: {results[n][i]['guard']['note'].replace('Guard: ', '')}" for i in ids if results[n].get(i, {}).get('guard')]
         if notes:
             moved.append(f'{label}, the guard moved: ' + ' '.join(notes))
-    about = spec['about'] + (' ' + ' '.join(moved) if moved else ' The guard moved nothing in any version.')
+    about = spec['about'] + (' ' + ' '.join(moved) if moved else '' if spec.get('guard') is False else ' The guard moved nothing in any version.')
     base = {v['id']: v['base'] for v in spec['variants'] if v.get('base')}
     data = (f"const TITLE={json.dumps(spec['title'])};\nconst ABOUT={json.dumps(about)};\nconst PHOTOS={json.dumps(photos)};\n"
             f"const V={json.dumps([[v['id'], v['name']] for v in spec['variants']])};\nconst BASE={json.dumps(base)};\nconst STATS={json.dumps(stats)};")

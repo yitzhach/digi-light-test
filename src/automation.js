@@ -232,12 +232,16 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const px = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
     const s = api.source(), fw = s.naturalWidth || s.width;
     const key = [whole[0], whole[1], rect ? [rect.x, rect.y, rect.w, rect.h] : ''].join('|');
-    if (!photoCache || photoCache.src !== s || photoCache.key !== key) {
+    // The photo drawn the way the picture's own pixels started: the preview's copy for a preview,
+    // else cut from the full photo as export.js cuts its tiles (a GPU canvas, high quality when
+    // scaled). Resampled any other way it differs by a level or so, which counts as clipping.
+    const pv = api.previewSource?.(), usePv = !rect && pv && pv.width === w && pv.height === h && whole[0] === w;
+    if (!photoCache || photoCache.src !== (usePv ? pv : s) || photoCache.key !== key) {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
-      const g = c.getContext('2d', { willReadFrequently: true }), k = fw / whole[0], r = rect || { x: 0, y: 0, w, h };
-      g.imageSmoothingQuality = 'high';
-      g.drawImage(s, r.x * k, r.y * k, r.w * k, r.h * k, 0, 0, w, h);
-      photoCache = { src: s, key, stats: pictureStats(px(c), w, h) };
+      const g = c.getContext('2d'), kx = fw / whole[0], ky = (s.naturalHeight || s.height) / whole[1], r = rect || { x: 0, y: 0, w, h };
+      if (usePv) g.drawImage(pv, 0, 0);
+      else { if (kx !== 1 || ky !== 1) g.imageSmoothingQuality = 'high'; g.drawImage(s, r.x * kx, r.y * ky, r.w * kx, r.h * ky, 0, 0, w, h); }
+      photoCache = { src: usePv ? pv : s, key, stats: pictureStats(px(c), w, h) };
     }
     const m = imageMetrics(px(canvas), w, h, photoCache.stats);
     return { ...m, crop: rect || null, ms: Math.round(performance.now() - t0) };
@@ -264,6 +268,46 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const W = opts.width ? Math.max(1, Math.min(fw, Math.round(opts.width))) : fw;
     const metrics = measure(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect);
     return { image: await encode(c, opts), metrics };
+  }
+  // Several pictures at once, for rounds of looks: items [{settings, width?, crop?, format?,
+  // quality?}], each made as export() would make it from those settings (taken as they are:
+  // dress and guard them first). Items that need the same relief (the same surface settings,
+  // size and crop) are rendered in one tiled pass, MANY_CHUNK at a time, so the relief is built
+  // once per pass, not once per picture. Returns, in order, what export() returns for each
+  // (`metrics: true` → {image, metrics}). The settings in force before are put back.
+  const MANY_CHUNK = 8;
+  async function exportMany(items, opts = {}) {
+    needPhoto();
+    if (state.mode !== 'single') throw new Error('Export works on a single photograph here.');
+    if (!Array.isArray(items) || !items.length || items.some((it) => !it?.settings)) throw new Error('exportMany takes a list of {settings, width?, crop?, format?, quality?}.');
+    await idle();
+    const s = api.source(), fw = s.naturalWidth || s.width, fh = s.naturalHeight || s.height;
+    const before = snapshot(), groups = new Map(), out = new Array(items.length);
+    try {
+      for (const [i, it] of items.entries()) {
+        restore(validate({ format: 'digilight', version: 1, image: 'data:image/png;base64,', settings: it.settings }));
+        const W = it.width ? Math.max(1, Math.min(fw, Math.round(it.width))) : fw;
+        const rect = it.crop ? cropRect(it.crop, it.width) : null;
+        const { key, state: st } = api.captureState(W);
+        const gk = JSON.stringify([key, W, rect]);
+        if (!groups.has(gk)) groups.set(gk, { W, rect, members: [] });
+        groups.get(gk).members.push({ i, st });
+      }
+      for (const g of groups.values()) {
+        const whole = [g.W, g.W === fw ? fh : Math.max(1, Math.round(fh * g.W / fw))];
+        for (let c = 0; c < g.members.length; c += MANY_CHUNK) {
+          const part = g.members.slice(c, c + MANY_CHUNK);
+          const canvases = await api.exportStates(part.map((m) => m.st), { width: g.W === fw ? undefined : g.W, rect: g.rect || undefined });
+          for (const [k, m] of part.entries()) {
+            const it = items[m.i], enc = { format: it.format || opts.format, quality: it.quality ?? opts.quality, as: opts.as };
+            out[m.i] = opts.metrics ? { metrics: measure(canvases[k], whole, g.rect), image: await encode(canvases[k], enc) } : await encode(canvases[k], enc);
+          }
+        }
+      }
+    } finally {
+      restore(before);
+    }
+    return out;
   }
   // crop: {x, y, w, h} in the exported image's pixels (full size, or width px wide), or
   // "x,y,w,h"; values of 1 or less are fractions of its width / height. Kept inside it.
@@ -319,7 +363,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     presets: () => Object.fromEntries(Object.entries(presets).map(([k, t]) => [k, [...t.names]])), applyPreset: serial(async (k, n) => applyPreset(k, n)),
     addLight: serial(async (k, p) => addLight(k, p)), removeLight: serial(async (i) => removeLight(i)),
     undo: serial(async () => step('undo')), redo: serial(async () => step('redo')),
-    render: serial(render), export: serial(exportImage),
+    render: serial(render), export: serial(exportImage), exportMany: serial(exportMany),
     // The guard: guard({fix}) checks (and with fix, the default, repairs as its own undo
     // step) the picture as it stands; setGuard(false) stops changes being guarded.
     guard: serial(async (o = {}) => { needPhoto(); return guard.run({ ...o, fix: o.fix !== false, amend: false }); }),

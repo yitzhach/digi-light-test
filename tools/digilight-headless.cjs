@@ -133,10 +133,12 @@ async function analyzeCached(call, input, opts = {}) {
 /** The record to keep beside an exported picture (digilight.record() plus what only the caller
  *  knows): the app's code hash, the input (name and, for a file, its sha256), the recipe that made
  *  it (`job`), the output, the guard's note and the metrics. Written as FILE.json beside FILE.jpg. */
-async function writeRecord(call, file, { input, job, output, guard, metrics } = {}) {
+async function writeRecord(call, file, { input, job, output, guard, metrics, base } = {}) {
   const id = inputId(input);
-  const rec = await call('record', { code: code(), input: input == null ? null : { name: String(input), ...(id !== String(input) ? { sha256: id } : {}) },
-    job: job || null, output: { file: path.basename(file), ...(output || {}) }, guard: guard || null, metrics: metrics || null });
+  const extra = { code: code(), input: input == null ? null : { name: String(input), ...(id !== String(input) ? { sha256: id } : {}) },
+    job: job || null, output: { file: path.basename(file), ...(output || {}) }, guard: guard || null, metrics: metrics || null };
+  // `base`: a digilight.record() taken earlier, while this picture's settings were the page's.
+  const rec = base ? { ...base, ...extra, settings: base.settings } : await call('record', extra);
   const out = file.replace(/\.[^./\\]+$/, '') + '.json';
   fs.writeFileSync(out, JSON.stringify(rec, null, 1));
   return out;

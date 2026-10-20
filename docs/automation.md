@@ -33,6 +33,7 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
 | `undo()` / `redo()` | `true` if there was a step |
 | `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below) |
+| `exportMany(items, {metrics, format, quality})` | several pictures at once: `items` `[{settings, width?, crop?, format?, quality?}]` (settings from `settings()` or a record, taken as they are). Items that need the same relief (same surface settings, size and crop) share one tiled pass, so the relief is built once for all of them, not once per picture; returns what `export` returns for each, in order, and puts the settings back. The CLI `batch` uses it |
 | `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` as `render` |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
 | `setProject(objOrJSON)` | opens a project |
@@ -88,6 +89,11 @@ same size and crop. `render({metrics: true})`, `export({metrics: true})`, the CL
 
 Measured on the preview it describes the preview; for detail at full resolution, use an
 export (a `crop` is quick).
+
+The photo side is drawn exactly the way the picture's own pixels started (the preview's copy of
+the photo for a preview; cut from the full photo as the export cuts its tiles, for an export), so
+an unchanged picture measures as zero change. Resampled any other way the photo is a level or
+two off, and on a bright painting that alone counted half a percent as newly blown.
 
 
 ### Guard
@@ -191,7 +197,9 @@ software GL (no GPU): 2–3 minutes. A full-size export of a 1000×1500 photo ta
 uses 4096 px tiles (2048 on a GPU), and the relief is rebuilt only when a setting it is made
 from changes, so jobs that differ only in lights, tone or the graze skip that step.
 
-**Several looks or variants of one photo: use `batch`.** Each `render --look` runs its own
+**Several looks or variants of one photo: use `batch`.** Jobs that share a relief (most rounds:
+looks and lamps change, the surface does not) are rendered together, the relief built once for
+all of them (`--no-many` renders each on its own). Each `render --look` runs its own
 Analyze; `batch` runs it once and then renders every job from the settings the photo
 opened with (~10 s each instead of ~3 min each). Run one CLI at a time: parallel runs share
 the CPUs and are slower in total.

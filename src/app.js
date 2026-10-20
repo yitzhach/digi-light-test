@@ -35,6 +35,8 @@ let imgW = 0, imgH = 0;
 // The untouched source is kept so export can go back to native resolution;
 // the preview only ever sees a downscaled copy.
 let fullSource = null, fullW = 0, fullH = 0, previewScale = 1;
+// The photo as the preview works on it (imgW x imgH): what an unchanged render matches.
+let previewSource = null;
 let dirtySurface = true;
 let strokeMeasuredAt = NaN;   // Stroke size blur (px) the band spread was last measured at
 // Relief measured from lamp photos (lampphotos.js), at the preview's size: when
@@ -289,6 +291,7 @@ async function setSource(src, keep = false) {
   const c = document.createElement('canvas');
   c.width = imgW; c.height = imgH;
   c.getContext('2d').drawImage(src, 0, 0, imgW, imgH);
+  previewSource = c;
 
   // Measure the working image, not the original file: this reports what the
   // shader will actually see. Descriptive only — it says whether Chroma reject
@@ -1303,6 +1306,8 @@ async function boot() {
   initStudio({
     state, canvas, render, renderNow, applyColor,
     source: () => fullSource,
+    // The photo at the preview's size, exactly as the preview's renders start from it.
+    previewSource: () => previewSource,
     dirty: () => { dirtySurface = true; },
     // What draws: the GPU's name, and whether it is software GL (SwiftShader).
     renderer: () => ({ name: glctx.caps.renderer, software: !!glctx.caps.software }),
@@ -1327,6 +1332,27 @@ async function boot() {
       return exportImage({ mode: 'single', source: fullSource, width, height, rect }, null, { viewMode: 0 });
     },
     sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
+    // Many variants in one tiled pass (automation exportMany): captureState(outW) is the live
+    // settings as an export outW px wide would use them, with the preview's measurements brought
+    // up to date, and the key of the relief they need; exportStates(states, {width, rect}) renders
+    // states that share one key together, one canvas each.
+    captureState: (outW) => {
+      updateDerived(imgW);
+      if (dirtySurface || surfaceKey() !== builtSurface || state.strokeSigmaPx !== strokeMeasuredAt) renderNow();
+      return { key: surfaceKey() + (measured?.on ? '|measured' : ''), state: Object.assign(renderState(outW), { viewMode: 0 }) };
+    },
+    exportStates: async (states, { width, rect } = {}) => {
+      const job = { mode: 'single', source: fullSource, rect };
+      if (width) { job.width = Math.max(1, Math.min(fullW, Math.round(width))); job.height = Math.max(1, Math.round(fullH * job.width / fullW)); }
+      state.exporting = true;
+      cancelSharp();
+      try {
+        return await exportFullRes(glctx, { gbuf, photo, shader }, job, states);
+      } finally {
+        state.exporting = false;
+        surfaceClobbered = true;
+      }
+    },
     // A new light, as + Light / + Shadow make it ('light', 'shade' or 'negative').
     makeLight: (kind = 'light') => (kind === 'light' ? newLight(state.lights.length) : { ...newShadow(state.lights.filter(isShadow).length), kind }),
     // Single photo: the frame rebuilds the relief if a setting it is made from changed (surfaceKey).

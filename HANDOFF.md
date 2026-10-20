@@ -200,6 +200,13 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
     Split / Original / diagnostic views (it measured the screen) and puts the view back.
   - **tools/looks/make_round.py:** a round spec → CLI batch per photo → stats → filled review
     page (`--skip-existing` resumes). Round 4 spec: tools/looks/round4.json.
+  - **exportMany:** variants that share a relief come out of one tiled pass (export.js renderTiles
+    takes a list of states; app.js captureState / exportStates); the CLI batch uses it (`--no-many`
+    to compare): 6 full-size jobs 313 s → 204 s.
+  - **Exact baselines:** the guard and the metrics drew the photo another way than the picture's
+    pixels started (preview copy at low quality, export tiles on a GPU canvas), a level or two
+    off: ~0.5% phantom "newly blown" on the red panel, enough to make the guard darken an
+    unchanged picture. Now an unchanged picture measures exactly 0 at any size (tested exactly).
 - **10-20 (later): guard options for the user to judge, NEXT CHAT START HERE.** The user did not
   know what the chip is (screenshots sent: it sits at the top of the picture) and wants to choose
   the guard's order and the room-light cap by eye. Review page

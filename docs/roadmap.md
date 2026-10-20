@@ -54,7 +54,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
 - **Stable look ids.**
   - Key `LOOK_BIAS` by id plus version, not display name: today it falls back to `?? 0`, so a renamed look silently loses its exposure. Jobs should name looks by id, not index.
   - Done 10-19: mirror the graze angle with `keySide`: `crispGraze(s,170|175)` is fixed, so a photo lit from the right gets the wrong graze side.
-- **Many variants per relief build.** `exportMany`, grouped by surface key, in chunks of about 10 because of memory. Round 2 was 45 jobs but only 7 distinct reliefs. About 100 lines. With the NOW wins, a 45-variant round goes from about 26 min to about 6–7 min.
+- **Done 10-20: many variants per relief build** (`exportMany`, export.js renderTiles with a list of states; the CLI batch renders jobs that share a relief together). Measured: 6 full-size variants of the red panel 313 s → 204 s (−35%); the rest is dressing, the guard and metrics per job, so longer rounds gain more.
+  - Was: **Many variants per relief build.** `exportMany`, grouped by surface key, in chunks of about 10 because of memory. Round 2 was 45 jobs but only 7 distinct reliefs. About 100 lines. With the NOW wins, a 45-variant round goes from about 26 min to about 6–7 min.
 - **In the app, for uploaders** (`src/batch.js`, `src/auto.js`):
   - An Auto source in `looks()` so looks open in the full-screen viewer (about 30 lines).
   - "Pin as A" so Hold flips to another look, not only the photo (about 20 lines).

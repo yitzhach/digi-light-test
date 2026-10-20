@@ -885,7 +885,9 @@ const r=await a.evaluate(async()=>{const d=window.digilight,out={};
  await d.set('exposure',2.5);out.bright=(await d.render({metrics:true})).metrics;
  await d.set('exposure',d.describe().find(x=>x.path==='exposure').min);out.dark=(await d.render({metrics:true})).metrics;
  return out;});
-const near0=(v)=>[v.newBlown,v.newCrushed,v.darksLift,v.stops.p05,v.stops.p50,v.stops.p95,...v.thirds].every(x=>Math.abs(x)<=0.6)&&Object.values(v.detail).every(x=>Math.abs(x-1)<0.05);
+// Exact, not near: the photo is drawn the way the picture's pixels started (preview copy / tile cut); resampled
+// another way it is a level off, and on a bright painting that alone counted 0.5% as newly blown (10-20).
+const near0=(v)=>v.newBlown===0&&v.newCrushed===0&&Math.abs(v.darksLift)<=0.05&&[v.stops.p05,v.stops.p50,v.stops.p95,...v.thirds].every(x=>x===0)&&Object.values(v.detail).every(x=>x===1);
 assert.ok(r.same,'metrics leave the image as it was');
 assert.ok(r.m.render.p50>0&&r.m.photo.p50>0&&r.m.size[0]>0&&r.m.render.thirds.length===3&&Array.isArray(r.m.warnings)&&r.m.ms>=0,JSON.stringify(r.m));
 for(const [k,v] of [['preview',r.photoPreview],['export',r.photoExport.vsPhoto],['crop',r.photoCrop.vsPhoto]])assert.ok(near0(v),'the photo measures as the photo: '+k+' '+JSON.stringify(v));
@@ -893,6 +895,30 @@ assert.equal(r.photoExport.size[0],120);assert.ok(r.photoCrop.crop&&r.photoCrop.
 assert.ok(r.bright.vsPhoto.newBlown>0.003&&r.bright.warnings.some(w=>/whites/.test(w))&&r.bright.vsPhoto.stops.p50>0,JSON.stringify(r.bright.vsPhoto));
 assert.ok(r.dark.vsPhoto.stops.p50<0&&r.dark.warnings.some(w=>/darks/.test(w)),JSON.stringify(r.dark));
 await ctx.close();console.log('PASS metrics: render / export / crop against the photo, the photo measures as itself, warnings for blown whites and dark',JSON.stringify({preview:r.photoPreview.detail,bright:r.bright.vsPhoto.newBlown,ms:r.m.ms}));}
+// exportMany: variants that share a relief come out of one tiled pass (the relief built once per tile for
+// them all), each the same picture as its own export; another relief gets its own pass; settings put back.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,gb=__bench.gbuf,orig=gb.build;let tiles=0;d.setGuard(false);
+ const pw=__bench.canvas.width,ph=__bench.canvas.height;gb.build=function(tex,w,h,o){if(w!==pw||h!==ph)tiles++;return orig.call(this,tex,w,h,o);};__bench.state.maxTile=160;
+ const px=async(url)=>{const im=new Image();im.src=url;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const g=c.getContext('2d');g.drawImage(im,0,0);return g.getImageData(0,0,c.width,c.height).data;};
+ const base=d.settings();
+ await d.set({'graze.enabled':true,'graze.opacity':0.5});const A=d.settings();
+ await d.set({exposure:0.4,'lights.0.kelvin':3500,'graze.detail':0.03});const B=d.settings();
+ await d.set({reliefScale:Math.round(d.get('reliefScale')*1.5*100)/100});const C=d.settings();
+ const single=[],per=[];for(const s of [A,B,C]){await d.setSettings(s);const t=tiles;single.push(await d.export({format:'png'}));per.push(tiles-t);}
+ await d.setSettings(base);const before=JSON.stringify(d.settings());
+ const t1=tiles;const many=await d.exportMany([A,B,C].map((settings)=>({settings,format:'png'})));const nMany=tiles-t1;const after=JSON.stringify(d.settings());
+ const diffs=[];for(let k=0;k<3;k++){const p=await px(single[k]),q=await px(many[k]);let sum=0;for(let i=0;i<p.length;i++)sum+=Math.abs(p[i]-q[i]);diffs.push(sum/p.length);}
+ const m=await d.exportMany([{settings:A,width:100,crop:'0,0,0.5,0.5',format:'jpeg'}],{metrics:true});
+ let bad='';try{await d.exportMany([{width:100}]);}catch(e){bad=e.message;}
+ delete __bench.state.maxTile;gb.build=orig;
+ return {per,nMany,diffs,restored:before===after,distinct:new Set(single).size,m:[m[0].image.slice(0,23),m[0].metrics.size,!!m[0].metrics.crop],bad};});
+assert.equal(r.distinct,3,'three different pictures');assert.ok(r.per.every(n=>n>1),'several tiles each '+JSON.stringify(r.per));
+assert.equal(r.nMany,Math.max(r.per[0],r.per[1])+r.per[2],'A and B share one relief pass, C has its own '+JSON.stringify(r));
+assert.ok(r.diffs.every(x=>x<0.5),'each the same as its own export '+JSON.stringify(r.diffs));assert.ok(r.restored,'settings put back');
+assert.ok(r.m[0]==='data:image/jpeg;base64,'&&r.m[1][0]===50&&r.m[2],'a cropped, scaled jpeg with metrics '+JSON.stringify(r.m));assert.match(r.bad,/exportMany takes/);
+await ctx.close();console.log('PASS exportMany: shared relief rendered once for its variants, same pictures as single exports, settings put back',JSON.stringify({per:r.per,many:r.nMany,diffs:r.diffs.map(x=>+x.toFixed(4))}));}
 // Record (digilight.record): what a picture was made from; its settings make the same picture again.
 {const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
 await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);

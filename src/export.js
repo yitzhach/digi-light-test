@@ -48,11 +48,18 @@ export function requiredMargin(state) {
  * out as the same pixels of a full render would. One padded tile, no larger than
  * maxTile, is alive on the GPU at a time.
  *
+ * Several variants at once: `state` and `out` as arrays of the same length, settings that
+ * share one relief (app.js surfaceKey: the same surface settings, photo and size). Each
+ * tile's surface is then built once, from the first, and every variant is shaded on it
+ * with its own smoothings, lights and tone, so a round of looks costs one relief build.
+ *
  * @param builders {gbuf, photo, shader}
  * @param job      {mode:'single', source, width?, height?} | {mode:'photometric', sources:[], solver}
  * @returns true when done; false if `cancelled()` turned true between tiles
  */
 export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled } = {}) {
+  const states = Array.isArray(state) ? state : [state], outs = Array.isArray(out) ? out : [out];
+  state = states[0];
   const { gl, caps } = glctx;
   const { gbuf, photo, shader } = builders;
   const photometric = job.mode === 'photometric';
@@ -65,7 +72,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
   const kx = SW / W, ky = SH / H;
   const aspect = H / W;
 
-  const margin = requiredMargin(state);
+  const margin = Math.max(...states.map(requiredMargin));
   // Keep the padded tile inside the driver's texture limit with room to spare;
   // several float targets of this size are alive at once.
   // Overridable so the seam behaviour can be exercised on small test images, and
@@ -151,35 +158,40 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           if (target) { gl.deleteTexture(target.tex); gl.deleteFramebuffer(target.fbo); }
           target = makeTarget(gl, pw, ph, { float: false, linear: false, caps });
         }
-        bindTarget(gl, target);
-
-        // Textures are uploaded flipped, so v = 0 is the BOTTOM of the image and
-        // the tile's UV origin has to be measured up from the bottom edge.
-        shader.draw(targets, state, aspect, pw, ph, {
-          ox: px0 / W,
-          oy: (H - py1) / H,
-          sx: pw / W,
-          sy: ph / H,
-        });
-
         const buf = new Uint8Array(pw * ph * 4);
-        gl.readPixels(0, 0, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        for (let k = 0; k < states.length; k++) {
+          const st = states[k], out = outs[k];
+          // A variant's own smoothings of the shared relief (each reruns only if it differs).
+          if (k > 0 && !photometric) { gbuf.buildGraze(st.grazeSigmaPx ?? 0); gbuf.buildShadow(st.shadowSigmaPx ?? 0); gbuf.buildStroke(st.strokeSigmaPx ?? 0); }
+          bindTarget(gl, target);
 
-        // readPixels comes back bottom-up; un-flip while copying only the
-        // interior, which is the part that had full context on every side.
-        const offX = ix0 - px0, offY = iy0 - py0;
-        const img = out.createImageData(iw, ih);
-        for (let y = 0; y < ih; y++) {
-          const srcRow = ph - 1 - (offY + y);
-          let s = (srcRow * pw + offX) * 4;
-          let d = y * iw * 4;
-          for (let x = 0; x < iw; x++) {
-            img.data[d] = buf[s]; img.data[d + 1] = buf[s + 1];
-            img.data[d + 2] = buf[s + 2]; img.data[d + 3] = 255;
-            s += 4; d += 4;
+          // Textures are uploaded flipped, so v = 0 is the BOTTOM of the image and
+          // the tile's UV origin has to be measured up from the bottom edge.
+          shader.draw(targets, st, aspect, pw, ph, {
+            ox: px0 / W,
+            oy: (H - py1) / H,
+            sx: pw / W,
+            sy: ph / H,
+          });
+
+          gl.readPixels(0, 0, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+
+          // readPixels comes back bottom-up; un-flip while copying only the
+          // interior, which is the part that had full context on every side.
+          const offX = ix0 - px0, offY = iy0 - py0;
+          const img = out.createImageData(iw, ih);
+          for (let y = 0; y < ih; y++) {
+            const srcRow = ph - 1 - (offY + y);
+            let s = (srcRow * pw + offX) * 4;
+            let d = y * iw * 4;
+            for (let x = 0; x < iw; x++) {
+              img.data[d] = buf[s]; img.data[d + 1] = buf[s + 1];
+              img.data[d + 2] = buf[s + 2]; img.data[d + 3] = 255;
+              s += 4; d += 4;
+            }
           }
+          out.putImageData(img, ix0 - rect.x, iy0 - rect.y);
         }
-        out.putImageData(img, ix0 - rect.x, iy0 - rect.y);
 
         done++;
         if (onProgress) onProgress(done / total, done, total);
@@ -200,6 +212,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
  * The whole image at the source's own resolution, or `job.rect` ({x, y, w, h} in its
  * pixels) of it: the same pixels a whole export has there, for a fraction of the time.
  * `state` should already be scaled to that resolution (renderState in app.js does it).
+ * An array of states (variants sharing a relief, see renderTiles) returns one canvas each.
  */
 export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const source = job.mode === 'photometric' ? job.sources[0] : job.source;
@@ -207,19 +220,19 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const W = job.width || source.width || source.naturalWidth;
   const H = job.height || source.height || source.naturalHeight;
   const rect = job.rect || { x: 0, y: 0, w: W, h: H };
-  const out = document.createElement('canvas');
-  out.width = rect.w; out.height = rect.h;
-  const octx = out.getContext('2d', { willReadFrequently: false });
+  const many = Array.isArray(state), states = many ? state : [state];
+  const outs = states.map(() => { const c = document.createElement('canvas'); c.width = rect.w; c.height = rect.h; return c; });
+  const ctxs = outs.map((c) => c.getContext('2d', { willReadFrequently: false }));
 
   // An export leaves out what only the screen shows: the split and the mask tint.
-  const prevExporting = state.exporting;
-  state.exporting = true;
+  const prevExporting = states.map((s) => s.exporting);
+  for (const s of states) s.exporting = true;
   try {
-    await renderTiles(glctx, builders, job, state, rect, octx, { onProgress });
+    await renderTiles(glctx, builders, job, many ? states : state, rect, many ? ctxs : ctxs[0], { onProgress });
   } finally {
-    state.exporting = prevExporting;
+    states.forEach((s, i) => { s.exporting = prevExporting[i]; });
   }
-  return out;
+  return many ? outs : outs[0];
 }
 
 export function downloadCanvas(canvas, filename, type = 'image/png', quality) {
