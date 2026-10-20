@@ -43,7 +43,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - Was: **Shared metrics (about 1 day).**
   - Extend `src/measure.js`: it is DOM-free and Node can test it, but keep it descriptive, not predictive.
   - Return a `metrics` block from `digilight.render` and `export`, the CLI `batch`, and MCP `render_preview` / `export_image`. The review page shows it beside each image.
-- **One guard after every change**, not only inside Analyze. Move it out of `keepWhites`.
+- **Done 10-20: one guard after every change** (`src/guard.js`; preview size, not full resolution: a full-size check costs an export).
+  - Was: **One guard after every change**, not only inside Analyze. Move it out of `keepWhites`.
   - Whites: ease `highlightRolloff` first, then exposure.
   - Darks: raise `graze.lift`, then `ambient`.
   - Measure at full resolution, not the 240 px thumbnail, and report what it did ("wanted +0.30, capped at +0.12").

@@ -11,7 +11,9 @@ const settle=async()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=
 const pixels=()=>page.evaluate(()=>{__bench.render();return __bench.canvas.toDataURL()});
 const setting=k=>page.evaluate(k=>__bench.state[k],k);
 const slider=async(id,v)=>{await page.locator('#'+id).evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},v);await settle();};
-await page.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await page.waitForFunction(()=>window.__bench&&window.__studio);await settle();assert.equal(await page.locator('#err').textContent(),'');console.log('PASS boot and shader compilation');
+await page.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await page.waitForFunction(()=>window.__bench&&window.__studio);await settle();
+// The panel tests below check settings and pixels exactly as each control sets them, so the guard (its own test, near the end) is off here.
+await page.evaluate(()=>{__studio.guard.enabled=false;});assert.equal(await page.locator('#err').textContent(),'');console.log('PASS boot and shader compilation');
 // Opens on Setup with Auto's Analyze; the desktop tests below use All (every section).
 assert.equal(await page.evaluate(()=>__studio.tools.current),'setup');assert.ok(await page.locator('#autoAnalyze').isVisible()&&await page.locator('#quickSetup').isVisible()&&await page.locator('#openPhoto').isVisible()&&await page.locator('#layersSection').isHidden(),'opens on Setup with Analyze');
 await page.click('#toolRail .railAll');console.log('PASS opens on Setup with Analyze');
@@ -45,7 +47,7 @@ await page.evaluate(()=>{const s=__bench.state;s.textureDepthMm=1;s.graze.enable
 const pre=await page.evaluate(()=>JSON.stringify(__studio.snapshot())),hist=await page.evaluate(()=>__studio.history.index),px0=await pixels();
 await page.click('#autoAnalyze');await page.waitForFunction(()=>__studio.auto.analysis&&!document.querySelector('#autoAnalyze').disabled,null,{timeout:600000});await settle();
 const A=await page.evaluate(()=>{const A=__studio.auto.analysis;return {depth:A.depth,rake:A.rake,n:A.items.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:document.querySelector('#autoLooks canvas').width,
-  lines:document.querySelectorAll('#autoReadout .autoLine').length,items:A.items.map(i=>({name:i.name,kind:i.kind,exp:i.settings.exposure,depth:i.settings.textureDepthMm,g:i.settings.graze.enabled,angle:i.settings.graze.angle,width:i.settings.paintingWidthCm}))};});
+  lines:document.querySelectorAll('#autoReadout .autoLine').length,items:A.items.map(i=>({name:i.name,kind:i.kind,exp:i.settings.exposure,depth:i.settings.textureDepthMm,g:i.settings.graze.enabled,angle:i.settings.graze.angle,rake:[i.settings.graze.elevation,i.settings.graze.detail,i.settings.graze.fine],width:i.settings.paintingWidthCm}))};});
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),pre,'Analyze leaves the settings as they were');assert.equal(await page.evaluate(()=>__studio.history.index),hist);assert.equal(await pixels(),px0);
 assert.ok(A.n>=9&&A.tiles===A.n&&A.thumbW===240&&A.lines===5,JSON.stringify(A));
 // The analysis saved for the tools' disk cache and loaded back: same looks, no heightmap; refused for other settings.
@@ -56,7 +58,7 @@ const rt=await page.evaluate(async()=>{const dl=window.digilight,c=JSON.parse(JS
 assert.ok(rt.same&&!rt.hm&&rt.size<2e6&&rt.looks===A.n&&rt.tiles===A.n&&rt.thumbW===240&&/another photo or other settings/.test(rt.other),JSON.stringify(rt));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
 const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
 // Round 2's keepers in the favourite looks: deeper relief over the fitted depth (auto.js deeper()).
-for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));}
+for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,0.01,0.5],'round 3: lower, finer raking '+n);}
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
 await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
 const on=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,angle:s.graze.angle,depth:s.textureDepthMm,exp:s.exposure,op:s.graze.opacity,tile:document.querySelector('.autoLook.on span').textContent};});
@@ -850,6 +852,7 @@ await ctx.close();console.log('PASS relief rebuilt only for its own settings, ex
 {const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
 await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
 const r=await a.evaluate(async()=>{const d=window.digilight,out={};
+ d.setGuard(false);   // measures the pictures as set; the guard has its own test
  const plain=await d.render();const m=await d.render({metrics:true});out.same=m.image===plain;out.m=m.metrics;
  await d.set('originalTop',1);
  out.photoPreview=(await d.render({metrics:true})).metrics.vsPhoto;
@@ -867,5 +870,30 @@ assert.equal(r.photoExport.size[0],120);assert.ok(r.photoCrop.crop&&r.photoCrop.
 assert.ok(r.bright.vsPhoto.newBlown>0.003&&r.bright.warnings.some(w=>/whites/.test(w))&&r.bright.vsPhoto.stops.p50>0,JSON.stringify(r.bright.vsPhoto));
 assert.ok(r.dark.vsPhoto.stops.p50<0&&r.dark.warnings.some(w=>/darks/.test(w)),JSON.stringify(r.dark));
 await ctx.close();console.log('PASS metrics: render / export / crop against the photo, the photo measures as itself, warnings for blown whites and dark',JSON.stringify({preview:r.photoPreview.detail,bright:r.bright.vsPhoto.newBlown,ms:r.m.ms}));}
+// Guard (guard.js): a change that blows whites is brought back (rolloff, then exposure) in the same undo step and says so;
+// with the guard off it stays, the chip says what clips and Fix repairs it as its own step; crushed darks are lifted.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+const r=await a.evaluate(async()=>{const d=window.digilight,out={},wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+ out.start=[d.get('exposure'),d.get('highlightRolloff')];out.clean=await d.guard({fix:false});
+ const u0=__studio.history.index;out.set=await d.set('exposure',2.5);out.steps=__studio.history.index-u0;out.g=d.lastGuard();
+ out.now=[d.get('exposure'),d.get('highlightRolloff')];
+ await d.undo();out.undone=[d.get('exposure'),d.get('highlightRolloff')];
+ d.setGuard(false);await d.set('exposure',2.5);out.unguarded=d.get('exposure');out.check=await d.guard({fix:false});
+ __bench.render();await wait(1200);const chip=document.getElementById('guardChip');out.chip=[chip.hidden,chip.textContent];
+ const u1=__studio.history.index;chip.querySelector('button').click();out.fix=[d.get('exposure'),d.get('highlightRolloff'),__studio.history.index-u1,chip.textContent];
+ await d.undo();out.fixUndone=d.get('exposure');
+ await d.set({exposure:0,highlightRolloff:out.start[1],ambient:0.3});out.darkBefore=await d.guard({fix:false});
+ d.setGuard(true);await d.set({ambient:0,exposure:-1.5});out.dark=d.lastGuard();out.darkNow=[d.get('ambient'),d.get('exposure')];
+ return out;});
+assert.ok(r.clean.ok&&!r.clean.fixed,'the synthetic painting starts clean '+JSON.stringify(r.clean));
+assert.ok(r.g.fixed&&r.g.ok&&r.g.after.newBlown<=0.003&&r.g.before.newBlown>0.003,'guarded '+JSON.stringify(r.g));assert.equal(r.steps,1,'change and fix: one undo step');
+assert.match(r.g.note,/Guard: (highlight rolloff|exposure)/);assert.ok(r.now[0]<2.5||r.now[1]>r.start[1],JSON.stringify(r.now));assert.deepEqual(r.set.exposure,r.now[0],'set returns the guarded value');
+assert.deepEqual(r.undone,r.start,'one undo takes change and fix back');
+assert.equal(r.unguarded,2.5);assert.ok(!r.check.ok&&!r.check.fixed,JSON.stringify(r.check));
+assert.ok(!r.chip[0]&&/newly blown/.test(r.chip[1]),'chip shows what clips '+JSON.stringify(r.chip));
+assert.ok((r.fix[0]<2.5||r.fix[1]>r.start[1])&&r.fix[2]===1&&/Fixed/.test(r.fix[3]),'Fix: one undo step '+JSON.stringify(r.fix));assert.equal(r.fixUndone,2.5);
+assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&/room light|shadow lift/.test(r.dark.note),'darks lifted '+JSON.stringify(r.dark));
+await ctx.close();console.log('PASS guard: whites and darks brought back in the same undo step, off switch, chip and Fix',JSON.stringify({note:r.g.note,dark:r.dark&&r.dark.note}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

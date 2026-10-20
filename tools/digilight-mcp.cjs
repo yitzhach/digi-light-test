@@ -99,8 +99,18 @@ async function waitExport(run, f) {
   return r || { stillExporting: true, path: f, seconds: Math.round((Date.now() - e.t0) / 1000),
     next: 'The export is still running in the background. Call export_image again with the same path to keep waiting.' };
 }
-// A tool that changes the picture: an export that finished unseen no longer matches it.
-const changing = (fn) => tool(async (...a) => { exported = null; return fn(...a); });
+// A tool that changes the picture: an export that finished unseen no longer matches it. The
+// page guards each change (src/guard.js: blown whites, crushed darks); what it did is added.
+const changing = (fn) => tool(async (s, args) => {
+  exported = null;
+  const seq = (await s.call('lastGuard'))?.seq;
+  const out = await fn(s, args);
+  const g = await s.call('lastGuard');
+  if (!g || g.seq === seq || (!g.fixed && g.ok)) return out;
+  const res = out && out.content ? out : text(out);
+  res.content.push({ type: 'text', text: g.note || `Still over the limits: ${JSON.stringify(g.after)}` });
+  return res;
+});
 const needOpen = async (call) => { if (!(await call('info')).photo) throw new Error('No photo open yet. Use open_image first.'); };
 
 const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
@@ -108,7 +118,7 @@ const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
     'DigiLight relights a photo of a painting with virtual lamps over its estimated paint relief (impasto).',
     'Typical flow: open_image → analyze (slow: 1–3 min) → apply_look → render_preview to see it → set_settings to adjust → render_preview again → export_image.',
     'Fixed presets (apply_preset) need no analyze. describe_settings lists every setting with its range; set_settings checks values and changes nothing on an error.',
-    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture).',
+    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture). Each change is guarded: if it would blow whites or crush darks, highlight rolloff / exposure / shadow lift / room light are moved just enough to stop it, in the same undo step, and the answer says so ("Guard: exposure +0.80 → +0.55"). guard checks and fixes on request; set_guard turns it off when the user really wants the clipping.',
   ].join(' '),
 });
 
@@ -225,6 +235,18 @@ server.registerTool('remove_light', {
   description: 'Removes light number index (from 0), lamp or shadow. The last one cannot be removed (turn it off instead: lights.0.enabled false).',
   inputSchema: { index: z.number().int().min(0) },
 }, changing(async ({ call }, { index }) => call('removeLight', index)));
+
+server.registerTool('guard', {
+  title: 'Check whites and darks',
+  description: 'Checks the picture as it stands against the photo: share of pixels newly blown to white / crushed to black, limits 0.3% / 0.15%. With fix (default true) it brings them back under the limits (highlight rolloff, then exposure; shadow lift, then room light), as one undo step, and says what it moved.',
+  inputSchema: { fix: z.boolean().optional() },
+}, tool(async ({ call }, { fix }) => { await needOpen(call); exported = null; return call('guard', { fix: fix !== false }); }));
+
+server.registerTool('set_guard', {
+  title: 'Guard on or off',
+  description: 'on false stops changes being guarded (for when the user wants the clipping); true turns it back on (the default).',
+  inputSchema: { on: z.boolean() },
+}, tool(async ({ call }, { on }) => ({ guard: await call('setGuard', on) })));
 
 server.registerTool('undo', { title: 'Undo', description: 'Undoes the last change. Returns false when there is nothing to undo.', inputSchema: {} },
   changing(async ({ call }) => ({ undone: await call('undo') })));

@@ -182,6 +182,23 @@ Shadow lift −0.3..+0.5 on lamps 1–3; then the same on the user's own bundle 
 **Rule:** update this file in the same commit (or right after) every push to `main`.
 
 ## Status
+- **10-20, on `main`: round 3 picks folded in + the guard.** Round 3 keepers (ArtifactData
+  picks): L08, L12, F03, F07 = raking light lower (6°) and finer raking detail, on both
+  favourite looks, nothing else. auto.js `crispGraze` now elevation 6 (was 8), detail 0.01 (was
+  the favourite's 0.02), fine 0.5 (was 0.15); both together were not reviewed as one image yet:
+  ask the user to look at the two looks on their photos (and on the door photos when re-sent).
+  **Guard** (src/guard.js; the user asked what it means: "a check after every change that
+  stops whites blowing out or darks going to black, by nudging the fewest settings"): after a
+  one-tap change (tapped Auto look, lighting / graze / matched look presets, every
+  window.digilight change, each CLI job once, MCP changes) it measures newly blown / crushed
+  pixels vs the photo at preview size (measure.js rule and LIMITS) and bisects Highlight
+  rolloff → exposure (whites), graze Shadow lift → Ambient ≤ 0.6 (darks); same undo step; note
+  like "Guard: highlight rolloff 0.70 → 1.00, exposure +2.50 → +1.95 (newly blown 4.87% →
+  0.21%)". Hand-moved sliders are never changed: a chip at the top of the picture says what
+  clips, with Fix (own undo step). Off: digilight.setGuard(false), CLI --no-guard / job "guard":
+  false, MCP set_guard. Rounds rendered through the CLI are now guarded (their output lines
+  carry "guard" when it moved anything). Ask: is the chip welcome, should Ambient's 0.6 cap or
+  the order (rolloff before exposure) change.
 - **10-19 (third session), on `main`: shared metrics on every render** (user: "go ahead with
   the shared metrics"). `src/measure.js` `imageMetrics` / `pictureStats` (DOM-free): the same
   numbers as tools/looks/stats.py (checked equal on samples/painting.jpg: hi, lo, p05/50/95,
@@ -494,6 +511,8 @@ To judge it on a real painting, by eye:
    Split screenshot of one region. Note what looks wrong and where.
 
 ## Done recently
+- 10-20 (on `main`): round 3 keepers in the favourite looks (raking 6°, finer detail); the guard
+  (src/guard.js) after every one-tap / API / CLI / MCP change, chip + Fix for hand changes.
 - 10-19 (third session, on `main`): shared metrics (measure.js imageMetrics) from render /
   export / CLI / MCP, with warnings. See Status.
 - 10-19 (second session, on `main`): relief rebuilt only for its own settings, exports reuse
@@ -1113,9 +1132,8 @@ To judge it on a real painting, by eye:
 
 ## Next up (candidates — confirm with user)
 -5. (10-19) Round 3 picks → fold into the looks; then docs/roadmap.md NOW/NEXT in order
-   (NOW is done except round 3 and the door photos; Shared metrics done 10-19; next: the one
-   guard after every change (can now use imageMetrics at full size), the JSON record per
-   export (settings + metrics), look ids, exportMany).
+   (NOW is done except the door photos; Shared metrics done 10-19, guard 10-20; next: the JSON
+   record per export (settings, look, guard, metrics), look ids, exportMany).
 -4. NEXT CHAT STARTS HERE (10-15): the AI-match work. The user's favourite remains the AI image
    (`samples/painting.jpg` relit by a generative model; the user can re-upload it): "more
    natural texture (a little less fine texture) and a bit more depth". Best DigiLight looks:

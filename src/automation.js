@@ -57,7 +57,7 @@ export function parseSets(text) {
   return out;
 }
 
-export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, $ }) {
+export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, $ }) {
   // One call at a time: each waits for the one before (a render during an Analyze would see its trial looks).
   let queue = Promise.resolve();
   const serial = (fn) => (...args) => { const run = queue.then(() => fn(...args)); queue = run.catch(() => {}); return run; };
@@ -100,7 +100,11 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   function apply(next) {
     const checked = validate({ format: 'digilight', version: 1, image: 'data:image/png;base64,', settings: next });
     restore(checked); checkpoint();
+    guarded();
   }
+  // Every change here is guarded (guard.js) unless setGuard(false): whites and darks brought
+  // back under the limits in the same undo step. lastGuard() says what it did.
+  const guarded = () => guard?.afterOneTap() ?? null;
   function set(pathOrObj, value) {
     const changes = typeof pathOrObj === 'string' ? { [pathOrObj]: value } : pathOrObj;
     if (!changes || typeof changes !== 'object') throw new Error('set() takes (path, value) or {path: value, ...}.');
@@ -192,12 +196,13 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const list = auto.analysis.items;
     const i = typeof which === 'number' ? which : list.findIndex((it) => it.name.toLowerCase() === String(which).toLowerCase());
     if (!(i >= 0 && i < list.length)) throw new Error(`No look "${which}". Looks: ${list.map((it) => it.name).join(', ')}.`);
-    auto.pick(i);
     const s = opts.strength ?? 1;
     if (!(s >= 0 && s <= 1)) throw new Error('strength is 0–1.');
-    if (s !== 1) { auto.setStrength(s); checkpoint(); }
+    auto.pick(i);   // guards the look itself
+    let g = guard?.enabled ? guard.last : null;
+    if (s !== 1) { auto.setStrength(s); checkpoint(); g = guarded(); }
     await idle();
-    return { look: list[i].name, strength: s };
+    return { look: list[i].name, strength: s, ...(g?.fixed ? { guard: g.note } : {}) };
   }
   // Fixed presets: lighting scenes, graze (raking) presets, matched looks. No Analyze needed.
   function applyPreset(kind, name) {
@@ -205,7 +210,8 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     if (!table) throw new Error(`Preset kind is one of: ${Object.keys(presets).join(', ')}.`);
     if (!table.names.includes(name)) throw new Error(`No ${kind} preset "${name}". Presets: ${table.names.join(', ')}.`);
     table.apply(name); checkpoint();
-    return { kind, name };
+    const g = guarded();
+    return { kind, name, ...(g?.fixed ? { guard: g.note } : {}) };
   }
 
   // Output.
@@ -299,6 +305,10 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     addLight: serial(async (k, p) => addLight(k, p)), removeLight: serial(async (i) => removeLight(i)),
     undo: serial(async () => step('undo')), redo: serial(async () => step('redo')),
     render: serial(render), export: serial(exportImage),
+    // The guard: guard({fix}) checks (and with fix, the default, repairs as its own undo
+    // step) the picture as it stands; setGuard(false) stops changes being guarded.
+    guard: serial(async (o = {}) => { needPhoto(); return guard.run({ fix: o.fix !== false, amend: false }); }),
+    lastGuard: () => guard.last, setGuard: (on) => { guard.enabled = !!on; return guard.enabled; },
     getProject: serial(getProject), setProject: serial(setProject),
   };
   window.digilight = digilight;

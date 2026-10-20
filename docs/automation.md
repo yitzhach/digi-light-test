@@ -89,6 +89,23 @@ same size and crop. `render({metrics: true})`, `export({metrics: true})`, the CL
 Measured on the preview it describes the preview; for detail at full resolution, use an
 export (a `crop` is quick).
 
+
+### Guard
+
+Every change through `window.digilight` (`set`, `setSettings`, `applyLook`, `applyPreset`,
+`addLight`, `removeLight`) is checked against the photo at the preview's size (`src/guard.js`).
+If it newly blows more than 0.3% of the picture to white or crushes more than 0.15% to black,
+the guard moves settings just far enough to stop it, in the same undo step: Highlight rolloff
+(up to 1), then exposure, for whites; the raking light's Shadow lift (when it shows), then room
+light (Ambient, at most 0.6), for darks. `set` returns the values after it, `lastGuard()` what it
+did (`{ok, fixed, before, after, changes: {path: [from, to]}, note}`, e.g. "Guard: exposure +2.50
+→ +1.95"), and `applyLook` / `applyPreset` add `guard: note`. `guard({fix})` checks the picture as
+it stands (`fix: false` only reports); `setGuard(false)` turns it off. In the app, tapped looks
+and presets are guarded the same way; a hand-moved slider never is: a chip on the picture says
+what clips, with Fix. The CLI guards each job once after all its options (`"guard"` in the
+output line; `--no-guard`, or `"guard": false` in a job, to skip); the MCP server has `guard` and
+`set_guard` and adds the note to a change's answer.
+
 ## Bridges
 
 ### URL parameters (run once on open)
@@ -276,6 +293,7 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `describe_settings` | every setting with its range; `filter` narrows it (`graze`, `lights.0`, `relief`) |
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |
+| `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
 | `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings |
 | `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |

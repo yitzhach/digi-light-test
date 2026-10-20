@@ -25,7 +25,7 @@ const full = process.argv.includes('--full');
   const ok = async (name, args) => { const x = await call(name, args); assert.ok(!x.r.isError, `${name}: ${x.t}`); return x; };
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project'])
+    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard'])
       assert.ok(names.includes(n), 'missing tool ' + n);
     assert.ok((await client.getInstructions?.() || '').includes('open_image'), 'server instructions');
     console.log('PASS mcp lists its tools');

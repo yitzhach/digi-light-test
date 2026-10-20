@@ -119,7 +119,7 @@ export function keySide(lights, side) {
 const mirrorAngle = (deg) => ((180 - deg) % 360 + 360) % 360;
 
 export function initAuto({ state, api, before, snapshot, restore, checkpoint, setBatching, makeLight, lighting, grazePresets, looks, LOOK_KEYS, LOOK_NEUTRAL,
-  findRaking, userPresets, presetSettings, userProjects, projectSettings, currentProject, unmasked }) {
+  findRaking, userPresets, presetSettings, userProjects, projectSettings, currentProject, unmasked, guard }) {
   const $ = (id) => document.getElementById(id);
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'autoSection'; box.open = true;
   box.innerHTML = `<summary>Auto · analyze and pick a look</summary><div class="grp">
@@ -198,7 +198,10 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     if (k.graze) { Object.assign(s.graze, k.graze, { enabled: true }); if (rake) s.graze.angle = A.rake; delete s.graze.lamp; } else s.graze.enabled = false; };
   // Shadow lift 0.6, not the favourite's 0.3: the user (10-19) found the darks crushed; on the
   // red-lintel door it takes black clipping from 1.04% to 0.29% (photo 0.17%), whites unchanged.
-  const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 8, lift: 0.6 });
+  // Round 3 (10-20): the user kept "raking light lower (6°)" and "finer raking detail" on both
+// looks (L08, L12, F03, F07): elevation 8 → 6, graze detail 0.02 → 0.01 (about 16 → 8 px of
+// smoothing at full size, the likely source of the "motion blur"), fine 0.15 → 0.5.
+const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 6, lift: 0.6, detail: 0.01, fine: 0.5 });
   // Round 2 (10-19): the user kept "deeper relief + crisper texture" on both favourite looks
   // (A11, A15: Colour › Relief 150%, Fine detail 140%). Built-in looks do not carry the Colour
   // tool, so the same is made with the look's own settings: texture depth × 1.65 (over the depth
@@ -370,6 +373,10 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
     active = { index: i, from, target, applied: '' };
     $('autoStrength').disabled = false; $('autoStrength').value = 1;
     apply(1); checkpoint();
+    // A tapped look is guarded like any one-tap change (guard.js), in the same undo step.
+    const g = guard?.()?.afterOneTap();
+    active.applied = JSON.stringify(snapshot());
+    if (g?.fixed) $('autoNote').textContent += ` ${g.note}`;
   }
   function apply(s) {
     restore(mixSettings(active.from, active.target, s, api.applyColor));

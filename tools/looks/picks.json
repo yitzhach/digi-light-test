@@ -1,5 +1,5 @@
 {
- "about": "The user's Keep / Maybe / Drop picks from the review pages (read with ArtifactData list collection picks). Unmarked = dropped (user, 10-19). Recipes: favourite-variants.json (round F1), round2.json (round 2).",
+ "about": "The user's Keep / Maybe / Drop picks from the review pages (read with ArtifactData list collection picks). Unmarked = dropped (user, 10-19). Recipes: favourite-variants.json (round F1), round2.json (round 2), round3.json (round 3).",
  "F1": {
   "page": "https://claude.ai/artifact/XZyjaDxxn4zZCQMo9wroeB",
   "date": "2026-10-19",
@@ -22,5 +22,17 @@
    "A10": "Side lamp left, 5000 K + wide soft pool", "A13": "Side lamp left, 5000 K + deeper relief + lift darks", "A14": "From the left, 5000 K + wide soft pool"
   },
   "note": "Rendered before graze.lift 0.6 (crushed-darks fix) went into the two looks. 28 of 41 unmarked = dropped."
+ },
+ "round3": {
+  "page": "https://claude.ai/artifact/LeAKsrXizCyEQUUgDY4MgW",
+  "date": "2026-10-20",
+  "keep": ["F03", "F07", "L08", "L12"],
+  "maybe": [],
+  "drop": [],
+  "names": {
+   "L08": "Raking light lower (6°)", "L12": "Finer raking detail (less smoothing)",
+   "F03": "From the left, raking light lower (6°)", "F07": "From the left, finer raking detail"
+  },
+  "note": "Both picks on both looks went in: crispGraze elevation 6, detail 0.01, fine 0.5 (auto.js). Not kept: brighter, lift darks, cool fill, 5000 K, raking from lower left."
  }
 }

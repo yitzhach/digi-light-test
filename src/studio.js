@@ -11,6 +11,7 @@ import { initAuto } from './auto.js';
 import { initToolRail } from './toolrail.js';
 import { initTouchSliders } from './touchsliders.js';
 import { initAutomation } from './automation.js';
+import { initGuard } from './guard.js';
 import { adjustDefaults, validateAdjust, buildAdjustUI, eyeButton } from './adjust.js';
 import { overlayDefaults, validateOverlays, buildOverlayUI } from './overlays.js';
 
@@ -307,7 +308,7 @@ export function initStudio(api) {
   $('grazeBest').onclick = () => bestRaking();
   $('grazeColourOver').onclick = () => reliefOnly(true);
   for (const name of Object.keys(grazePresets)) $('grazePreset').add(new Option(name, name));
-  $('grazePreset').onchange = e => { const v = grazePresets[e.target.value]; if (v) setGraze({ ...v }); };
+  $('grazePreset').onchange = e => { const v = grazePresets[e.target.value]; if (v) { setGraze({ ...v }); oneTap(); } };
   $('grazeDial').addEventListener('pointerdown', e => {
     const dial = $('grazeDial'); e.preventDefault(); dial.focus(); dial.setPointerCapture(e.pointerId);
     const move = ev => {
@@ -492,7 +493,7 @@ export function initStudio(api) {
   function syncColour(){colourSync?.();const o=$('adjustOpacity');if(o&&state.adjust){o.value=state.adjust.opacity;o.nextElementSibling.textContent=Math.round(state.adjust.opacity*100)+'%';}}
   // Matched looks: a whole look in one pick (presets.js looks), undoable like any change.
   {const l=document.createElement('label');l.className='selectRow';l.textContent='Matched looks';const sel=document.createElement('select');sel.id='lookPreset';sel.add(new Option('Choose a look…',''));for(const name of Object.keys(looks))sel.add(new Option(name,name));l.append(sel);$('lookControls').prepend(l);$('lookControls').prepend($('adjustOpacity').closest('.row'));
-   sel.onchange=()=>{if(looks[sel.value]){useLook(sel.value);sync();}};}
+   sel.onchange=()=>{if(looks[sel.value]){useLook(sel.value);sync();oneTap();}};}
   function useLook(name){stopSweep();const k=looks[name];state.lights=k.lights.map(makeLight);state.selected=0;for(const key of LOOK_KEYS)if(key in k)state[key]=structuredClone(k[key]);
     if(k.graze){Object.assign(state.graze,k.graze);delete state.graze.lamp;}else state.graze.enabled=false;refresh();}
   function syncLook(){for(const [key,,,,,fmt] of lookControls){const i=$(key);if(!i)continue;i.closest('.row').querySelector('output').textContent=fmt(+i.value);}}
@@ -551,7 +552,7 @@ export function initStudio(api) {
     else { state.photoDiffuse=SIDE_SHARE; state.azimuthDeg=d[3]; state.albedoSuppress=0.5; }
     api.dirty();
   }
-  $('lightingPreset').onchange=e=>{if(e.target.value) {useLighting(e.target.value); sync();}};
+  $('lightingPreset').onchange=e=>{if(e.target.value) {useLighting(e.target.value); sync(); oneTap();}};
   $('surfacePreset').onchange=e=>{if(textures[e.target.value]){useTexture(e.target.value); sync();}};
   $('materialPreset').onchange=e=>{const v=materials[e.target.value]; if(!v)return; [state.roughness,state.specular,state.metallic]=v; sync();};
   $('photoCompass').onclick=e=>{const b=e.target.closest('button'); if(!b)return; usePhotoLight(b.dataset.dir); sync();};
@@ -787,8 +788,11 @@ export function initStudio(api) {
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
     listProjects:()=>list()});
+  // Guard: no change blows whites or crushes darks (guard.js). One-tap changes are fixed at once.
+  const guard=initGuard({state,api,snapshot,restore,history,historyUI,$});
+  const oneTap=()=>{checkpoint();return guard.afterOneTap();};
   // Auto: Analyze, then one-tap looks made for this photo (auto.js).
-  const auto=initAuto({state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
+  const auto=initAuto({guard:()=>({afterOneTap:oneTap}),state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
     findRaking,userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,
     userProjects:()=>storage('projects','readonly',s=>s.getAll()),projectSettings:p=>validate(p),currentProject:()=>projectId,unmasked});
   buildSaveExport();
@@ -799,9 +803,9 @@ export function initStudio(api) {
   // window.digilight: the same app for scripts and AI agents (automation.js, docs/automation.md).
   const presetTables={lighting:{names:Object.keys(lighting),apply:n=>{useLighting(n);sync();}},graze:{names:Object.keys(grazePresets),apply:n=>{stopSweep();setGraze({...grazePresets[n]});sync();}},
     looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}}};
-  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,
+  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,
     openProject:p=>{const run=queue.then(async()=>{loading=true;try{await open(p);}finally{loading=false;}});queue=run.catch(()=>{});return run;}});
-  window.__studio={calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={guard,calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 
   // Save & export: every way out of the app in one section, one sub-tab at a time.
   function buildSaveExport(){

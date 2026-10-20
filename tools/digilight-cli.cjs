@@ -24,7 +24,9 @@
 //   --out FILE (.png/.jpg/.webp)  --width N  --preview  --quality 0..1
 //   --crop x,y,w,h   only that part of the export, at full detail (pixels, or fractions of 1)
 //   render and batch print each picture's metrics against the photo (clipping, darks, detail,
-//   warnings; docs/automation.md); --no-metrics skips them
+//   warnings; docs/automation.md); --no-metrics skips them. After the options the guard brings
+//   blown whites / crushed darks back under the limits and says how ("guard"); --no-guard
+//   (or a job's "guard": false) leaves the picture as set
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
 //   --fresh   Analyze again even if the cache has this photo (DIGILIGHT_CACHE: the cache
 //             folder, default ~/.cache/digilight/analysis; 0 turns it off)
@@ -38,7 +40,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (k === 'set' || k === 'preset') o[k].push(v); else o[k] = v;
@@ -74,7 +76,9 @@ async function dress(call, j, analyze, src = {}) {
     for (const s of sets) Object.assign(changes, typeof s === 'object' ? s : parseSets(s));
     await call('set', changes);
   }
-  return analysis;
+  // The guard once, on the picture as the options left it (the page guards no single step: main).
+  const g = j.guard === false ? null : await call('guard');
+  return { analysis, guard: g && (g.fixed || !g.ok) ? { ok: g.ok, changes: g.changes, note: g.note } : null };
 }
 
 // Writes j.out; returns the picture's metrics (null with metrics off).
@@ -96,7 +100,7 @@ function readJobs(file) {
 // Analyze once (the page keeps it), then each job from the settings the photo opened with.
 // A job that fails (a bad setting, say) is reported and skipped; the exit code is 1 if any did.
 // (Two pages rendering at once were tried, 10-19: on 4 CPUs no faster in total than one.)
-async function runJobs(call, jobs, src, metrics) {
+async function runJobs(call, jobs, src, metrics, noGuard) {
   const base = await call('settings');
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   let failed = 0;
@@ -104,9 +108,9 @@ async function runJobs(call, jobs, src, metrics) {
     const t = Date.now();
     try {
       await call('setSettings', base);
-      await dress(call, j, false);
+      const { guard } = await dress(call, { ...j, guard: noGuard ? false : j.guard }, false);
       const m = await write(call, j, metrics);
-      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10, ...(m ? { metrics: m } : {}) }) + '\n');
+      process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round((Date.now() - t) / 100) / 10, ...(guard ? { guard } : {}), ...(m ? { metrics: m } : {}) }) + '\n');
     } catch (e) {
       failed++;
       process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n');
@@ -118,7 +122,7 @@ async function runJobs(call, jobs, src, metrics) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 30).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
+  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 32).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
   if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
@@ -127,10 +131,11 @@ async function main() {
   const { call, errors, close } = await launch({ port: +(o.port || 0) });
   try {
     await openInput(call, input);
+    await call('setGuard', false);   // guarded once per job, after all its changes (dress)
     const src = { input, fresh: !!o.fresh };
 
-    if (jobs) { await runJobs(call, jobs, src, !o['no-metrics']); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
-    const analysis = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set }, cmd === 'analyze', src);
+    if (jobs) { await runJobs(call, jobs, src, !o['no-metrics'], !!o['no-guard']); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
+    const { analysis, guard } = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set, guard: o['no-guard'] || !['render', 'get'].includes(cmd) ? false : undefined }, cmd === 'analyze', src);
 
     let out;
     if (cmd === 'info') out = await call('info');
@@ -139,7 +144,7 @@ async function main() {
     else if (cmd === 'get') out = await call('get', o.path ?? null);
     else {
       const m = await write(call, o, !o['no-metrics']);
-      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(m ? { metrics: m } : {}) };
+      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(m ? { metrics: m } : {}) };
     }
     if (o['save-project']) { fs.writeFileSync(o['save-project'], JSON.stringify(await call('getProject'))); out = { ...out, project: path.resolve(o['save-project']) }; }
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');
