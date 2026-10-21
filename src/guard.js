@@ -4,18 +4,21 @@
 // its own looks under the photo's whites (auto.js keepWhites), but nothing checked a
 // look once tapped, a preset, a value an AI agent set, or a slider. The guard does,
 // against the photo at the preview's size, with measure.js's rule and LIMITS:
-//   whites newly blown over the limit → ease Highlight rolloff (up to 1), then exposure;
-//   darks newly crushed over the limit → raise the graze's Shadow lift (when it shows),
-//   then the room light (Ambient, at most AMBIENT_MAX so it does not turn milky).
-// Each setting moves only as far as it must (bisection), and the guard says what it did:
+//   whites newly blown over the limit → lower exposure until nothing new blows (AIM);
+//   darks newly crushed over the limit → raise the room light (Ambient, up to AMBIENT_MAX).
+// The user's picks (10-21, tools/looks/picks.json guard2: W3, D4 / D7). Each setting moves only
+// as far as it must to reach the aim (bisection), and the guard says what it did:
 // "exposure +0.80 → +0.55". One-tap changes (looks, presets, the automation API) are
 // fixed at once, folded into the same undo step; a hand-moved slider is never changed
 // behind the user's back: a chip on the picture says what is clipping and offers Fix.
 
 import { CLIP_HI, CLIP_LO, LIMITS } from './measure.js';
 
-const AMBIENT_MAX = 0.6;
-const WHITES = ['highlightRolloff', 'exposure'], DARKS = ['graze.lift', 'ambient'];
+const AMBIENT_MAX = 1;
+const WHITES = ['exposure'], DARKS = ['ambient'];
+// What a fix aims under, once a picture is over LIMITS: whites all the way back to the photo's
+// (stopping just under the limit left pictures that read as too bright), darks just under.
+const AIM = { newBlown: 0 };
 // How far each may go, and its step: [to, grid].
 // Output black and Lift darks (the Colour tool's Levels and Lift darks) are options for now
 // (10-21: the user found the room-light fixes too bright); they lift the deepest tones only.
@@ -119,11 +122,14 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
   // options so alternatives can be rendered side by side for the user.
   function guard({ fix = true, amend = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX, limits } = {}) {
     if (!api.source() || state.mode !== 'single' || state.exporting) return null;
-    lim = { ...LIMITS, ...limits };
+    const limit = { ...LIMITS, ...limits };
+    lim = limit;
     const before = check();
     if (!before) return null;
-    if (whitesOK(before) && darksOK(before)) return { ok: true, fixed: false, before, after: before, changes: {}, note: '' };
+    const blown = !whitesOK(before), crushed = !darksOK(before);
+    if (!blown && !crushed) return { ok: true, fixed: false, before, after: before, changes: {}, note: '' };
     if (!fix) return { ok: false, fixed: false, before, after: before, changes: {}, note: describe(before) };
+    lim = { ...LIMITS, ...AIM, ...limits };   // a side that is over the limit is fixed to the aim
     const base = snapshot(), changes = {};
     const move = (path, to, grid, ok) => {
       const from = get(base, path);
@@ -136,14 +142,15 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
       return r.m;
     };
     let m = before;
-    if (!whitesOK(m)) {
+    if (blown) {
       for (const p of whites) if (!whitesOK(m)) m = move(p, ...MOVES[p](base, ambientMax), whitesOK) || m;
     }
-    if (!darksOK(m)) {
+    if (crushed || !darksOK(m)) {
       for (const p of darks) if (!darksOK(m) && (p !== 'graze.lift' || (base.graze?.enabled && base.graze.opacity > 0))) m = move(p, ...MOVES[p](base, ambientMax), darksOK) || m;
     }
     restore(base);
     const after = check();
+    lim = limit;
     if (Object.keys(changes).length) {
       if (amend && history.index >= 0) history.entries[history.index] = JSON.stringify(snapshot());
       else history.push(snapshot());
