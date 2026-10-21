@@ -13,6 +13,11 @@
 //   describe   every setting that can be set: path, label, range, value (JSON)
 //   get        the settings (or --path one of them) after the options below (JSON)
 //   render     write the relit painting to --out (full size unless --preview or --width)
+//   verify     the input is a picture's record (FILE.json): re-renders it from the recorded photo
+//              (or --photo PATH) and settings and checks it is the same picture, pixel for
+//              pixel: the photo's fingerprint and the picture's (SHA-256 of the RGBA pixels before
+//              encoding) against the record's; with a PNG beside the record, also how many pixels
+//              differ and by how much. --out FILE keeps the re-render. Exit code 1 if not the same.
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
 //              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
 //               "exposureAdd": 0.3, "scale": {"textureDepthMm": 1.2}, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
@@ -27,7 +32,8 @@
 //   warnings; docs/automation.md); --no-metrics skips them. After the options the guard brings
 //   blown whites / crushed darks back under the limits and says how ("guard"); --no-guard
 //   (or a job's "guard": false) leaves the picture as set. Each picture gets a record beside it
-//   (FILE.json: settings, look, recipe, input, code hash, guard, metrics); --no-record (or a
+//   (FILE.json: settings, look, recipe, input, code hash, guard, metrics, the photo's and the
+//   picture's pixel fingerprints); --no-record (or a
 //   job's "record": false) skips it. batch renders jobs that share a relief together (one relief
 //   build for many pictures); --no-many renders each job on its own
 //   --jobs FILE.json   --save-project FILE.digilight.json   --path a.b   --port N
@@ -86,12 +92,13 @@ async function dress(call, j, analyze, src = {}) {
 }
 
 // Writes j.out; returns the picture's metrics (null with metrics off).
+// Writes the picture; returns its metrics (null with --no-metrics) and its pixels' fingerprint.
 async function write(call, j, metrics = true) {
   const format = (path.extname(j.out).slice(1) || 'png').toLowerCase();
-  const opts = { format, quality: j.quality != null ? +j.quality : 0.92, metrics };
+  const opts = { format, quality: j.quality != null ? +j.quality : 0.92, metrics, hash: true };
   const r = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined, crop: j.crop || undefined });
-  fs.writeFileSync(j.out, fromDataURL(metrics ? r.image : r));
-  return metrics ? r.metrics : null;
+  fs.writeFileSync(j.out, fromDataURL(r.image));
+  return { metrics: r.metrics || null, pixels: r.pixels };
 }
 
 function readJobs(file) {
@@ -117,9 +124,9 @@ async function runJobs(call, jobs, src, { metrics, noGuard, noRecord, many }) {
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   let failed = 0;
   const fail = (j, e) => { failed++; process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n'); };
-  const done = async (j, ms, guard, m, rec) => {
-    const file = noRecord || j.record === false ? null : await writeRecord(call, path.resolve(j.out), { base: rec, input: src.input, job: recipe(j), output: outputOf(j), guard, metrics: m });
-    process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round(ms / 100) / 10, ...(guard ? { guard } : {}), ...(file ? { record: file } : {}), ...(m ? { metrics: m } : {}) }) + '\n');
+  const done = async (j, ms, guard, { metrics: m, pixels }, rec) => {
+    const file = noRecord || j.record === false ? null : await writeRecord(call, path.resolve(j.out), { base: rec, input: src.input, job: recipe(j), output: { ...outputOf(j), pixels }, guard, metrics: m });
+    process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round(ms / 100) / 10, ...(guard ? { guard } : {}), ...(file ? { record: file } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}) }) + '\n');
   };
   const waiting = [];
   for (const j of jobs) {
@@ -127,7 +134,7 @@ async function runJobs(call, jobs, src, { metrics, noGuard, noRecord, many }) {
     try {
       await call('setSettings', base);
       const { guard } = await dress(call, { ...j, guard: noGuard ? false : j.guard }, false);
-      if (j.preview || !many) { const m = await write(call, j, metrics); await done(j, Date.now() - t, guard, m); }
+      if (j.preview || !many) { const w = await write(call, j, metrics); await done(j, Date.now() - t, guard, w); }
       else waiting.push({ j, guard, ms: Date.now() - t, rec: await call('record', {}) });
     } catch (e) { fail(j, e); }
   }
@@ -136,24 +143,74 @@ async function runJobs(call, jobs, src, { metrics, noGuard, noRecord, many }) {
     let res;
     try {
       res = await call('exportMany', part.map(({ j, rec }) => ({ settings: rec.settings, width: j.width ? +j.width : undefined, crop: j.crop || undefined,
-        format: (path.extname(j.out).slice(1) || 'png').toLowerCase(), quality: j.quality != null ? +j.quality : 0.92 })), { metrics });
+        format: (path.extname(j.out).slice(1) || 'png').toLowerCase(), quality: j.quality != null ? +j.quality : 0.92 })), { metrics, hash: true });
     } catch (e) { for (const w of part) fail(w.j, e); continue; }
     const each = (Date.now() - t0) / part.length;
     for (const [k, w] of part.entries()) {
       try {
-        fs.writeFileSync(w.j.out, fromDataURL(metrics ? res[k].image : res[k]));
-        await done(w.j, w.ms + each, w.guard, metrics ? res[k].metrics : null, w.rec);
+        fs.writeFileSync(w.j.out, fromDataURL(res[k].image));
+        await done(w.j, w.ms + each, w.guard, { metrics: res[k].metrics || null, pixels: res[k].pixels }, w.rec);
       } catch (e) { fail(w.j, e); }
     }
   }
   if (failed) process.exitCode = 1;
 }
 
+// Re-render a recorded picture and check it is the same, pixel for pixel (see verify above).
+async function verify(file, o) {
+  const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (rec.format !== 'digilight-record' || !rec.settings || !rec.output) throw new Error(`${file} is not a DigiLight record.`);
+  const input = o.photo || rec.input?.name;
+  if (!input || /^data:/.test(input)) throw new Error('The record does not say where the photo is: give it with --photo PATH.');
+  const out = rec.output, want = out.pixels?.sha256;
+  if (!want) throw new Error('The record has no pixel fingerprint (made before 10-21): nothing to check against.');
+  const { call, page, errors, close } = await launch({ port: +(o.port || 0) });
+  try {
+    // A recorded path is as it was given (relative to where that run was); else beside the record.
+    const local = /^(sample:|https?:)/.test(input) ? input : [input, path.resolve(path.dirname(file), input)].find((f) => fs.existsSync(f));
+    if (!local) throw new Error(`The photo ${input} is not there: give it with --photo PATH.`);
+    await openInput(call, local);
+    await call('setGuard', false);   // the record holds the settings as the guard left them
+    await call('setSettings', rec.settings);
+    const photo = (await call('record', {})).photo;
+    const opts = { format: 'png', hash: true };
+    const r = out.preview ? await call('render', opts) : await call('export', { ...opts, width: out.width, crop: out.crop });
+    if (o.out) fs.writeFileSync(o.out, fromDataURL(r.image));
+    const res = {
+      record: path.resolve(file), same: r.pixels.sha256 === want,
+      photo: { same: rec.photo?.pixelsSha256 ? photo.pixelsSha256 === rec.photo.pixelsSha256 : null, recorded: rec.photo?.pixelsSha256 ?? null, now: photo.pixelsSha256 },
+      pixels: { recorded: want, now: r.pixels.sha256, size: [r.pixels.width, r.pixels.height] },
+      renderer: { recorded: rec.renderer ?? null, now: (await call('record', {})).renderer },
+      code: { recorded: rec.code ?? null, now: require('./digilight-headless.cjs').codeHash() },
+    };
+    // With a lossless picture beside the record, say how far apart they are.
+    const png = path.resolve(path.dirname(file), out.file || '');
+    if (!res.same && out.file && /\.png$/i.test(png) && fs.existsSync(png)) {
+      res.vsFile = await page.evaluate(async ([a, b]) => {
+        const px = async (u) => { const im = new Image(); im.src = u; await im.decode(); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, c.width, c.height).data; };
+        const [x, y] = await Promise.all([px(a), px(b)]);
+        if (x.length !== y.length) return { comparable: false };
+        let n = 0, max = 0;
+        for (let i = 0; i < x.length; i += 4) { const m = Math.max(Math.abs(x[i] - y[i]), Math.abs(x[i + 1] - y[i + 1]), Math.abs(x[i + 2] - y[i + 2])); if (m) n++; if (m > max) max = m; }
+        return { pixelsDiffering: n, of: x.length / 4, maxLevels: max };
+      }, [r.image, `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`]);
+    }
+    process.stdout.write(JSON.stringify(res, null, 2) + '\n');
+    if (!res.same) process.exitCode = 1;
+    if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n');
+  } finally { await close(); }
+}
+
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const [cmd, input] = o._;
-  if (o.help || !cmd) { process.stdout.write(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 36).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n'); return; }
-  if (!['info', 'analyze', 'describe', 'get', 'render', 'batch'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch).`);
+  if (o.help || !cmd) {
+    const lines = fs.readFileSync(__filename, 'utf8').split('\n').slice(1);
+    process.stdout.write(lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
+    return;
+  }
+  if (!['info', 'analyze', 'describe', 'get', 'render', 'batch', 'verify'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch, verify).`);
+  if (cmd === 'verify') return verify(input, o);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
   const jobs = cmd === 'batch' ? readJobs(o.jobs) : null;
@@ -173,10 +230,10 @@ async function main() {
     else if (cmd === 'describe') out = await call('describe');
     else if (cmd === 'get') out = await call('get', o.path ?? null);
     else {
-      const m = await write(call, o, !o['no-metrics']);
+      const { metrics: m, pixels } = await write(call, o, !o['no-metrics']);
       const job = recipe({ ...o, set: o.set.length ? o.set : undefined, preset: o.preset.length ? o.preset : undefined });
-      const rec = o['no-record'] ? null : await writeRecord(call, path.resolve(o.out), { input, job, output: outputOf(o), guard, metrics: m });
-      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), ...(m ? { metrics: m } : {}) };
+      const rec = o['no-record'] ? null : await writeRecord(call, path.resolve(o.out), { input, job, output: { ...outputOf(o), pixels }, guard, metrics: m });
+      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}) };
     }
     if (o['save-project']) { fs.writeFileSync(o['save-project'], JSON.stringify(await call('getProject'))); out = { ...out, project: path.resolve(o['save-project']) }; }
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');

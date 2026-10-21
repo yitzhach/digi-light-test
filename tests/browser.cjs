@@ -948,10 +948,15 @@ const r=await a.evaluate(async()=>{const d=window.digilight;
  await d.applyPreset('graze','Classic raking');await d.set({exposure:0.2,'lights.0.kelvin':3600});const img=await d.render();
  const rec=await d.record({metrics:{probe:1}});await d.set({exposure:-1,'graze.enabled':false});const changed=(await d.render())!==img;
  await d.setSettings(rec.settings);const again=(await d.render())===img;
- return {rec:{format:rec.format,version:rec.version,at:typeof rec.at,renderer:rec.renderer,photo:rec.photo,look:rec.look,metrics:rec.metrics,exposure:rec.settings.exposure},changed,again,json:JSON.stringify(rec).length};});
+ const e1=await d.export({width:120,hash:true}),e2=await d.export({width:120,hash:true,metrics:true}),r1=await d.render({hash:true});
+ return {rec:{format:rec.format,version:rec.version,at:typeof rec.at,renderer:rec.renderer,photo:rec.photo,look:rec.look,metrics:rec.metrics,exposure:rec.settings.exposure},changed,again,json:JSON.stringify(rec).length,
+  px:[e1.pixels,e2.pixels,typeof e1.image,!!e2.metrics,r1.pixels]};});
 assert.equal(r.rec.format,'digilight-record');assert.equal(r.rec.version,1);assert.equal(r.rec.at,'string');assert.ok(r.rec.renderer&&r.rec.renderer.software===true&&r.rec.renderer.name,'renderer '+JSON.stringify(r.rec.renderer));
 assert.ok(r.rec.photo.width>0&&r.rec.photo.height>0);assert.equal(r.rec.look,null,'no look applied');assert.deepEqual(r.rec.metrics,{probe:1});assert.equal(r.rec.exposure,0.2);
 assert.ok(r.changed&&r.again,'the record\'s settings make the same picture again '+JSON.stringify(r));
+// Fingerprints (SHA-256 of the pixels before encoding): the photo's in the record; an export's, the same each time.
+assert.match(r.rec.photo.pixelsSha256,/^[0-9a-f]{64}$/);const [p1,p2,ty,hasM,pr]=r.px;
+assert.match(p1.sha256,/^[0-9a-f]{64}$/);assert.equal(p1.width,120);assert.deepEqual(p1,p2,'the same export, the same fingerprint');assert.equal(ty,'string');assert.ok(hasM);assert.match(pr.sha256,/^[0-9a-f]{64}$/);
 await ctx.close();console.log('PASS record: renderer, photo, look, extras, settings that make the same picture again',r.json+' bytes');}
 // Guard (guard.js): a change that blows whites is brought back (exposure, until nothing new blows) in the same undo step and says so;
 // with the guard off it stays, the chip says what clips and Fix repairs it as its own step; crushed darks are lifted.

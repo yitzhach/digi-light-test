@@ -224,8 +224,29 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     if (opts.as === 'blob') return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('Could not encode the image.'))), type, q));
     return canvas.toDataURL(type, q);
   }
-  // metrics: true → {image, metrics}: the render's numbers against the photo at the same
-  // size and crop (measure.js imageMetrics), measured on the pixels before encoding.
+  // A picture's fingerprint: SHA-256 of its RGBA pixels as drawn, before PNG / JPEG encoding,
+  // so a re-render can be checked against it whatever the file format (`verify` in the CLI).
+  // null where the browser has no SubtleCrypto (plain http away from localhost).
+  async function pixelsOf(canvas) {
+    const w = canvas.width, h = canvas.height;
+    if (!globalThis.crypto?.subtle) return { width: w, height: h, sha256: null };
+    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    const d = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    return { width: w, height: h, sha256: Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('') };
+  }
+  // The photo's own fingerprint (its pixels as the browser decoded them, full size), cached.
+  let photoPixels = null;
+  async function photoFingerprint() {
+    const s = api.source();
+    if (photoPixels?.src === s) return photoPixels.value;
+    const c = document.createElement('canvas'); c.width = s.naturalWidth || s.width; c.height = s.naturalHeight || s.height;
+    c.getContext('2d').drawImage(s, 0, 0);
+    photoPixels = { src: s, value: await pixelsOf(c) };
+    return photoPixels.value;
+  }
+  // metrics: true → {image, metrics, pixels}: the render's numbers against the photo at the same
+  // size and crop (measure.js imageMetrics), measured on the pixels before encoding, and its
+  // fingerprint (pixelsOf); hash: true → {image, pixels}.
   let photoCache = null;   // the last photo measured: {src, key, stats}
   function measure(canvas, whole, rect) {
     const t0 = performance.now(), w = canvas.width, h = canvas.height;
@@ -252,9 +273,9 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     api.renderNow();
     const c = document.createElement('canvas'); c.width = api.canvas.width; c.height = api.canvas.height;
     c.getContext('2d').drawImage(api.canvas, 0, 0);
-    if (!opts.metrics) return encode(c, opts);
-    const metrics = measure(c, [c.width, c.height]);
-    return { image: await encode(c, opts), metrics };
+    if (!opts.metrics && !opts.hash) return encode(c, opts);
+    const metrics = opts.metrics ? measure(c, [c.width, c.height]) : undefined;
+    return { image: await encode(c, opts), metrics, pixels: await pixelsOf(c) };
   }
   async function exportImage(opts = {}) {
     needPhoto();
@@ -263,11 +284,11 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const rect = opts.crop ? cropRect(opts.crop, opts.width) : undefined;
     const out = opts.width ? await api.renderAt(opts.width, rect) : await api.exportFull(rect);
     const c = out?.canvas || out;
-    if (!opts.metrics) return encode(c, opts);
+    if (!opts.metrics && !opts.hash) return encode(c, opts);
     const s = api.source(), fw = s.naturalWidth || s.width, fh = s.naturalHeight || s.height;
     const W = opts.width ? Math.max(1, Math.min(fw, Math.round(opts.width))) : fw;
-    const metrics = measure(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect);
-    return { image: await encode(c, opts), metrics };
+    const metrics = opts.metrics ? measure(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect) : undefined;
+    return { image: await encode(c, opts), metrics, pixels: await pixelsOf(c) };
   }
   // Several pictures at once, for rounds of looks: items [{settings, width?, crop?, format?,
   // quality?}], each made as export() would make it from those settings (taken as they are:
@@ -300,7 +321,9 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
           const canvases = await api.exportStates(part.map((m) => m.st), { width: g.W === fw ? undefined : g.W, rect: g.rect || undefined });
           for (const [k, m] of part.entries()) {
             const it = items[m.i], enc = { format: it.format || opts.format, quality: it.quality ?? opts.quality, as: opts.as };
-            out[m.i] = opts.metrics ? { metrics: measure(canvases[k], whole, g.rect), image: await encode(canvases[k], enc) } : await encode(canvases[k], enc);
+            out[m.i] = opts.metrics || opts.hash
+              ? { metrics: opts.metrics ? measure(canvases[k], whole, g.rect) : undefined, image: await encode(canvases[k], enc), pixels: await pixelsOf(canvases[k]) }
+              : await encode(canvases[k], enc);
           }
         }
       }
@@ -326,13 +349,14 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   // .json next to each export): the settings (setSettings() takes them back), the look applied
   // and whether it was changed since, the photo's size, what drew it, when. `extra` is merged
   // in: the guard's note and the metrics, which only the caller knows belong to this picture.
-  function record(extra = {}) {
+  async function record(extra = {}) {
     needPhoto();
+    const photoPx = await photoFingerprint();
     const s = api.source(), a = auto.active, it = a && auto.analysis?.items?.[a.index];
     const look = it ? { name: it.name, kind: it.kind, ...(it.id ? { id: it.id, version: it.version } : {}), strength: +($('autoStrength')?.value ?? 1),
       changedSince: JSON.stringify(snapshot()) !== a.applied } : null;
     return { format: 'digilight-record', version: 1, api: API_VERSION, at: new Date().toISOString(),
-      renderer: api.renderer?.() || null, photo: { width: s.naturalWidth || s.width, height: s.naturalHeight || s.height, sample: api.sample?.() || null },
+      renderer: api.renderer?.() || null, photo: { width: s.naturalWidth || s.width, height: s.naturalHeight || s.height, sample: api.sample?.() || null, pixelsSha256: photoPx.sha256 },
       look, ...clone(extra), settings: settings() };
   }
   async function getProject(opts = {}) {

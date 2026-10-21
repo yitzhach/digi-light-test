@@ -282,8 +282,8 @@ server.registerTool('export_image', {
   return waitExport(async () => {
     const t0 = Date.now(), r = await call('export', { format, quality: quality ?? 0.92, width, crop, metrics: true }), buf = fromDataURL(r.image);
     fs.writeFileSync(f, buf);
-    const rec = record === false ? null : await writeRecord(call, f, { input: opened, job: { width, crop }, output: { format, ...(width ? { width } : {}), ...(crop ? { crop } : {}) }, metrics: r.metrics });
-    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(rec ? { record: rec } : {}), ...(await call('info')), metrics: r.metrics };
+    const rec = record === false ? null : await writeRecord(call, f, { input: opened, job: { width, crop }, output: { format, ...(width ? { width } : {}), ...(crop ? { crop } : {}), pixels: r.pixels }, metrics: r.metrics });
+    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(rec ? { record: rec } : {}), ...(await call('info')), pixelsSha256: r.pixels?.sha256 ?? null, metrics: r.metrics };
   }, f);
 }));
 
