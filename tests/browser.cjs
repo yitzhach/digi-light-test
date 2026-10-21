@@ -81,7 +81,7 @@ const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kin
  assert.ok(L.applied.id==='raking-texture'&&L.applied.look==='Raking texture'&&L.angle===A.rake&&L.steps===1,JSON.stringify(L.applied));assert.equal(L.back,pre,'undo');
  console.log('PASS built-in looks: fixed ids and versions, applyLook by id');}
 // Round 2's keepers in the favourite looks: deeper relief over the fitted depth (auto.js deeper()).
-for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,0.01,0.5],'round 3: lower, finer raking '+n);}
+for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,0.02,0.15],'round 4: lower raking, old smoothing '+n);}
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
 await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
 const on=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,angle:s.graze.angle,depth:s.textureDepthMm,exp:s.exposure,op:s.graze.opacity,tile:document.querySelector('.autoLook.on span').textContent};});

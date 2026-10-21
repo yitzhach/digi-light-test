@@ -34,8 +34,9 @@ export const CRISP = { neutralWB: 0.6, vibrance: 0.4, strokeDef: 0.5, albedoSupp
 export const LOOK_BIAS = { 'gallery': -1.03, 'gallery-spot': -1.48, 'matched': -1.18, 'matched-raking': -1.28, 'favourite': -0.76, 'favourite-left': -0.75, 'favourite-side-lamp': -0.78, 'raking-texture': -0.8, 'long-shadows': -0.56, 'soft-window': -0.83, 'museum-spot': -1.75 };
 // Each built-in look's recipe version, raised whenever its recipe changes, so a record or a pick
 // says which recipe made a picture. favourite-left / -side-lamp: 1 round F1 (10-19), 2 round 2
-// keepers (deeper, lamp low near the edge), 3 round 3 keepers (raking 6°, finer detail, 10-20).
-export const LOOK_VERSION = { 'favourite-left': 3, 'favourite-side-lamp': 3 };
+// keepers (deeper, lamp low near the edge), 3 round 3 keepers (raking 6°, finer detail, 10-20),
+// 4 round 4 (raking 6° with the old smoothing, 10-21).
+export const LOOK_VERSION = { 'favourite-left': 4, 'favourite-side-lamp': 4 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
@@ -207,7 +208,9 @@ export function initAuto({ state, api, before, snapshot, restore, checkpoint, se
   // Round 3 (10-20): the user kept "raking light lower (6°)" and "finer raking detail" on both
 // looks (L08, L12, F03, F07): elevation 8 → 6, graze detail 0.02 → 0.01 (about 16 → 8 px of
 // smoothing at full size, the likely source of the "motion blur"), fine 0.15 → 0.5.
-const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 6, lift: 0.6, detail: 0.01, fine: 0.5 });
+// Round 4 (10-21): together the finer detail read as too much high-frequency sharpness; the user
+// kept the lower light with the old smoothing (L02): detail 0.02, fine 0.15 again, elevation 6.
+const crispGraze = (s, angle) => Object.assign(s.graze, { enabled: true, angle, reach: 0.4, soft: 0.1, elevation: 6, lift: 0.6, detail: 0.02, fine: 0.15 });
   // Round 2 (10-19): the user kept "deeper relief + crisper texture" on both favourite looks
   // (A11, A15: Colour › Relief 150%, Fine detail 140%). Built-in looks do not carry the Colour
   // tool, so the same is made with the look's own settings: texture depth × 1.65 (over the depth

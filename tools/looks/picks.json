@@ -34,5 +34,26 @@
    "F03": "From the left, raking light lower (6°)", "F07": "From the left, finer raking detail"
   },
   "note": "Both picks on both looks went in: crispGraze elevation 6, detail 0.01, fine 0.5 (auto.js). Not kept: brighter, lift darks, cool fill, 5000 K, raking from lower left."
+ },
+ "round4": {
+  "page": "https://claude.ai/artifact/Ckij9SS2EXVa475GXkByai",
+  "date": "2026-10-21",
+  "keep": ["L02"],
+  "maybe": ["L03", "L05", "F05"],
+  "drop": [],
+  "names": {
+   "L02": "Round 3's lower raking only (old smoothing)", "L03": "Round 3's finer raking only (old angle, 8°)",
+   "L05": "Finer still (smoothing 0.008, fine 0.65)", "F05": "From the left, finer still (0.008, 0.65)"
+  },
+  "note": "User: 'a bit much high frequency sharpness in most'. L02 went into both looks: crispGraze detail 0.02, fine 0.15, elevation 6 (LOOK_VERSION 4)."
+ },
+ "guard1": {
+  "page": "https://claude.ai/artifact/KReiYc3BimztEmr1HzPgQg",
+  "date": "2026-10-21",
+  "keep": [],
+  "maybe": ["D4"],
+  "drop": [],
+  "names": { "D4": "Room light only, up to 1.0 (stronger)" },
+  "note": "User: the options were 'mostly a bit off or too bright'; no whites option picked. Guard order unchanged until a second options page."
  }
 }
