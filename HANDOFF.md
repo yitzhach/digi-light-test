@@ -46,10 +46,10 @@ needs the background. The plan is **docs/roadmap.md**.
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. Measured relief from sunlight: go ahead and build it into the app (roadmap NEXT)? For the lintel
-   panel: how far the lintel sticks out and how wide the panel is (gives the sun's elevation from
-   the lintel's shadow, about 14° for 2.5 cm on 50 cm, and so the true depth). More sunlit shots
-   with the board turned about 90° would give the slopes across the sun too.
+1. Measured relief from sunlight: the user likes it as an option for images (10-21) and asked
+   whether turning the piece between shots is just math (yes: lining up handheld shots is what
+   register.py does). Lintel panel: lintel 3/4" out, panel 20.5" wide, so the sun was 10.3° up and
+   its relief is about 1.26 mm (docs/real-light-test.md). Waiting on a go to build it into the app.
 2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
    crushed on every look; the red panel just over): raise the black point a touch, or keep the
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)

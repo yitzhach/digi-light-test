@@ -96,8 +96,11 @@ matching (174 inliers, median 0.9 px; brightness alone had kept 6 of 18, see reg
   the lintel the shadow runs 167 px down (rows 652 → 818 of 1670); its slanted right edge takes
   the lintel's bottom-right corner (942, 651) to about (738, 818): 264 px, 0.205 of the panel's
   width, about 40° below the horizontal. So the sun's elevation is
-  atan(lintel protrusion / (0.205 × panel width)): about 14° for 2.5 cm on 50 cm. Asked the user
-  for the two lengths; the measurement below assumed 20°.
+  atan(lintel protrusion / (0.205 × panel width)). The user's lengths: the lintel sticks out 3/4"
+  and the panel is 20.5" wide (1308 px in the flat photo), so the shadow shifts 10.5 cm and the sun
+  stood **10.3°** above the face (11.9° / 13.6° if the block under the lintel sits 1/8" / 1/4"
+  lower than the plaster it is fixed to). The measurement below assumed 20° and a 50 cm width, so
+  its depth is about twice too deep: 2.43 mm → **1.26 mm** (× tan 10.3° / tan 20° × 52.07 / 50).
 - Today's relief, the same as on the door: light-and-shade correlation with the sun 0.04 / 0.10 /
   0.12 / 0.14 under a sun-like light (graze 47°, 20°, unsmoothed), about 0 for the looks.
 - Measured relief (`measure_sun.cjs … 20 47 50`: lined up 0.5 px, 2.43 mm, 2.5% glints):
