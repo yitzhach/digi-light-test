@@ -1428,16 +1428,16 @@
    "azimuthDeg": 141,
    "broadRelief": 0.55,
    "chromaReject": 0.85,
-   "exposure": -0.24,
+   "exposure": -0.34,
    "fineHidden": null,
    "fineRelief": 0.77,
    "graze": {
     "angle": 170,
     "clean": 0.55,
-    "detail": 0.01,
+    "detail": 0.02,
     "elevation": 6,
     "enabled": true,
-    "fine": 0.5,
+    "fine": 0.15,
     "lift": 0.6,
     "opacity": 0.63,
     "reach": 0.4,
@@ -1545,7 +1545,7 @@
    "textureDepthMm": 9.9,
    "vibrance": 0
   },
-  "version": 3
+  "version": 4
  },
  {
   "id": "favourite-side-lamp",
@@ -1686,16 +1686,16 @@
    "azimuthDeg": 141,
    "broadRelief": 0.55,
    "chromaReject": 0.85,
-   "exposure": -0.44,
+   "exposure": -0.55,
    "fineHidden": null,
    "fineRelief": 0.77,
    "graze": {
     "angle": 175,
     "clean": 0.55,
-    "detail": 0.01,
+    "detail": 0.02,
     "elevation": 6,
     "enabled": true,
-    "fine": 0.5,
+    "fine": 0.15,
     "lift": 0.6,
     "opacity": 0.63,
     "reach": 0.4,
@@ -1803,7 +1803,7 @@
    "textureDepthMm": 9.9,
    "vibrance": 0
   },
-  "version": 3
+  "version": 4
  },
  {
   "id": "raking-texture",
