@@ -114,4 +114,7 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   not in state/history; projects save it as `relief` (reliefsave.js); a new photo drops it.
   Lamp photos must be cropped exactly like the painting photo; lamp "out" is from the painted face.
 - The CLI turns the page's own guarding off and guards each job once after all its options.
+- tests/browser.cjs's zoom block ("zoom to 1000%") failed once on 10-21 on its last check, the undo
+  history one step longer (22 vs 21) after the brush undo, and passed on the re-run of the same
+  code: a timing race to look into if it comes back.
 - Whenever you push to `main`, update this file (CLAUDE.md).
