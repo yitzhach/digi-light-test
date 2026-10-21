@@ -1,0 +1,18 @@
+{
+ "title": "Round 5: less high-frequency sharpness",
+ "pageTitle": "Lighting Round 5",
+ "about": "Round 5 (10-21). In round 4 you kept the lower raking light with the old smoothing (L02) and found a bit much high-frequency sharpness in most versions. L02 is now both built-in looks (L01, F01 here). This round goes softer from there, one step at a time: 02 the raking light's fine texture lower (0.15 → 0.05), 03 the relief's fine detail back to the favourite's own (the round 2 'crisper texture' ×1.4 taken out), 04 the raking light smoothed a little more (detail 0.02 → 0.03), 05 all three. Hold the picture to flip to 01 (for 02–05) or to the photo (for 01). Rendered without the guard, like rounds 3 and 4.",
+ "guard": false,
+ "variants": [
+  {"id": "L01", "name": "Side lamp left, now (round 4's L02)", "look": "Favourite, side lamp left"},
+  {"id": "L02", "name": "Raking fine texture lower (0.05)", "look": "Favourite, side lamp left", "set": {"graze.fine": 0.05}, "base": "L01"},
+  {"id": "L03", "name": "Relief fine detail without the ×1.4", "look": "Favourite, side lamp left", "scale": {"fineRelief": 0.7143}, "base": "L01"},
+  {"id": "L04", "name": "Raking light smoothed a little more (0.03)", "look": "Favourite, side lamp left", "set": {"graze.detail": 0.03}, "base": "L01"},
+  {"id": "L05", "name": "All three softer", "look": "Favourite, side lamp left", "set": {"graze.fine": 0.05, "graze.detail": 0.03}, "scale": {"fineRelief": 0.7143}, "base": "L01"},
+  {"id": "F01", "name": "From the left, now (round 4's L02 change)", "look": "Favourite, from the left"},
+  {"id": "F02", "name": "From the left, raking fine texture lower (0.05)", "look": "Favourite, from the left", "set": {"graze.fine": 0.05}, "base": "F01"},
+  {"id": "F03", "name": "From the left, relief fine detail without the ×1.4", "look": "Favourite, from the left", "scale": {"fineRelief": 0.7143}, "base": "F01"},
+  {"id": "F04", "name": "From the left, raking smoothed a little more (0.03)", "look": "Favourite, from the left", "set": {"graze.detail": 0.03}, "base": "F01"},
+  {"id": "F05", "name": "From the left, all three softer", "look": "Favourite, from the left", "set": {"graze.fine": 0.05, "graze.detail": 0.03}, "scale": {"fineRelief": 0.7143}, "base": "F01"}
+ ]
+}

@@ -17,10 +17,15 @@ import { CLIP_HI, CLIP_LO, LIMITS } from './measure.js';
 const AMBIENT_MAX = 0.6;
 const WHITES = ['highlightRolloff', 'exposure'], DARKS = ['graze.lift', 'ambient'];
 // How far each may go, and its step: [to, grid].
+// Output black and Lift darks (the Colour tool's Levels and Lift darks) are options for now
+// (10-21: the user found the room-light fixes too bright); they lift the deepest tones only.
 const MOVES = {
   highlightRolloff: () => [1, 0.02], exposure: () => [-3, 0.05],
   'graze.lift': () => [1, 0.02], ambient: (s, max) => [Math.max(s.ambient, max), 0.02],
+  'adjust.levels.outBlack': () => [0.1, 0.005], 'adjust.lift.amount': () => [1, 0.02],
 };
+// The Colour tool section a path needs switched on, so a value moved there shows.
+const SECTION = { 'adjust.levels.outBlack': 'levels', 'adjust.lift.amount': 'lift' };
 const STEPS = 7;   // bisection steps per setting: 1/128 of its span
 
 export function initGuard({ state, api, snapshot, restore, history, historyUI, $ }) {
@@ -67,7 +72,9 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     const n = w * h, r4 = (v) => Math.round(v * 1e4) / 1e4;
     return { newBlown: r4(blown / n), newCrushed: r4(crushed / n) };
   }
-  const whitesOK = (m) => m.newBlown <= LIMITS.newBlown, darksOK = (m) => m.newCrushed <= LIMITS.newCrushed;
+  // The limits a run aims under: LIMITS, or a run's own (an option, see guard()).
+  let lim = LIMITS;
+  const whitesOK = (m) => m.newBlown <= lim.newBlown, darksOK = (m) => m.newCrushed <= lim.newCrushed;
 
   // Paths the guard moves, read and written on a settings snapshot.
   const get = (s, p) => p.split('.').reduce((o, k) => o?.[k], s);
@@ -91,8 +98,9 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     return { value: good, m: goodM };
   }
 
-  const fmt = { exposure: (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`, highlightRolloff: (v) => v.toFixed(2), 'graze.lift': (v) => `${Math.round(v * 100)}%`, ambient: (v) => v.toFixed(2) };
-  const label = { exposure: 'exposure', highlightRolloff: 'highlight rolloff', 'graze.lift': 'shadow lift', ambient: 'room light' };
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  const fmt = { exposure: (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}`, highlightRolloff: (v) => v.toFixed(2), 'graze.lift': pct, ambient: (v) => v.toFixed(2), 'adjust.levels.outBlack': (v) => v.toFixed(3), 'adjust.lift.amount': pct };
+  const label = { exposure: 'exposure', highlightRolloff: 'highlight rolloff', 'graze.lift': 'shadow lift', ambient: 'room light', 'adjust.levels.outBlack': 'output black', 'adjust.lift.amount': 'lift darks' };
   const pc = (v) => `${(v * 100).toFixed(2)}%`;
 
   /**
@@ -104,12 +112,14 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
    */
   function run(opts) {
     quiet = true;
-    try { const r = relit(() => guard(opts)); api_.last = r && { ...r, seq: ++seq }; return r; } finally { quiet = false; clearTimeout(timer); }
+    try { const r = relit(() => guard(opts)); api_.last = r && { ...r, seq: ++seq }; return r; } finally { quiet = false; lim = LIMITS; clearTimeout(timer); }
   }
   // whites / darks: which settings it moves, in order (WHITES / DARKS by default); ambientMax caps
-  // the room light. Kept as options so alternatives can be rendered side by side for the user.
-  function guard({ fix = true, amend = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX } = {}) {
+  // the room light; limits ({newBlown, newCrushed}) replaces the limits it aims under. Kept as
+  // options so alternatives can be rendered side by side for the user.
+  function guard({ fix = true, amend = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX, limits } = {}) {
     if (!api.source() || state.mode !== 'single' || state.exporting) return null;
+    lim = { ...LIMITS, ...limits };
     const before = check();
     if (!before) return null;
     if (whitesOK(before) && darksOK(before)) return { ok: true, fixed: false, before, after: before, changes: {}, note: '' };
@@ -118,8 +128,11 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     const move = (path, to, grid, ok) => {
       const from = get(base, path);
       if (from == null || (to - from) * Math.sign(to - from) <= 0) return null;
+      const sec = SECTION[path] && base.adjust[SECTION[path]], was = sec && [base.adjust.on, sec.on];
+      if (sec) { base.adjust.on = 1; sec.on = 1; }
       const r = nearest(base, path, from, to, ok, grid);
       if (Math.abs(r.value - from) > 1e-9) changes[path] = [from, r.value];
+      else if (sec) [base.adjust.on, sec.on] = was;
       return r.m;
     };
     let m = before;

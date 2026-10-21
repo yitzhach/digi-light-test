@@ -1,0 +1,17 @@
+{
+ "title": "Guard options 2: gentler fixes",
+ "pageTitle": "Guard Options 2",
+ "about": "Guard options, second page (10-21). On the first page the fixes were 'mostly a bit off or too bright': the guard moves a setting only until the picture is just under the limit, and room light brightens everything. Here: a too-bright picture (Gallery track, exposure +2.5) fixed by lowering exposure only until nothing new blows (W3), or highlights then exposure to the same aim (W4), against the guard now (W1). A too-dark one (Gallery track, Classic raking, exposure −0.8, no room light) fixed with room light up to 1.0 (D4, your maybe), with the output black point only (D5: lifts the deepest tones, leaves the rest), with Lift darks only (D6: darks most, whites untouched), or allowing 0.5% newly crushed, the level your favourite looks already have, with room light (D7) or the black point (D8). Hold the picture to flip to the unfixed version.",
+ "variants": [
+  {"id": "W0", "name": "Too bright, as set (no guard)", "preset": "lighting:Gallery track", "set": {"exposure": 2.5}, "guard": false},
+  {"id": "W1", "name": "Guard now: soften highlights, then exposure, just under the limit", "preset": "lighting:Gallery track", "set": {"exposure": 2.5}, "guard": {}, "base": "W0"},
+  {"id": "W3", "name": "Exposure only, until nothing new blows", "preset": "lighting:Gallery track", "set": {"exposure": 2.5}, "guard": {"whites": ["exposure"], "limits": {"newBlown": 0}}, "base": "W0"},
+  {"id": "W4", "name": "Highlights, then exposure, until nothing new blows", "preset": "lighting:Gallery track", "set": {"exposure": 2.5}, "guard": {"limits": {"newBlown": 0}}, "base": "W0"},
+  {"id": "D0", "name": "Too dark, as set (no guard)", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": false},
+  {"id": "D4", "name": "Room light only, up to 1.0 (your maybe)", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": {"darks": ["ambient"], "ambientMax": 1}, "base": "D0"},
+  {"id": "D5", "name": "Output black point only", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": {"darks": ["adjust.levels.outBlack"]}, "base": "D0"},
+  {"id": "D6", "name": "Lift darks only", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": {"darks": ["adjust.lift.amount"]}, "base": "D0"},
+  {"id": "D7", "name": "Room light up to 1.0, allowing 0.5% crushed", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": {"darks": ["ambient"], "ambientMax": 1, "limits": {"newCrushed": 0.005}}, "base": "D0"},
+  {"id": "D8", "name": "Output black point, allowing 0.5% crushed", "preset": ["lighting:Gallery track", "graze:Classic raking"], "set": {"exposure": -0.8, "ambient": 0}, "guard": {"darks": ["adjust.levels.outBlack"], "limits": {"newCrushed": 0.005}}, "base": "D0"}
+ ]
+}

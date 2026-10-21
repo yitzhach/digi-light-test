@@ -80,7 +80,8 @@ async function dress(call, j, analyze, src = {}) {
     await call('set', changes);
   }
   // The guard once, on the picture as the options left it (the page guards no single step: main).
-  const g = j.guard === false ? null : await call('guard');
+  // A job's "guard" may be the guard's options ({whites, darks, ambientMax, limits}: guard.js).
+  const g = j.guard === false ? null : await call('guard', typeof j.guard === 'object' ? j.guard : {});
   return { analysis, guard: g && (g.fixed || !g.ok) ? { ok: g.ok, changes: g.changes, note: g.note } : null };
 }
 
