@@ -25,23 +25,43 @@ needs the background. The plan is **docs/roadmap.md**.
     picked); **Compare full screen** renders Auto's looks into the batch viewer (`batch.openAuto`,
     source "Auto looks"); the viewer's **Pin as A** makes Hold flip to that look (P, hold Space).
     `guard.preview()` fixes a shown look without touching the undo history.
+  - **The user's test photos** (plaster door flat and in raking sun, a banded panel outdoors, a
+    close-up; scratch only, not in the repo): review of today's looks with the guard on,
+    https://claude.ai/artifact/TPRk1CiypEiBBJLewfb5fs. The guard fixes they led to: when the darks
+    fix (room light) blows whites, exposure comes back down to the whites limit; darks aim at half
+    the limit (the guard judges at preview size, and the door's exports showed 0.25% where the
+    preview showed 0.15%).
+  - **Real light test** (**docs/real-light-test.md**, tools in **tools/realref/**): the sunlit door
+    photo lined up on the flat one (0.6 px) is a reference for real raking light. Today's relief,
+    estimated from one flat photo, gives light and shade unrelated to it (correlation about 0, every
+    band, every direction; no setting fixes it; it embosses the paint's outlines). Relief measured
+    from that one sunlit photo through the lamp-photo code: 0.55 / 0.60 (mid / broad) under a
+    sun-like light; review page https://claude.ai/artifact/AvR9yt12cnmo3qtaL46yvG (Hold flips
+    measured / estimated). Roadmap NEXT has the plan: measured relief from 2–3 phone shots in sun.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. Guard: the user noted D4 / D7 "bit dark" and W3 "a bit too bright". Mostly the test cases' own
-   exposure (−0.8 / +2.5): the guard fixes clipping, not overall brightness. On the red panel room
-   light 1.0 is still just over the darks limit; ask whether a second darks step is wanted.
-2. Is the guard chip welcome (screenshots sent 10-20)?
-3. Re-attach the two plaster door photos (not in the repo); may they be kept as a private test set?
-4. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
+1. Measured relief from sunlight: 2–3 more sunlit shots of the door with the board turned about
+   90° between them (and the plaster's thickness at the dark block's edge, for the depth)? Or
+   carry on with the one shot (sun from the upper left, depth unknown).
+2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
+   crushed on every look; the red panel just over): raise the black point a touch, or keep the
+   black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
+3. White plaster: should the favourites keep whites white (neutral greys: plaster b* 16 → ~12;
+   the sunlit photo is 3.9)?
+4. May the test photos be kept as a private test set (now only in a session's scratch space)?
+5. Is the guard chip welcome (screenshots sent 10-20)?
+6. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
    phone or iMac, default look for uploaders, 16-bit / TIFF output.
-5. Older, still open (details in docs/history.md): confirm the Shadow light picks (Shade vs
+7. Older, still open (details in docs/history.md): confirm the Shadow light picks (Shade vs
    Negative light; more shade shapes?); overlay defaults (grain 35%, vignette 50%); Broad form
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
+1. With the user's answer on sunlight: a sun lamp and handheld lining up in the lamp-photo tool
+   (roadmap NEXT, "Measured relief from sunlight"); looks without graze smoothing on measured relief.
+2. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
    fit-to-screen; a `?round=` link that renders a round on the user's own GPU); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
    measurements apart from look fitting); faster metrics.

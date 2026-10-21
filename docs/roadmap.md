@@ -68,6 +68,22 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - `render_preview` takes `region` and returns `stats`.
   - A `compare` tool returns an A|B crop pair plus the difference.
   - `batch_render`.
+- **Measured relief from sunlight** (evidence: docs/real-light-test.md, 10-21). On the user's
+  plaster door the relief estimated from one flat photo gave light and shade unrelated to real
+  raking sunlight (correlation about 0, every band, every direction, no setting helps); the relief
+  measured from one handheld sunlit photo through the lamp-photo code reached 0.55 / 0.60 (mid /
+  broad) under a sun-like light. Sunlight is a free, even, distant lamp: 2–3 phone shots in sun,
+  the board turned about 90° between them, could replace the tripod-and-lamp session. Needs:
+  - Line up handheld shots in the app (features + homography; tools/realref/register.py does it
+    with OpenCV SIFT: 0.6 px median on the door). lampphotos.js `align` only searches ±1% shifts.
+  - A sun lamp in lamp photos: a direction (from the shadows, or the user's answer), no
+    distance falloff; Fit depth with it (it fails with a far point lamp today).
+  - Keep broad forms for sun shots (DRIFT_SIGMA drops anything over 6% of the width, for a lamp's
+    uneven beam; sunlight is even).
+  - Depth: one unknown sun elevation leaves the depth scale open (bas-relief ambiguity): take it
+    from a known thickness (a plaster step), or the sun's elevation.
+  - Looks on measured relief without the graze smoothing tuned for the estimate's grain (detail
+    0.02–0.03, fine 0.15): on the door it smoothed real detail (68% of the photo's fine texture).
 - **Narrower Analyze cache.** Cache the photo measurements separately from look fitting, so a look tweak doesn't re-run the 172 s Analyze.
 - **Fixed test set plus goldens.**
   - The door photos, steel+plaster, DSC_8382 and the painting sample.
@@ -100,8 +116,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
 - **Provenance:** code hash, GPU or SwiftShader, render time.
 
 ## 6. Questions for you
-1. Can you shoot 2–3 low-lamp photos plus one even photo of each piece? Measured relief is the biggest quality lever.
-2. Please re-attach the door photos. May we keep them privately as the fixed test set?
+1. Can you shoot 2–3 low-lamp photos plus one even photo of each piece? Measured relief is the biggest quality lever. (10-21: or 2–3 phone shots in direct sun, the board turned about 90° between them; see docs/real-light-test.md.)
+2. Please re-attach the door photos. May we keep them privately as the fixed test set? (10-21: the user sent the door flat and in sun, a banded panel outdoors and a close-up; kept outside the repo until they say.)
 3. Is the strong left-to-right falloff wanted, or should evenness be a slider?
 4. Should we test a finer graze, which risks some grit, to fight the smear?
 5. Are you happy to vote blind?
