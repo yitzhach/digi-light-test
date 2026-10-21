@@ -353,7 +353,7 @@ function makeViewer(ctx) {
     $('bvPrev').disabled = cur === 0; $('bvNext').disabled = cur === list.length - 1;
     const isA = pinnedIn === ctx.batch && pinned === cur, a = pinA();
     $('bvPin').textContent = isA ? 'Unpin A' : 'Pin as A'; $('bvPin').setAttribute('aria-pressed', String(isA));
-    $('bvHold').textContent = a ? `Hold: A (${pad(a.num)})` : 'Hold: original';
+    $('bvHold').textContent = a ? `Hold: A·${pad(a.num)}` : 'Hold: original';
     const dots = $('bvDots'); dots.replaceChildren();
     for (const [i, x] of list.entries()) {
       const d = document.createElement('button'); d.className = 'bvDot' + (i === cur ? ' on' : '') + (x.pick ? ' picked' : '');

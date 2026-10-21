@@ -117,7 +117,7 @@ assert.equal(v.src,'auto');assert.equal(v.n,Math.min(10,v.want.length+1));assert
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before);assert.equal(await page.evaluate(()=>__studio.history.index),hi);
 const src=()=>page.evaluate(()=>({img:document.querySelector('#bvImg').src,tag:document.querySelector('#bvTag').textContent,hold:document.querySelector('#bvHold').textContent}));
 await page.evaluate(()=>__batch.viewer.go(1));await page.click('#bvPin');assert.equal(await page.textContent('#bvPin'),'Unpin A');assert.equal(await page.evaluate(()=>__batch.viewer.pinned),1);
-await page.click('#bvNext');const hb=await page.locator('#bvHold').boundingBox();assert.match((await src()).hold,/Hold: A \(02\)/);
+await page.click('#bvNext');const hb=await page.locator('#bvHold').boundingBox();assert.match((await src()).hold,/Hold: A·02/);
 await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await page.mouse.down();const held=await src();await page.mouse.up();const back=await src();
 const urls=await page.evaluate(()=>__batch.batch.items.map(i=>i.url));
 assert.equal(held.img,urls[1]);assert.equal(held.tag,'A · LOOK 02');assert.equal(back.img,urls[2]);

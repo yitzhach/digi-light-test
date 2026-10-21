@@ -174,7 +174,7 @@ body.batchOpen { overflow:hidden; }
 #autoAnalyze { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
 #autoReadout { line-height:1.45; }
 .autoLine { display:block; } .autoLine b { color:var(--ink); font-weight:600; }
-.autoLooks { display:grid; grid-template-columns:repeat(auto-fill,minmax(116px,1fr)); gap:8px; margin:8px 0; }
+.autoLooks { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:8px; margin:8px 0; }
 .autoLooks:empty { display:none; }
 .autoLook { display:flex; flex-direction:column; gap:4px; padding:4px; border-radius:6px; text-align:left; min-height:44px; }
 .autoLook canvas { width:100%; height:auto; aspect-ratio:4/5; object-fit:cover; border-radius:3px; display:block; background:#000; }
