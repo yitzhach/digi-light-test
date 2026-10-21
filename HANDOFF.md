@@ -6,36 +6,27 @@ the upgrade phases, done lists) is kept verbatim in **docs/history.md**; search 
 needs the background. The plan is **docs/roadmap.md**.
 
 ## Now
-- **10-20 (overnight, user asleep, asked for continuous refinement; all on `main`):**
-  - Round 3 picks folded into both favourite looks (raking 6°, finer detail; LOOK_VERSION 3).
-  - **The guard** (src/guard.js) after every one-tap / API / CLI / MCP change; chip + Fix for
-    hand-moved sliders; never changes a hand-moved slider. Fixed overnight: it applied nothing when
-    a setting's furthest value was not enough; it measured the screen (Split / Original views)
-    instead of the relit picture; the chip's check blocked phone taps (it now reads the frame on
-    screen when idle); and its baseline photo was resampled differently from the preview's, which
-    counted ~0.5% phantom "newly blown" on a bright painting (now exactly 0 for an unchanged picture).
-  - **Metrics** (measure.js imageMetrics) on render / export / exportMany / CLI / MCP; the same
-    baseline fix for exports (photo cut as the tiles cut it): unchanged = exactly 0 at any size.
-  - **Records** (`FILE.json` beside every CLI picture and MCP export), **look ids + versions**,
-    **goldens** (tests/goldens/looks.json), **exportMany** (variants that share a relief rendered
-    in one tiled pass; CLI batch uses it, `--no-many` to compare: 6 jobs 313 s → 204 s).
-  - **tools/looks/make_round.py** builds a round end to end (see Lighting rounds below).
-  - Metrics 7× faster (running-sum box filters, quickselect percentiles; exact, tests/measure.mjs);
-    `open_image` / CLI inputs take `data:image/...;base64` URLs (records keep only their sha256).
+- **10-21 (branch `claude/quirky-allen-tna7jh`, not yet on `main`):**
+  - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much
+    high-frequency sharpness in most"), so crispGraze is detail 0.02, fine 0.15, elevation 6;
+    LOOK_VERSION 4; goldens updated.
+  - **Guard picks** in (guard options 2, W3 maybe, D4 / D7 kept): whites → exposure only, down until
+    nothing new blows (AIM newBlown 0); darks → room light only, up to 1. The aim applies only to the
+    side over the limit. The old paths stay as options, plus `adjust.levels.outBlack` and
+    `adjust.lift.amount`, and a run's own `limits`; CLI jobs take the guard's options
+    (`"guard": {...}`), so guard alternatives are now a plain round spec (tools/looks/guard2.json).
+  - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
+    goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. **Guard options** — https://claude.ai/artifact/KReiYc3BimztEmr1HzPgQg (picks in ArtifactData
-   "picks"): which way should the guard fix a too-bright picture (W1 soften highlights then
-   exposure / W2 exposure only) and a too-dark one (D1 raking shadow lift then room light ≤ 0.6 /
-   D2–D4 room light only ≤ 0.6 / 0.3 / 1.0)? By eye D1 turns the red panel bright orange and loses
-   the raking drama. Then set guard.js WHITES / DARKS / AMBIENT_MAX to match (re-rendered with the
-   exact baseline: tools/looks/guard-options.cjs).
-2. **Round 4** — https://claude.ai/artifact/Ckij9SS2EXVa475GXkByai (picks in "picks"): the round 3
-   keepers together (L01, F01) vs each alone, and lower (5°) / finer (0.008, 0.65) still. Rendered
-   without the guard, like round 3. Measured: the finer raking light raises fine texture a lot
-   (red panel 2.05× the photo's vs 1.49× with the old smoothing; DSC_8382 4.5× vs 2.0×), so watch
-   for grit; all versions sit ~1 stop under the photo with 0.4–0.5% pure black, as the approved
-   favourite looks always have.
+1. **Round 5** — https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB (picks in "picks", spec
+   tools/looks/round5.json): softer than now, one step at a time: graze fine 0.15 → 0.05 (02),
+   relief fine detail without round 2's ×1.4 (03), graze detail 0.02 → 0.03 (04), all three (05).
+   Measured: 02 / 05 also lift the crushed darks, but mid texture drops to 80–84% of the photo's on
+   the red panel (warning), so watch for softness.
+2. Guard: the user noted D4 / D7 "bit dark" and W3 "a bit too bright". Mostly the test cases' own
+   exposure (−0.8 / +2.5): the guard fixes clipping, not overall brightness. On the red panel room
+   light 1.0 is still just over the darks limit; ask whether a second darks step is wanted.
 3. Is the guard chip welcome (screenshots sent 10-20)?
 4. Re-attach the two plaster door photos (not in the repo); may they be kept as a private test set?
 5. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
@@ -45,16 +36,12 @@ needs the background. The plan is **docs/roadmap.md**.
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Fold the guard-options and round 4 picks in (guard.js order / cap; auto.js crispGraze, bump
-   LOOK_VERSION, `UPDATE_GOLDENS=1`).
+1. Fold the round 5 picks in (auto.js crispGraze / deeper, bump LOOK_VERSION, `UPDATE_GOLDENS=1`);
+   log them in tools/looks/picks.json. Merge the branch to `main` when the user wants.
 2. Roadmap NEXT, in order (docs/roadmap.md): in-app A/B for uploaders (Auto looks in the
    full-screen viewer, Pin as A, press-and-hold a thumbnail, bigger thumbnails); agent tools
-   (`open_image` data URLs, `render_preview` region + stats, a `compare` tool); narrower Analyze
-   cache (photo measurements apart from look fitting); faster metrics (box filters dominate,
-   ~0.7 s/MP).
-3. Check whether the guard's darks fix costs texture (raking shadow lift 60% vs 100%, fine and mid
-   detail at the same export size; an earlier 1.66 → 0.67 reading compared different sizes, so it
-   proves nothing). If it does, weigh detail in the guard once the user has chosen the order.
+   (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
+   measurements apart from look fitting); faster metrics.
 
 ## What it is
 Static, no-build, in-browser painting relighter (WebGL2, ES modules). Upload a photo of a
@@ -100,8 +87,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 2. `DIGILIGHT_BROWSER=/opt/pw-browsers/chromium python3 tools/looks/make_round.py
    tools/looks/roundN.json --photo "p:Red panel:sample:painting" --photo "d:DSC_8382:sample:dsc8382"
    --out DIR` (`--skip-existing` resumes; background it with a long timeout).
-3. Publish DIR/page with the Artifact tool (capabilities {"db": {}}, files from the script's
-   last line); the user marks Keep / Maybe / Drop + notes; read them with ArtifactData list,
+3. Publish DIR/page with the Artifact tool (capabilities {"db": {}}, root DIR/page, files from
+   the script's last line); the user marks Keep / Maybe / Drop + notes; read them with ArtifactData list,
    collection "picks"; log them in tools/looks/picks.json; fold keepers into auto.js (bump
    LOOK_VERSION, update goldens).
 
