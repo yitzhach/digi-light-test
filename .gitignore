@@ -1,3 +1,4 @@
 .wrangler
 node_modules
 tools/.install.lock
+__pycache__/
