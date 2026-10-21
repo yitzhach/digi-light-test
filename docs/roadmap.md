@@ -83,7 +83,12 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - Depth: one unknown sun elevation leaves the depth scale open (bas-relief ambiguity): take it
     from a known thickness (a plaster step), or the sun's elevation.
   - Looks on measured relief without the graze smoothing tuned for the estimate's grain (detail
-    0.02–0.03, fine 0.15): on the door it smoothed real detail (68% of the photo's fine texture).
+    0.02–0.03, fine 0.15): on the door it smoothed real detail (68% of the photo's fine texture);
+    without it the side-lamp favourite matched the real sun's texture strength (×1.0 / 1.7 / 2.0
+    fine / mid / broad against ×2.0 / 1.9 / 1.8) at correlation 0.48 / 0.56 (mid / broad).
+  - Second piece (panel with a lintel) replicated it (0.54 / 0.51 measured, about 0 today). A
+    protruding object (the lintel, a few cm) needs modelling apart: its step is not measurable from
+    shading, so its cast shadow is missing.
 - **Narrower Analyze cache.** Cache the photo measurements separately from look fitting, so a look tweak doesn't re-run the 172 s Analyze.
 - **Fixed test set plus goldens.**
   - The door photos, steel+plaster, DSC_8382 and the painting sample.

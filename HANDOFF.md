@@ -38,13 +38,18 @@ needs the background. The plan is **docs/roadmap.md**.
     from that one sunlit photo through the lamp-photo code: 0.55 / 0.60 (mid / broad) under a
     sun-like light; review page https://claude.ai/artifact/AvR9yt12cnmo3qtaL46yvG (Hold flips
     measured / estimated). Roadmap NEXT has the plan: measured relief from 2–3 phone shots in sun.
+    Second piece (panel with a wooden lintel, flat + sunlit) replicated it; the page now has both.
+    Best so far: the side-lamp favourite on measured relief with its graze smoothing off (texture as
+    strong as the real sun's, in the right places). register.py now pools brightness and colour-ratio
+    matches (the lintel pair failed on brightness alone); page.py builds the review page.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. Measured relief from sunlight: 2–3 more sunlit shots of the door with the board turned about
-   90° between them (and the plaster's thickness at the dark block's edge, for the depth)? Or
-   carry on with the one shot (sun from the upper left, depth unknown).
+1. Measured relief from sunlight: go ahead and build it into the app (roadmap NEXT)? For the lintel
+   panel: how far the lintel sticks out and how wide the panel is (gives the sun's elevation from
+   the lintel's shadow, about 14° for 2.5 cm on 50 cm, and so the true depth). More sunlit shots
+   with the board turned about 90° would give the slopes across the sun too.
 2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
    crushed on every look; the red panel just over): raise the black point a touch, or keep the
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
