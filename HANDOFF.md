@@ -20,6 +20,11 @@ needs the background. The plan is **docs/roadmap.md**.
     LOOK_VERSION 5, goldens updated (on the samples the looks fit the same exposure as the
     reviewed L04 / F03, within 0.03). Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
     were kept too: the user is near the target, so further rounds should be small steps.
+  - **Looks side by side in the app** (roadmap NEXT, first part): Auto thumbnails bigger (three
+    across on a phone); press and hold one to see it on the picture (guarded, no undo step, not
+    picked); **Compare full screen** renders Auto's looks into the batch viewer (`batch.openAuto`,
+    source "Auto looks"); the viewer's **Pin as A** makes Hold flip to that look (P, hold Space).
+    `guard.preview()` fixes a shown look without touching the undo history.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
@@ -36,8 +41,8 @@ needs the background. The plan is **docs/roadmap.md**.
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Roadmap NEXT, in order (docs/roadmap.md): in-app A/B for uploaders (Auto looks in the
-   full-screen viewer, Pin as A, press-and-hold a thumbnail, bigger thumbnails); agent tools
+1. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
+   fit-to-screen; a `?round=` link that renders a round on the user's own GPU); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
    measurements apart from look fitting); faster metrics.
 
