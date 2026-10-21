@@ -80,7 +80,12 @@ float luma(vec3 lin) { return dot(lin, vec3(0.2126, 0.7152, 0.0722)); }
 const LUMA_FS = `${HEAD}${SRGB}
 uniform sampler2D uSrc;
 void main() {
-  vec3 lin = srgbToLinear(texture(uSrc, vUV).rgb);
+  // At 1:1 the photo's own texel, not a filtered sample: the filter's fixed-point weights
+  // still leak a sliver of a neighbour into a pixel (a black one next to white came back
+  // as 1 after the round trip to linear and back).
+  vec2 at = vUV * vec2(textureSize(uSrc, 0));
+  vec3 c = all(lessThan(abs(at - gl_FragCoord.xy), vec2(0.01))) ? texelFetch(uSrc, ivec2(gl_FragCoord.xy), 0).rgb : texture(uSrc, vUV).rgb;
+  vec3 lin = srgbToLinear(c);
   outColor = vec4(lin, luma(lin));
 }`;
 

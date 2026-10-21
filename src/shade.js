@@ -245,6 +245,13 @@ vec3 acesFilm(vec3 x) {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 
+// The photo as it was, in linear light: its own texel when the render is the photo's size
+// (exports at full size), so Original on top at 100% gives the photo back bit for bit.
+vec3 photoLin() {
+  vec2 at = vUV * vec2(textureSize(uLin, 0));
+  return all(lessThan(abs(at - gl_FragCoord.xy), vec2(0.01))) ? texelFetch(uLin, ivec2(gl_FragCoord.xy), 0).rgb : texture(uLin, vUV).rgb;
+}
+
 vec3 linearToSrgb(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(max(c, 1e-5), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
 }
@@ -345,7 +352,7 @@ float poolShare(vec3 lp, float dist, float falloff) {
 void main() {
   vec2 gUV = uUVOffset + vUV * uUVScale;
   if (uSplit >= 0.0 && gUV.x < uSplit) {
-    outColor = vec4(linearToSrgb(texture(uLin, vUV).rgb), 1.0); return;
+    outColor = vec4(linearToSrgb(photoLin()), 1.0); return;
   }
   vec4 nh = texture(uNormal, vUV);
   float mask = texture(uMask, gUV).r * 2.0;
@@ -360,7 +367,7 @@ void main() {
     outColor = vec4(uHeightColour == 1 ? turbo(v) : vec3(v), 1.0); return;
   }
   if (uViewMode == 3) { outColor = vec4(linearToSrgb(texture(uAlbedo, vUV).rgb), 1.0); return; }
-  if (uViewMode == 4) { outColor = vec4(linearToSrgb(texture(uLin, vUV).rgb), 1.0); return; }
+  if (uViewMode == 4) { outColor = vec4(linearToSrgb(photoLin()), 1.0); return; }
 
   vec3 albedo = texture(uAlbedo, vUV).rgb;
 
@@ -522,7 +529,7 @@ void main() {
   vec3 col = relit;
   vec4 lmask = texture(uLayerMask, gUV);
   if (uLayerCount > 0) {
-    vec3 orig = clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0);
+    vec3 orig = clamp(linearToSrgb(photoLin()), 0.0, 1.0);
     for (int i = 0; i < ${MAX_LAYERS}; i++) {
       if (i >= uLayerCount) break;
       vec3 b = uLayerSource[i] == 0 ? orig : relit;
@@ -530,7 +537,7 @@ void main() {
     }
   }
   col = overlays(col, gUV);
-  if (uOriginalTop > 0.0) col = mix(col, clamp(linearToSrgb(texture(uLin, vUV).rgb), 0.0, 1.0), uOriginalTop);
+  if (uOriginalTop > 0.0) col = mix(col, clamp(linearToSrgb(photoLin()), 0.0, 1.0), uOriginalTop);
   float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
   col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
   outColor = vec4(col, 1.0);
