@@ -129,6 +129,26 @@ the recipe (`job`: look, preset, set, exposureAdd, scale, addLights, width, crop
 what the guard did and the metrics; `--no-record` (or a job's `"record": false`) skips it. The MCP
 `export_image` writes one too (`record: false` skips it).
 
+### Exact pictures and fingerprints
+
+DigiLight calculates, it never regenerates: every output pixel is the photo's own pixel at that
+place times light computed from the relief. With nothing changed (Original on top 100%) a
+full-size export is the photo bit for bit (tests/exact.cjs, on random noise; give it a PNG: a
+JPEG decodes a level or two differently in different software). `record()` is async and holds
+`photo.pixelsSha256`, the SHA-256 of the photo's RGBA pixels as decoded. `export`, `render` and
+`exportMany` with `hash: true` (or `metrics: true`) also return `pixels: {width, height, sha256}`,
+the fingerprint of the picture's RGBA pixels before PNG / JPEG encoding, and the CLI and MCP
+records keep it as `output.pixels`. `node tools/digilight-cli.cjs verify FILE.json [--photo PATH]
+[--out FILE]` re-renders a recorded picture from its photo and settings and says whether it is
+the same picture, pixel for pixel (exit code 1 if not; with a PNG beside the record, how many
+pixels differ and by how much).
+
+Known gap (10-21): a picture made by applying a look (Analyze, `applyLook`, the guard) can export
+differently from the same settings set directly, in some page sessions and not others: the
+red-panel sample's side-lamp favourite at 900 px came out as one of two fingerprints, speckled
+apart over most pixels (up to 99 levels), with every recorded setting and measurement the same;
+set directly, the settings give the same picture every time. Under investigation (HANDOFF.md).
+
 ## Bridges
 
 ### URL parameters (run once on open)

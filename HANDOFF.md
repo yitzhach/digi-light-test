@@ -42,14 +42,25 @@ needs the background. The plan is **docs/roadmap.md**.
     Best so far: the side-lamp favourite on measured relief with its graze smoothing off (texture as
     strong as the real sun's, in the right places). register.py now pools brightness and colour-ratio
     matches (the lintel pair failed on brightness alone); page.py builds the review page.
+  - **Exact, traceable pictures** (the user, 10-21: the app must be runnable end to end by an AI and
+    give "mathematically pixel for pixel accurate images", never a regenerated look-alike; plan in
+    docs/roadmap.md NEXT, first item). Done: (1) exact identity: Original on top 100% exports the photo
+    bit for bit (the texture filter leaked a sliver of a neighbour into dark pixels even at 1:1; now
+    the photo's own texel is read: gbuffer.js LUMA_FS, shade.js photoLin; tests/exact.cjs); (2)
+    fingerprints: `export / render / exportMany` with `hash: true` (or metrics) return
+    `pixels.sha256` (RGBA before encoding), records hold the photo's and the picture's, and
+    `digilight-cli.cjs verify FILE.json` re-renders a record and checks it pixel for pixel
+    (docs/automation.md "Exact pictures and fingerprints").
+  - **Open bug found by verify:** the same look applied the same way can export different pixels in
+    different page sessions (tests/repeat-look.cjs reproduces it; details there). Setting the
+    recorded settings directly is repeatable. So a record of a look-made picture may not verify.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. Measured relief from sunlight: the user likes it as an option for images (10-21) and asked
-   whether turning the piece between shots is just math (yes: lining up handheld shots is what
-   register.py does). Lintel panel: lintel 3/4" out, panel 20.5" wide, so the sun was 10.3° up and
-   its relief is about 1.26 mm (docs/real-light-test.md). Waiting on a go to build it into the app.
+1. (Answered 10-21: build the sun option — "I'm fine with building this out" — after the exactness
+   work.) Lintel panel: lintel 3/4" out, panel 20.5" wide, sun 10.3° up; the user says its relief goes
+   up to about 1/8" (the photos gave 2.3–3.05 mm). Depth in the app: ask the artist's deepest relief.
 2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
    crushed on every look; the red panel just over): raise the black point a touch, or keep the
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
@@ -64,9 +75,17 @@ needs the background. The plan is **docs/roadmap.md**.
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. With the user's answer on sunlight: a sun lamp and handheld lining up in the lamp-photo tool
-   (roadmap NEXT, "Measured relief from sunlight"); looks without graze smoothing on measured relief.
-2. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
+1. Fix the look-path repeatability bug (tests/repeat-look.cjs must pass, then add it to the routine
+   tests). Leads: after applyLook + guard, every JSON-able state field equals the setSettings path,
+   so look for GPU-side state the export reuses: gbuffer.js caches (buildGraze / buildShadow /
+   buildStroke keyed by sigma only?), `builtSurface` / `strokeMeasuredAt`, textures left from the
+   guard's many renderNow calls; try `api.dirty()` + renderNow before the export; bisect (skip the
+   guard; skip analyzeCached; applyLook strength 1 vs setSettings of its target).
+2. The rest of the exactness plan (roadmap NEXT): a change map (how much each pixel's light changed),
+   GPU and software GL agreeing within a stated tolerance, then the sun option (handheld lining up
+   in the app, a sun lamp, broad forms kept, depth from the artist's number, looks without graze
+   smoothing on measured relief), all drivable through the CLI / MCP with the same checks.
+3. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
    fit-to-screen; a `?round=` link that renders a round on the user's own GPU); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
    measurements apart from look fitting); faster metrics.
@@ -106,6 +125,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   look change → `UPDATE_GOLDENS=1 node tests/browser.cjs`, commit the file with the change.
 - `cd tools && npm install` once, then `node tests/mcp.cjs` (`--full` adds Analyze)
 - `node tests/measure.mjs` (measure.js against slow reference maths; no browser, <1 s)
+- `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; ~1 min)
+- `node tests/repeat-look.cjs [runs]` (the open repeatability bug: fails until fixed)
 - Do not edit `src/` while a test or a render runs: later test blocks and each CLI run load it
   fresh. Render from a snapshot (`git archive HEAD | tar -x -C DIR`, copy tools/node_modules).
 
