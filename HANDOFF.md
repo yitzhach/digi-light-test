@@ -6,7 +6,7 @@ the upgrade phases, done lists) is kept verbatim in **docs/history.md**; search 
 needs the background. The plan is **docs/roadmap.md**.
 
 ## Now
-- **10-21 (branch `claude/quirky-allen-tna7jh`, not yet on `main`):**
+- **10-21 (merged to `main`):**
   - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much
     high-frequency sharpness in most"), so crispGraze is detail 0.02, fine 0.15, elevation 6;
     LOOK_VERSION 4; goldens updated.
@@ -17,7 +17,8 @@ needs the background. The plan is **docs/roadmap.md**.
     (`"guard": {...}`), so guard alternatives are now a plain round spec (tools/looks/guard2.json).
   - **Round 5 picks** in (https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB): softer per look.
     Side lamp: graze detail 0.03 (L04); from the left: fine relief without round 2's ×1.4 (F03);
-    LOOK_VERSION 5. Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
+    LOOK_VERSION 5, goldens updated (on the samples the looks fit the same exposure as the
+    reviewed L04 / F03, within 0.03). Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
     were kept too: the user is near the target, so further rounds should be small steps.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
@@ -35,8 +36,7 @@ needs the background. The plan is **docs/roadmap.md**.
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Merge the branch to `main` when the user wants (update this file then).
-2. Roadmap NEXT, in order (docs/roadmap.md): in-app A/B for uploaders (Auto looks in the
+1. Roadmap NEXT, in order (docs/roadmap.md): in-app A/B for uploaders (Auto looks in the
    full-screen viewer, Pin as A, press-and-hold a thumbnail, bigger thumbnails); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
    measurements apart from look fitting); faster metrics.
