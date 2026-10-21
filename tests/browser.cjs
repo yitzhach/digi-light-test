@@ -101,6 +101,28 @@ const mix=await page.evaluate(async()=>{const {mixSettings}=await import('/src/a
 assert.deepEqual(mix,{n:2,x:.5,p:[3,4],g:[10,.4],layers:1,strokes:1,angle:0},JSON.stringify(mix));
 await page.evaluate(p=>{__studio.restore(JSON.parse(p));__studio.checkpoint();},pre);await settle();
 console.log('PASS Auto: Analyze leaves settings, looks for this photo, saved and loaded (cache), pick, Strength mix, Undo, saved preset adapted',JSON.stringify({depth:A.depth,rake:A.rake,looks:A.n}));}
+// Auto looks side by side: press and hold a look shows it until let go (no undo step, not picked);
+// Compare full screen renders the looks in the batch viewer; Pin as A makes Hold flip to that look.
+{const before=await page.evaluate(()=>JSON.stringify(__studio.snapshot())),hi=await page.evaluate(()=>__studio.history.index),act=await page.evaluate(()=>__studio.auto.active?.index??null);
+const tile=page.locator('#autoLooks .autoLook').nth(1);await tile.scrollIntoViewIfNeeded();const tb=await tile.boundingBox();
+await page.mouse.move(tb.x+tb.width/2,tb.y+tb.height/2);await page.mouse.down();await page.waitForTimeout(700);
+const during=await page.evaluate(()=>({snap:JSON.stringify(__studio.snapshot()),held:!!document.querySelector('#autoLooks .autoLook.held'),hist:__studio.history.index}));
+await page.mouse.up();await page.waitForTimeout(500);
+const after=await page.evaluate(()=>({snap:JSON.stringify(__studio.snapshot()),held:!!document.querySelector('#autoLooks .autoLook.held'),hist:__studio.history.index,act:__studio.auto.active?.index??null}));
+assert.ok(during.held&&during.snap!==before&&during.hist===hi,'holding shows the look');assert.equal(after.snap,before,'let go: back as it was');assert.ok(!after.held&&after.hist===hi&&after.act===act,'not picked, no undo step');
+await page.evaluate(()=>{document.querySelector('#batchDetail').value='fast';});
+await page.click('#autoCompare');await page.waitForFunction(()=>!document.querySelector('#batchViewer').hidden,null,{timeout:300000});
+const v=await page.evaluate(()=>{const A=__studio.auto.analysis,b=__batch.batch;return {n:b.items.length,names:b.items.map(i=>i.name),want:A.items.map(i=>i.name),exp:b.items[1].settings.exposure,wantExp:A.items[0].settings.exposure,src:document.querySelector('#batchSource').value};});
+assert.equal(v.src,'auto');assert.equal(v.n,Math.min(10,v.want.length+1));assert.equal(v.names[0],'Current look');assert.deepEqual(v.names.slice(1),v.want.slice(0,v.n-1));assert.equal(v.exp,v.wantExp,'a look as Auto made it');
+assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before);assert.equal(await page.evaluate(()=>__studio.history.index),hi);
+const src=()=>page.evaluate(()=>({img:document.querySelector('#bvImg').src,tag:document.querySelector('#bvTag').textContent,hold:document.querySelector('#bvHold').textContent}));
+await page.evaluate(()=>__batch.viewer.go(1));await page.click('#bvPin');assert.equal(await page.textContent('#bvPin'),'Unpin A');assert.equal(await page.evaluate(()=>__batch.viewer.pinned),1);
+await page.click('#bvNext');const hb=await page.locator('#bvHold').boundingBox();assert.match((await src()).hold,/Hold: A \(02\)/);
+await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await page.mouse.down();const held=await src();await page.mouse.up();const back=await src();
+const urls=await page.evaluate(()=>__batch.batch.items.map(i=>i.url));
+assert.equal(held.img,urls[1]);assert.equal(held.tag,'A · LOOK 02');assert.equal(back.img,urls[2]);
+await page.keyboard.press('p');assert.equal(await page.evaluate(()=>__batch.viewer.pinned),2,'P pins the look on screen');await page.keyboard.press('p');assert.equal(await page.evaluate(()=>__batch.viewer.pinned),null);
+await page.click('#bvClose');await page.evaluate(()=>{const s=document.querySelector('#batchSource');s.value='sweep';s.dispatchEvent(new Event('change'));document.querySelector('#batchDetail').value='sharp';});console.log('PASS Auto looks: press and hold previews, Compare full screen, Pin as A',v.n);}
 await page.selectOption('#lightingPreset','Raking light');await settle();const after=await pixels();
 await page.click('#compare');await settle();const before=await pixels();assert.notEqual(after,before);assert.equal(await setting('viewMode'),4);
 await page.click('#compare');await settle();assert.equal(await pixels(),after);

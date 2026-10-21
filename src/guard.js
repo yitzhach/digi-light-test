@@ -119,8 +119,9 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
   }
   // whites / darks: which settings it moves, in order (WHITES / DARKS by default); ambientMax caps
   // the room light; limits ({newBlown, newCrushed}) replaces the limits it aims under. Kept as
-  // options so alternatives can be rendered side by side for the user.
-  function guard({ fix = true, amend = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX, limits } = {}) {
+  // options so alternatives can be rendered side by side for the user. record false leaves the
+  // undo history alone (a look shown for a moment, a batch preview).
+  function guard({ fix = true, amend = true, record = true, whites = WHITES, darks = DARKS, ambientMax = AMBIENT_MAX, limits } = {}) {
     if (!api.source() || state.mode !== 'single' || state.exporting) return null;
     const limit = { ...LIMITS, ...limits };
     lim = limit;
@@ -151,7 +152,7 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     restore(base);
     const after = check();
     lim = limit;
-    if (Object.keys(changes).length) {
+    if (record && Object.keys(changes).length) {
       if (amend && history.index >= 0) history.entries[history.index] = JSON.stringify(snapshot());
       else history.push(snapshot());
       historyUI?.();
@@ -208,6 +209,9 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     check, run, LIMITS, enabled: true, last: null,
     // One-tap changes call this after their checkpoint: fixed at once, same undo step.
     afterOneTap: () => (api_.enabled ? run({ amend: true }) : null),
+    // A look shown without being applied (Auto's press and hold, batch previews): fixed the same
+    // way, kept out of the undo history.
+    preview: () => (api_.enabled ? run({ record: false }) : null),
   };
   return api_;
 }

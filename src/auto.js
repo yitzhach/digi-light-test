@@ -127,16 +127,17 @@ export function keySide(lights, side) {
 const mirrorAngle = (deg) => ((180 - deg) % 360 + 360) % 360;
 
 export function initAuto({ state, api, before, snapshot, restore, checkpoint, setBatching, makeLight, lighting, grazePresets, looks, LOOK_KEYS, LOOK_NEUTRAL,
-  findRaking, userPresets, presetSettings, userProjects, projectSettings, currentProject, unmasked, guard }) {
+  findRaking, userPresets, presetSettings, userProjects, projectSettings, currentProject, unmasked, guard, compare }) {
   const $ = (id) => document.getElementById(id);
   const box = document.createElement('details'); box.className = 'sectionDetails'; box.id = 'autoSection'; box.open = true;
   box.innerHTML = `<summary>Auto · analyze and pick a look</summary><div class="grp">
     <div class="views"><button id="autoAnalyze" class="primary">Analyze</button><button id="autoUndo" title="Undo the last change ( Ctrl/Cmd Z )">↶ Undo</button></div>
     <p class="note" id="autoReadout">Reads this photo (brightness, clipping, colour, light, stroke contrast and direction) and makes a set of one-tap looks for it.</p>
     <div id="autoLooks" class="autoLooks" role="list"></div>
+    <div class="views" id="autoCompareRow" hidden><button id="autoCompare" type="button">Compare full screen</button></div>
     <div class="row" id="autoStrengthRow"><label for="autoStrength">Strength</label><input id="autoStrength" type="range" min="0" max="1" step="0.01" value="1" disabled><output data-own>100%</output></div>
     <div class="row" id="autoOpacityRow" title="How much of the whole effect shows over the original photo (the same as Original on top in Layers, turned round)"><label for="autoOpacity">Opacity</label><input id="autoOpacity" type="range" min="0" max="1" step="0.01" value="1"><output data-own>100%</output></div>
-    <p class="note" id="autoNote">Tap a look to use it. Strength mixes it with the settings you had before (light, graze, tone); Opacity fades the whole effect into the original photo. Every slider stays in the other tools.</p></div>`;
+    <p class="note" id="autoNote">Tap a look to use it; press and hold one to see it on the picture until you let go. Strength mixes it with the settings you had before (light, graze, tone); Opacity fades the whole effect into the original photo. Every slider stays in the other tools.</p></div>`;
   before.before(box);
 
   let A = null, active = null, running = false;
@@ -370,23 +371,59 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
       const b = document.createElement('button'); b.type = 'button'; b.className = 'autoLook' + (it.kind !== 'built-in' ? ' mine' : '') + (active?.index === i ? ' on' : '');
       b.setAttribute('role', 'listitem'); b.title = `${it.note}. Exposure ${it.settings.exposure > 0 ? '+' : ''}${it.settings.exposure.toFixed(2)}`;
       b.append(it.thumb); const span = document.createElement('span'); span.textContent = it.name; b.append(span);
-      b.onclick = () => pick(i);
+      b.onclick = () => { if (held?.shown) { held = null; return; } pick(i); };
+      b.addEventListener('pointerdown', (e) => { if (e.button === 0) holdStart(i, b); });
+      for (const k of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(k, holdEnd);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
       grid.append(b);
     }
+    $('autoCompareRow').hidden = !A?.items?.length || !compare;
   }
+  // Press and hold a look: the picture shows it until the press ends, then goes back as it was
+  // (no undo step, nothing kept). A short tap still picks it.
+  let held = null;
+  const HOLD_MS = 350;
+  function holdStart(i, b) {
+    if (!A || running || state.exporting) return;
+    holdEnd();
+    held = { i, b, timer: setTimeout(() => {
+      if (!held || running || state.exporting) return;
+      held.keep = snapshot(); held.shown = true; b.classList.add('held');
+      // Guarded as a tap would be, so it shows what a tap gives (nothing goes in the undo history).
+      restore(targetFor(i, held.keep)); api.dirty(); guard?.()?.preview?.(); api.render();
+      $('autoNote').textContent = `Showing ${A.items[i].name} while you hold. Let go to go back; tap to use it.`;
+    }, HOLD_MS) };
+  }
+  function holdEnd() {
+    if (!held) return;
+    clearTimeout(held.timer);
+    if (!held.shown) { held = null; return; }
+    if (held.keep) { restore(held.keep); api.dirty(); api.render(); held.keep = null; held.b.classList.remove('held'); }
+    // `held` stays (shown) until the click that ends the press arrives, so it does not pick.
+    setTimeout(() => { held = null; }, 400);
+  }
+  $('autoCompare').onclick = async () => {
+    const b = $('autoCompare'); if (b.disabled) return;
+    b.disabled = true;
+    try { await compare?.((m) => { $('autoNote').textContent = m; }); } finally { b.disabled = false; }
+  };
 
+  // Look i as made for this photo, put on `from`: the photo's own keys (width, Photo was lit, brush
+  // corrections) as they are in `from`; built-in looks keep its layers, Colour tool and overlays,
+  // a saved preset or project brings its own.
+  function targetFor(i, from) {
+    const it = A.items[i], target = clone(it.settings);
+    for (const k of IMAGE_KEYS) if (k in from && k !== 'physical') target[k] = clone(from[k]);   // looks use calibrated depth
+    if (it.kind === 'built-in') { for (const k of ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden']) if (k in from) target[k] = clone(from[k]); target.originalTop = from.originalTop ?? 0; }
+    return target;
+  }
   // Picking: the look is mixed with the settings it replaces. Tapping another look keeps
   // the same starting point, unless the settings were changed by hand since.
   function pick(i) {
     if (!A || running || state.exporting) return;
     const now = JSON.stringify(snapshot());
     const from = active && now === active.applied ? active.from : JSON.parse(now);
-    // The look as made for this photo, on the current brush corrections and layers.
-    // Built-in looks keep your layers; a saved preset or project brings its own.
-    // The photo's own keys (width, Photo was lit, brush corrections) are as they are now.
-    const it = A.items[i], target = clone(it.settings);
-    for (const k of IMAGE_KEYS) if (k in from && k !== 'physical') target[k] = clone(from[k]);   // looks use calibrated depth
-    if (it.kind === 'built-in') { for (const k of ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden']) if (k in from) target[k] = clone(from[k]); target.originalTop = from.originalTop ?? 0; }
+    const target = targetFor(i, from);
     active = { index: i, from, target, applied: '' };
     $('autoStrength').disabled = false; $('autoStrength').value = 1;
     apply(1); checkpoint();
@@ -435,5 +472,5 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
     A = null; active = null; drawLooks(); $('autoStrength').disabled = true;
     status('New photo: Analyze to make looks for it.');
   });
-  return { analyze, save, load, pick, get analysis() { return A; }, get active() { return active; }, setStrength: (s) => { if (active) { $('autoStrength').value = s; apply(s); } } };
+  return { analyze, save, load, pick, targetFor, get analysis() { return A; }, get active() { return active; }, setStrength: (s) => { if (active) { $('autoStrength').value = s; apply(s); } } };
 }

@@ -783,7 +783,8 @@ export function initStudio(api) {
   // Profile · height map: height profiles, roughness numbers, colour height map (probe.js).
   const probe=initProbe({state,api,after:$('lampSection')});
   // Batch preview: rate several looks, export the chosen ones (batch.js).
-  initBatch({state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
+  // auto and guard are made below; the batch reaches them when it runs.
+  const batch=initBatch({auto:()=>auto,guard:()=>guard,state,api,after:$('projectName').closest('.sectionDetails'),snapshot,restore,setBatching:v=>{batching=v;},useLighting,lighting,grazePresets,
     userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,checkpoint,FILL_MAX,GRAZE_AMBIENT,
     // A picked look saved as a project variation (photo, its settings, measured relief), to reopen later.
     saveLook:async(name,id)=>{const p=await project();p.id=id||crypto.randomUUID();p.name=`${($('projectName').value.trim()||'Untitled painting').slice(0,70)} — ${name}`.slice(0,120);await storage('projects','readwrite',s=>s.put(p));return p.id;},
@@ -792,7 +793,7 @@ export function initStudio(api) {
   const guard=initGuard({state,api,snapshot,restore,history,historyUI,$});
   const oneTap=()=>{checkpoint();return guard.afterOneTap();};
   // Auto: Analyze, then one-tap looks made for this photo (auto.js).
-  const auto=initAuto({guard:()=>({afterOneTap:oneTap}),state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
+  const auto=initAuto({guard:()=>({afterOneTap:oneTap,preview:guard.preview}),compare:say=>batch.openAuto(say),state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
     findRaking,userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,
     userProjects:()=>storage('projects','readonly',s=>s.getAll()),projectSettings:p=>validate(p),currentProject:()=>projectId,unmasked});
   buildSaveExport();
