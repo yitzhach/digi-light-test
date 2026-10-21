@@ -981,7 +981,7 @@ assert.equal(r.unguarded,2.5);assert.ok(!r.check.ok&&!r.check.fixed,JSON.stringi
 assert.deepEqual(r.split.before,r.check.before,'Split view: the relit picture is judged');assert.equal(r.splitKept,0.5,'and the view is left as it was');
 assert.ok(!r.chip[0]&&/newly blown/.test(r.chip[1]),'chip shows what clips '+JSON.stringify(r.chip));
 assert.ok((r.fix[0]<2.5||r.fix[1]>r.start[1])&&r.fix[2]===1&&/Fixed/.test(r.fix[3]),'Fix: one undo step '+JSON.stringify(r.fix));assert.equal(r.fixUndone,2.5);
-assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&/^Guard: room light /.test(r.dark.note),'darks lifted '+JSON.stringify(r.dark));
+assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&r.dark.after.newCrushed<=0.00075&&/^Guard: room light /.test(r.dark.note),'darks lifted to half the limit '+JSON.stringify(r.dark));
 assert.ok(!r.short.ok&&r.short.fixed&&r.shortAmbient===0.01&&r.short.after.newCrushed<r.short.before.newCrushed&&/still over the limit/.test(r.short.note),'short of the limit: applied '+JSON.stringify([r.shortAmbient,r.short]));
 await ctx.close();console.log('PASS guard: whites and darks brought back in the same undo step, off switch, chip and Fix',JSON.stringify({note:r.g.note,dark:r.dark&&r.dark.note}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();

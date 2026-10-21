@@ -17,8 +17,11 @@ import { CLIP_HI, CLIP_LO, LIMITS } from './measure.js';
 const AMBIENT_MAX = 1;
 const WHITES = ['exposure'], DARKS = ['ambient'];
 // What a fix aims under, once a picture is over LIMITS: whites all the way back to the photo's
-// (stopping just under the limit left pictures that read as too bright), darks just under.
-const AIM = { newBlown: 0 };
+// (stopping just under the limit left pictures that read as too bright); darks at half the
+// limit, because the guard judges at the preview's size and fine dark specks it averages away
+// come back at full size (on the user's plaster door, 10-21, every look the guard brought to
+// 0.15% exported at 0.25–0.26%), and the user found the room-light fixes a bit dark.
+const AIM = { newBlown: 0, newCrushed: LIMITS.newCrushed / 2 };
 // How far each may go, and its step: [to, grid].
 // Output black and Lift darks (the Colour tool's Levels and Lift darks) are options for now
 // (10-21: the user found the room-light fixes too bright); they lift the deepest tones only.

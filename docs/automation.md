@@ -102,7 +102,9 @@ Every change through `window.digilight` (`set`, `setSettings`, `applyLook`, `app
 `addLight`, `removeLight`) is checked against the photo at the preview's size (`src/guard.js`).
 If it newly blows more than 0.3% of the picture to white or crushes more than 0.15% to black,
 the guard moves settings in the same undo step (the user's picks, 10-21): exposure, down until
-nothing new blows, for whites; room light (Ambient, up to 1), just far enough, for darks. `set` returns the values after it, `lastGuard()` what it
+nothing new blows, for whites; room light (Ambient, up to 1) until half the darks limit (it
+judges at the preview's size; full size shows a few more dark specks), for darks; and when
+that room light blows whites, exposure back down to the whites limit. `set` returns the values after it, `lastGuard()` what it
 did (`{ok, fixed, before, after, changes: {path: [from, to]}, note}`, e.g. "Guard: exposure +2.50
 → +1.95"), and `applyLook` / `applyPreset` add `guard: note`. `guard({fix})` checks the picture as
 it stands (`fix: false` only reports; `whites` / `darks` name the settings to move, in order, and
