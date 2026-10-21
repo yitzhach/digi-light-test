@@ -15,29 +15,27 @@ needs the background. The plan is **docs/roadmap.md**.
     side over the limit. The old paths stay as options, plus `adjust.levels.outBlack` and
     `adjust.lift.amount`, and a run's own `limits`; CLI jobs take the guard's options
     (`"guard": {...}`), so guard alternatives are now a plain round spec (tools/looks/guard2.json).
+  - **Round 5 picks** in (https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB): softer per look.
+    Side lamp: graze detail 0.03 (L04); from the left: fine relief without round 2's ×1.4 (F03);
+    LOOK_VERSION 5. Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
+    were kept too: the user is near the target, so further rounds should be small steps.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
-1. **Round 5** — https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB (picks in "picks", spec
-   tools/looks/round5.json): softer than now, one step at a time: graze fine 0.15 → 0.05 (02),
-   relief fine detail without round 2's ×1.4 (03), graze detail 0.02 → 0.03 (04), all three (05).
-   Measured: 02 / 05 also lift the crushed darks, but mid texture drops to 80–84% of the photo's on
-   the red panel (warning), so watch for softness.
-2. Guard: the user noted D4 / D7 "bit dark" and W3 "a bit too bright". Mostly the test cases' own
+1. Guard: the user noted D4 / D7 "bit dark" and W3 "a bit too bright". Mostly the test cases' own
    exposure (−0.8 / +2.5): the guard fixes clipping, not overall brightness. On the red panel room
    light 1.0 is still just over the darks limit; ask whether a second darks step is wanted.
-3. Is the guard chip welcome (screenshots sent 10-20)?
-4. Re-attach the two plaster door photos (not in the repo); may they be kept as a private test set?
-5. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
+2. Is the guard chip welcome (screenshots sent 10-20)?
+3. Re-attach the two plaster door photos (not in the repo); may they be kept as a private test set?
+4. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
    phone or iMac, default look for uploaders, 16-bit / TIFF output.
-6. Older, still open (details in docs/history.md): confirm the Shadow light picks (Shade vs
+5. Older, still open (details in docs/history.md): confirm the Shadow light picks (Shade vs
    Negative light; more shade shapes?); overlay defaults (grain 35%, vignette 50%); Broad form
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Fold the round 5 picks in (auto.js crispGraze / deeper, bump LOOK_VERSION, `UPDATE_GOLDENS=1`);
-   log them in tools/looks/picks.json. Merge the branch to `main` when the user wants.
+1. Merge the branch to `main` when the user wants (update this file then).
 2. Roadmap NEXT, in order (docs/roadmap.md): in-app A/B for uploaders (Auto looks in the
    full-screen viewer, Pin as A, press-and-hold a thumbnail, bigger thumbnails); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
