@@ -80,8 +80,10 @@ where in the code it lives. **Done 10-19** marks what the same session already b
     distance falloff; Fit depth with it (it fails with a far point lamp today).
   - Keep broad forms for sun shots (DRIFT_SIGMA drops anything over 6% of the width, for a lamp's
     uneven beam; sunlight is even).
-  - Depth: one unknown sun elevation leaves the depth scale open (bas-relief ambiguity): take it
-    from a known thickness (a plaster step), or the sun's elevation.
+  - Depth: one unknown sun elevation leaves the depth scale open (bas-relief ambiguity). Simplest:
+    ask the artist how deep the relief goes at most and scale the measured full range to it (on
+    the lintel panel the user said about 1/8"; one shadow plus the panel's width gave 2.3–3.05 mm
+    from the photos alone). Or the sun's elevation from a shadow of a known height.
   - Looks on measured relief without the graze smoothing tuned for the estimate's grain (detail
     0.02–0.03, fine 0.15): on the door it smoothed real detail (68% of the photo's fine texture);
     without it the side-lamp favourite matched the real sun's texture strength (×1.0 / 1.7 / 2.0

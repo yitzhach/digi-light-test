@@ -101,6 +101,12 @@ matching (174 inliers, median 0.9 px; brightness alone had kept 6 of 18, see reg
   stood **10.3°** above the face (11.9° / 13.6° if the block under the lintel sits 1/8" / 1/4"
   lower than the plaster it is fixed to). The measurement below assumed 20° and a 50 cm width, so
   its depth is about twice too deep: 2.43 mm → **1.26 mm** (× tan 10.3° / tan 20° × 52.07 / 50).
+- Check against the artist: the user says the panel's relief goes up to about 1/8" (3.2 mm). The
+  measured height map's full range (lowest to highest, 2% margin left out) is 2.29 mm with the sun
+  at 10.3°, 2.66 mm at 11.9°, 3.05 mm at 13.6° (the 2–98% spread: 1.26 / 1.46 / 1.67 mm). So the
+  depth from one sunlit photo plus one shadow and the panel's width lands at 72–96% of the
+  artist's figure, independently of the photos; a little short, as expected: the measurement drops
+  forms broader than 6% of the width and reads nothing where the sun cast shadows.
 - Today's relief, the same as on the door: light-and-shade correlation with the sun 0.04 / 0.10 /
   0.12 / 0.14 under a sun-like light (graze 47°, 20°, unsmoothed), about 0 for the looks.
 - Measured relief (`measure_sun.cjs … 20 47 50`: lined up 0.5 px, 2.43 mm, 2.5% glints):
