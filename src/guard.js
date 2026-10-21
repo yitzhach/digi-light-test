@@ -149,6 +149,13 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
     if (crushed || !darksOK(m)) {
       for (const p of darks) if (!darksOK(m) && (p !== 'graze.lift' || (base.graze?.enabled && base.graze.opacity > 0))) m = move(p, ...MOVES[p](base, ambientMax), darksOK) || m;
     }
+    // Room light lifts the lights too: when the darks fix blows whites the picture did not have
+    // (bright plaster under Long shadows, 10-21), exposure comes back down to the limit; the darks
+    // may then fall a little short, and the note says so.
+    lim = limit;
+    if (crushed && !blown && !whitesOK(m)) {
+      for (const p of whites) if (!whitesOK(m)) m = move(p, ...MOVES[p](base, ambientMax), whitesOK) || m;
+    }
     restore(base);
     const after = check();
     lim = limit;
