@@ -77,11 +77,11 @@ const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kin
   try{await d.applyLook('nope');}catch(e){out.bad=e.message;}
   const h=__studio.history.index;out.applied=await d.applyLook('raking-texture');out.angle=__bench.state.graze.angle;out.steps=__studio.history.index-h;await d.undo();out.back=JSON.stringify(__studio.snapshot());return out;});
  assert.deepEqual(L.ids.map(l=>l[0]),['gallery','gallery-spot','matched','matched-raking','favourite','favourite-left','favourite-side-lamp','raking-texture','long-shadows','soft-window','museum-spot']);
- assert.deepEqual(L.ids.find(l=>l[0]==='favourite-side-lamp'),['favourite-side-lamp',4]);assert.match(L.bad,/No look "nope".*Raking texture \(raking-texture\)/);
+ assert.deepEqual(L.ids.find(l=>l[0]==='favourite-side-lamp'),['favourite-side-lamp',5]);assert.match(L.bad,/No look "nope".*Raking texture \(raking-texture\)/);
  assert.ok(L.applied.id==='raking-texture'&&L.applied.look==='Raking texture'&&L.angle===A.rake&&L.steps===1,JSON.stringify(L.applied));assert.equal(L.back,pre,'undo');
  console.log('PASS built-in looks: fixed ids and versions, applyLook by id');}
 // Round 2's keepers in the favourite looks: deeper relief over the fitted depth (auto.js deeper()).
-for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,0.02,0.15],'round 4: lower raking, old smoothing '+n);}
+for(const n of ['Favourite, side lamp left','Favourite, from the left']){const f=A.items.find(i=>i.name===n);assert.ok(f&&f.depth===Math.min(10,Math.round(A.depth*1.65*100)/100)&&f.g,n+' '+JSON.stringify(f));assert.deepEqual(f.rake,[6,n==='Favourite, side lamp left'?0.03:0.02,0.15],'round 5: lower raking, side lamp smoothed more '+n);}
 const rk=A.items.find(i=>i.name==='Raking texture');assert.ok(rk.g&&rk.angle===A.rake&&rk.depth===A.depth&&Math.abs(rk.exp)<=3);
 await page.locator('.autoLook',{hasText:'Raking texture'}).click();await settle();
 const on=await page.evaluate(()=>{const s=__bench.state;return {g:s.graze.enabled,angle:s.graze.angle,depth:s.textureDepthMm,exp:s.exposure,op:s.graze.opacity,tile:document.querySelector('.autoLook.on span').textContent};});

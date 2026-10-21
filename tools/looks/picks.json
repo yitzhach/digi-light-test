@@ -68,5 +68,18 @@
   },
   "notes": { "D4": "bit dark", "D7": "bit dark", "W3": "a bit too bright" },
   "note": "Spec tools/looks/guard2.json. Went into guard.js: whites exposure only, aiming at 0 newly blown; darks room light only, up to 1.0. The 'bit dark' / 'a bit too bright' is mostly the test cases' own exposure (-0.8 / +2.5): the guard fixes clipping, not overall brightness."
+ },
+ "round5": {
+  "page": "https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB",
+  "date": "2026-10-21",
+  "keep": ["L01", "L04", "L05", "F01", "F03"],
+  "maybe": [],
+  "drop": [],
+  "names": {
+   "L01": "Side lamp left, now (round 4's L02)", "L04": "Raking light smoothed a little more (0.03)", "L05": "All three softer",
+   "F01": "From the left, now", "F03": "From the left, relief fine detail without the ×1.4"
+  },
+  "notes": { "F02": "Blurry" },
+  "note": "Spec tools/looks/round5.json. Went in per look: side lamp graze detail 0.03 (L04), from the left fine relief without round 2's ×1.4 (F03); LOOK_VERSION 5. Raking fine 0.05 left out (F02 'Blurry', part of L05)."
  }
 }
