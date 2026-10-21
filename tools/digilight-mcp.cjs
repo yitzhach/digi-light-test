@@ -118,7 +118,7 @@ const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
     'DigiLight relights a photo of a painting with virtual lamps over its estimated paint relief (impasto).',
     'Typical flow: open_image → analyze (slow: 1–3 min) → apply_look → render_preview to see it → set_settings to adjust → render_preview again → export_image.',
     'Fixed presets (apply_preset) need no analyze. describe_settings lists every setting with its range; set_settings checks values and changes nothing on an error.',
-    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture). Each change is guarded: if it would blow whites or crush darks, highlight rolloff / exposure / shadow lift / room light are moved just enough to stop it, in the same undo step, and the answer says so ("Guard: exposure +0.80 → +0.55"). guard checks and fixes on request; set_guard turns it off when the user really wants the clipping.',
+    'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture). Each change is guarded: if it would blow whites or crush darks, exposure (whites) or room light (darks) is moved to stop it, in the same undo step, and the answer says so ("Guard: exposure +0.80 → +0.55"). guard checks and fixes on request; set_guard turns it off when the user really wants the clipping.',
   ].join(' '),
 });
 
@@ -238,7 +238,7 @@ server.registerTool('remove_light', {
 
 server.registerTool('guard', {
   title: 'Check whites and darks',
-  description: 'Checks the picture as it stands against the photo: share of pixels newly blown to white / crushed to black, limits 0.3% / 0.15%. With fix (default true) it brings them back under the limits (highlight rolloff, then exposure; shadow lift, then room light), as one undo step, and says what it moved.',
+  description: 'Checks the picture as it stands against the photo: share of pixels newly blown to white / crushed to black, limits 0.3% / 0.15%. With fix (default true) it brings them back under the limits (exposure down until nothing new blows; room light up to 1), as one undo step, and says what it moved.',
   inputSchema: { fix: z.boolean().optional() },
 }, tool(async ({ call }, { fix }) => { await needOpen(call); exported = null; return call('guard', { fix: fix !== false }); }));
 

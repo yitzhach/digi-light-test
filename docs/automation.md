@@ -101,13 +101,14 @@ two off, and on a bright painting that alone counted half a percent as newly blo
 Every change through `window.digilight` (`set`, `setSettings`, `applyLook`, `applyPreset`,
 `addLight`, `removeLight`) is checked against the photo at the preview's size (`src/guard.js`).
 If it newly blows more than 0.3% of the picture to white or crushes more than 0.15% to black,
-the guard moves settings just far enough to stop it, in the same undo step: Highlight rolloff
-(up to 1), then exposure, for whites; the raking light's Shadow lift (when it shows), then room
-light (Ambient, at most 0.6), for darks. `set` returns the values after it, `lastGuard()` what it
+the guard moves settings in the same undo step (the user's picks, 10-21): exposure, down until
+nothing new blows, for whites; room light (Ambient, up to 1), just far enough, for darks. `set` returns the values after it, `lastGuard()` what it
 did (`{ok, fixed, before, after, changes: {path: [from, to]}, note}`, e.g. "Guard: exposure +2.50
 → +1.95"), and `applyLook` / `applyPreset` add `guard: note`. `guard({fix})` checks the picture as
 it stands (`fix: false` only reports; `whites` / `darks` name the settings to move, in order, and
-`ambientMax` caps the room light, for trying other ways); `setGuard(false)` turns it off. When even
+`ambientMax` caps the room light, `limits` ({newBlown, newCrushed}) sets what it aims under,
+for trying other ways; besides those it moves `highlightRolloff`, `graze.lift`,
+`adjust.levels.outBlack` and `adjust.lift.amount`); `setGuard(false)` turns it off. When even
 the furthest a setting may go is not enough, the guard still applies it and says it fell short. In the app, tapped looks
 and presets are guarded the same way; a hand-moved slider never is: a chip on the picture says
 what clips, with Fix. The CLI guards each job once after all its options (`"guard"` in the

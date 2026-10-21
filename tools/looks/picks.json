@@ -55,5 +55,18 @@
   "drop": [],
   "names": { "D4": "Room light only, up to 1.0 (stronger)" },
   "note": "User: the options were 'mostly a bit off or too bright'; no whites option picked. Guard order unchanged until a second options page."
+ },
+ "guard2": {
+  "page": "https://claude.ai/artifact/VttrEso56QaLaPYjcFEX6x",
+  "date": "2026-10-21",
+  "keep": ["D4", "D7"],
+  "maybe": ["W3"],
+  "drop": [],
+  "names": {
+   "D4": "Room light only, up to 1.0", "D7": "Room light up to 1.0, allowing 0.5% crushed",
+   "W3": "Exposure only, until nothing new blows"
+  },
+  "notes": { "D4": "bit dark", "D7": "bit dark", "W3": "a bit too bright" },
+  "note": "Spec tools/looks/guard2.json. Went into guard.js: whites exposure only, aiming at 0 newly blown; darks room light only, up to 1.0. The 'bit dark' / 'a bit too bright' is mostly the test cases' own exposure (-0.8 / +2.5): the guard fixes clipping, not overall brightness."
  }
 }
