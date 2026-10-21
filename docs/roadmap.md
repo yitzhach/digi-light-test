@@ -68,6 +68,22 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - `render_preview` takes `region` and returns `stats`.
   - A `compare` tool returns an A|B crop pair plus the difference.
   - `batch_render`.
+- **Exact, traceable pictures, run end to end by an AI** (the user, 10-21: "mathematically pixel
+  for pixel accurate images", never a regenerated look-alike). The app is already a calculation,
+  not a generator: every output pixel is the photo's own pixel at that place times light computed
+  from the relief, and the same settings give the same pixels (checked 10-21: one look rendered
+  twice, 0 of 5.0 M pixels differ). To make it a guarantee:
+  1. Exact identity: with nothing changed, the export is the photo bit for bit. Today the
+     photo-only export (Original on top 100%) is off by up to 2 levels on 45% of pixels (rounding
+     through linear light and the GPU) — fix and test.
+  2. Provenance in every record: photo hash, settings, code hash, renderer, and a hash of the
+     output pixels, so anyone can re-render and compare.
+  3. A pixel map per picture on request: how much each pixel's light changed (the shading the
+     photo was multiplied by), so an AI or a person can see that nothing else was touched.
+  4. Software-GL and GPU renders agree within a stated tolerance (tested), since an agent may
+     run headless.
+  5. The sun option below, fully drivable through the CLI / MCP (add photos, line up, measure,
+     set depth), with the same checks.
 - **Measured relief from sunlight** (evidence: docs/real-light-test.md, 10-21). On the user's
   plaster door the relief estimated from one flat photo gave light and shade unrelated to real
   raking sunlight (correlation about 0, every band, every direction, no setting helps); the relief
