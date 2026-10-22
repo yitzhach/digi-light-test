@@ -3,7 +3,10 @@
 //  2. the same settings give the same pixels, every time;
 //  3. resized, the photo is resampled by resample.js: exact block means, and a resized identity
 //     export is that resample bit for bit;
-//  4. a JPEG is decoded once (one decoder path), and exports as decoded with nothing changed.
+//  4. a JPEG is decoded once (one decoder path), and exports as decoded with nothing changed;
+//  5. the change map (changemap.js) of the identity export is no change at all (plain grey), of
+//     the preview with nothing changed too, and of a relit picture the same from export and
+//     exportMany.
 // The photo is random noise at an odd size, the hardest case: every pixel sits beside unrelated
 // ones, so any filtering, shift or rounding on the way through linear light shows. (The user,
 // 10-21: "mathematically pixel for pixel accurate images", not a look-alike. Before the fix,
@@ -46,9 +49,17 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       d.setGuard(false);
       await d.set({ originalTop: 1 });
       const same = await pixels(await asURL(await d.export({ format: 'png' })));
+      // 5. The change map with nothing changed: none, and the map plain grey.
+      const sameCh = (await d.export({ format: 'png', change: true })).change;
+      const sameMap = await pixels(sameCh.image);
+      let notGrey = 0;
+      for (let i = 0; i < sameMap.px.length; i += 4) if (sameMap.px[i] !== 128 || sameMap.px[i + 1] !== 128 || sameMap.px[i + 2] !== 128) notGrey++;
+      const previewCh = (await d.render({ change: true })).change.stats;
       await d.set({ originalTop: 0, exposure: 0.4, 'graze.enabled': true });
       const a = await pixels(await asURL(await d.export({ format: 'png' })));
       const b = await pixels(await asURL(await d.export({ format: 'png' })));
+      const relitCh = (await d.export({ format: 'png', change: { map: 'colour' } })).change.stats;
+      const manyCh = (await d.exportMany([{ settings: d.settings(), change: { map: 'colour' } }]))[0].change.stats;
       // 3. Resized, the photo goes through resample.js (the browser's own high-quality downscale
       // was not the same from one session to the next): exact means, any region the same pixels
       // as the whole, and a resized identity export is exactly that resample.
@@ -78,7 +89,8 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       const jc = document.createElement('canvas'); jc.width = W; jc.height = H;
       const jx = jc.getContext('2d', { willReadFrequently: true }); jx.drawImage(im, 0, 0);
       return { size: [same.w, same.h], identity: differ(same.px, photo), repeat: differ(a.px, b.px), relit: differ(a.px, photo),
-        boxOff, tile, smallSize: [small.w, small.h], resized: differ(small.px, whole), jpeg: differ(jpegOut.px, jx.getImageData(0, 0, W, H).data) };
+        boxOff, tile, smallSize: [small.w, small.h], resized: differ(small.px, whole), jpeg: differ(jpegOut.px, jx.getImageData(0, 0, W, H).data),
+        sameCh: sameCh.stats, mapSize: [sameMap.w, sameMap.h], notGrey, previewCh, relitCh, manyCh };
     });
     assert.deepEqual(r.size, [1201, 899]);
     assert.equal(r.identity.n, 0, 'nothing changed: the export is the photo, bit for bit ' + JSON.stringify(r.identity));
@@ -93,6 +105,14 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
     console.log('PASS resized: area-average resample (block means, regions = whole), and the export at 517 px is it bit for bit');
     assert.equal(r.jpeg.n, 0, 'a JPEG with nothing changed exports as decoded, bit for bit ' + JSON.stringify(r.jpeg));
     console.log('PASS JPEG identity: the photo decoded once, exported bit for bit');
+    assert.deepEqual(r.mapSize, [1201, 899]);
+    assert.equal(r.sameCh.same, 1, 'the identity export\'s change map: no change ' + JSON.stringify(r.sameCh));
+    assert.deepEqual([r.sameCh.light.min, r.sameCh.light.max, r.sameCh.colour.max], [0, 0, 0]);
+    assert.equal(r.notGrey, 0, 'and its light map is plain grey');
+    assert.equal(r.previewCh.same, 1, 'the preview with nothing changed: no change ' + JSON.stringify(r.previewCh));
+    assert.ok(r.relitCh.same < 0.5 && r.relitCh.light.brighter > 0.3, 'a relit picture changes ' + JSON.stringify(r.relitCh));
+    assert.deepEqual({ ...r.manyCh, crop: null }, { ...r.relitCh, crop: null }, 'exportMany gives export\'s change map');
+    console.log('PASS change map: none on the identity export (grey map) and the preview; relit', JSON.stringify(r.relitCh));
     assert.deepEqual(s.errors, []);
   } finally { await s.close(); }
 })().catch((e) => { console.error(e); process.exit(1); });

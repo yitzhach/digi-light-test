@@ -25,7 +25,7 @@ const full = process.argv.includes('--full');
   const ok = async (name, args) => { const x = await call(name, args); assert.ok(!x.r.isError, `${name}: ${x.t}`); return x; };
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard'])
+    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard', 'measure_relief'])
       assert.ok(names.includes(n), 'missing tool ' + n);
     assert.ok((await client.getInstructions?.() || '').includes('open_image'), 'server instructions');
     console.log('PASS mcp lists its tools');
@@ -53,7 +53,11 @@ const full = process.argv.includes('--full');
     assert.ok(Math.max(w, h) === 400, `preview ${w}x${h}`);
     const pm = JSON.parse((await ok('render_preview', { max_size: 400 })).r.content[1].text).metrics;
     assert.ok(pm.render.p50 > 0 && pm.photo && pm.vsPhoto.detail.fine > 0 && Array.isArray(pm.warnings), 'render_preview metrics ' + JSON.stringify(pm));
-    console.log('PASS describe_settings filter, list_presets, render_preview image and metrics');
+    const pc = (await ok('render_preview', { max_size: 400, change_map: 'light' })).r.content;
+    assert.ok(pc.length === 3 && pc[1].type === 'image', 'render_preview with change_map: picture, map, numbers');
+    const ch = JSON.parse(pc[2].text).change;
+    assert.ok(ch && ch.size && typeof ch.same === 'number' && ch.light && ch.colour, 'change map numbers ' + JSON.stringify(ch));
+    console.log('PASS describe_settings filter, list_presets, render_preview image, metrics and change map');
 
     const set = (await ok('set_settings', { changes: { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 } })).json();
     assert.deepEqual(set, { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 });
@@ -86,6 +90,14 @@ const full = process.argv.includes('--full');
     assert.ok(e.path === png && b.readUInt32BE(16) === 320 && b.slice(1, 4).toString() === 'PNG', JSON.stringify(e));
     const rec = JSON.parse(fs.readFileSync(path.join(out, 'relit.json'), 'utf8'));
     assert.ok(e.record === path.join(out, 'relit.json') && rec.format === 'digilight-record' && rec.settings.exposure === 0.1 && rec.output.file === 'relit.png' && rec.output.width === 320 && /^[0-9a-f]{64}$/.test(rec.code) && rec.input.name === 'sample:painting' && rec.metrics.vsPhoto, 'record beside the export ' + JSON.stringify({ ...rec, settings: undefined, metrics: undefined }));
+    const em = (await ok('export_image', { path: path.join(out, 'mapped.jpg'), width: 320, change_map: 'colour', record: false })).json();
+    assert.ok(em.change && em.change.map === 'colour' && fs.existsSync(path.join(out, 'mapped-change.png')) && em.change.size[0] === 320, 'export_image change_map ' + JSON.stringify(em.change));
+    // The relit export as a "sun photo" of the painting: measured relief from it, depth from the artist's number.
+    const mr = (await ok('measure_relief', { photos: [{ path: png, sun: { from_deg: 135, angle_deg: 20 } }], deepest_mm: 2 })).json();
+    assert.ok(mr.measuredRelief && mr.sun && mr.deepestMm === 2 && mr.rangeMm > 0 && Math.abs(mr.textureDepthMm - Math.min(10, Math.max(0.05, +(mr.depthMm * 2 / mr.rangeMm).toFixed(2)))) < 0.011, 'measure_relief ' + JSON.stringify(mr));
+    x = await call('measure_relief', { photos: [{ path: png }] });
+    assert.ok(x.r.isError && /either sun or lamp/.test(x.t), x.t);
+    console.log('PASS export_image change_map, measure_relief (sun, deepest relief)', JSON.stringify({ depthMm: +mr.depthMm.toFixed(2), rangeMm: +mr.rangeMm.toFixed(2), textureDepthMm: mr.textureDepthMm }));
     const crop = path.join(out, 'crop.png');
     const c = (await ok('export_image', { path: crop, width: 320, crop: { x: 0.5, y: 0, w: 0.5, h: 0.25 } })).json();
     assert.ok(c.path === crop && fs.readFileSync(crop).readUInt32BE(16) === 160, 'crop: half of 320 px ' + JSON.stringify(c));

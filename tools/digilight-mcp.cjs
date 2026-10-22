@@ -16,7 +16,7 @@ const path = require('path');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
-const { parseSets, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
+const { parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
 
 const log = (...a) => process.stderr.write('[digilight] ' + a.join(' ') + '\n');
 const FORMATS = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp' };
@@ -253,14 +253,21 @@ server.registerTool('undo', { title: 'Undo', description: 'Undoes the last chang
 server.registerTool('redo', { title: 'Redo', description: 'Redoes the last undone change. Returns false when there is nothing to redo.', inputSchema: {} },
   changing(async ({ call }) => ({ redone: await call('redo') })));
 
+// The change map (src/changemap.js): what changed, pixel by pixel, against the photo.
+const CHANGE_MAP = z.enum(['light', 'colour']).describe('Also return the change map: "light" (how much light each pixel gained or lost against the photo: grey unchanged, orange brighter, blue darker, full colour at 2 stops) or "colour" (how far each pixel is off the photo\'s own colour at its new brightness: black none, white 32 levels or more). Its numbers come as "change": same (share of pixels identical to the photo), light (stops: percentiles, shares brighter / darker), colour (levels: percentiles, share off)');
 server.registerTool('render_preview', {
   title: 'See the result',
   description: 'Renders the relit painting at preview size and returns it as an image (JPEG, max_size px on its long side, default 800) so you can see it, plus its metrics against the photo (measured at preview size): newly blown / crushed share, darks lift, tone shift in stops, detail kept per scale (1 = the photo\'s), left/centre/right brightness, and warnings in words. Use it after changes, before describing the result; read the warnings too, the user never wants blown whites, crushed darks or blur.',
-  inputSchema: { max_size: z.number().int().min(128).max(2000).optional() },
-}, tool(async ({ page: pg, call }, { max_size }) => {
+  inputSchema: {
+    max_size: z.number().int().min(128).max(2000).optional(),
+    change_map: CHANGE_MAP.optional(),
+  },
+}, tool(async ({ page: pg, call }, { max_size, change_map }) => {
   await needOpen(call);
-  const { url, metrics } = await preview(pg, call, max_size || 800, 0.85, true);
-  return { content: [{ type: 'image', data: url.split(',')[1], mimeType: 'image/jpeg' }, { type: 'text', text: JSON.stringify({ metrics }, null, 1) }] };
+  const { url, metrics, change } = await preview(pg, call, max_size || 800, 0.85, true, change_map ? { map: change_map } : undefined);
+  return { content: [{ type: 'image', data: url.split(',')[1], mimeType: 'image/jpeg' },
+    ...(change ? [{ type: 'image', data: change.url.split(',')[1], mimeType: 'image/jpeg' }] : []),
+    { type: 'text', text: JSON.stringify({ metrics, ...(change ? { change: change.stats } : {}) }, null, 1) }] };
 }));
 
 server.registerTool('export_image', {
@@ -273,18 +280,48 @@ server.registerTool('export_image', {
       .describe('Part of the image (at that width) to write: pixels, or all four 0–1 as fractions, e.g. {"x":0.4,"y":0.4,"w":0.2,"h":0.2}'),
     quality: z.number().min(0).max(1).optional().describe('JPEG/WebP quality 0–1, default 0.92'),
     record: z.boolean().optional().describe('Write FILE.json beside it (default true)'),
+    change_map: CHANGE_MAP.optional().describe('Also write the change map as FILE-change.png beside it, at the same size (see render_preview); its numbers go in the answer and the record'),
   },
-}, tool(async ({ call }, { path: p, width, crop, quality, record }) => {
+}, tool(async ({ call }, { path: p, width, crop, quality, record, change_map }) => {
   await needOpen(call);
   const f = filePath(p), format = FORMATS[path.extname(f).toLowerCase()];
   if (!format) throw new Error('path must end .png, .jpg or .webp.');
   if (!fs.existsSync(path.dirname(f))) throw new Error(`No such folder: ${path.dirname(f)}`);
   return waitExport(async () => {
-    const t0 = Date.now(), r = await call('export', { format, quality: quality ?? 0.92, width, crop, metrics: true }), buf = fromDataURL(r.image);
+    const t0 = Date.now(), r = await call('export', { format, quality: quality ?? 0.92, width, crop, metrics: true, change: change_map ? { map: change_map } : undefined }), buf = fromDataURL(r.image);
     fs.writeFileSync(f, buf);
-    const rec = record === false ? null : await writeRecord(call, f, { input: opened, job: { width, crop }, output: { format, ...(width ? { width } : {}), ...(crop ? { crop } : {}), pixels: r.pixels }, metrics: r.metrics });
-    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(rec ? { record: rec } : {}), ...(await call('info')), pixelsSha256: r.pixels?.sha256 ?? null, metrics: r.metrics };
+    let change = null;
+    if (r.change) {
+      const cf = f.replace(/\.[^./\\]+$/, '') + '-change.png';
+      fs.writeFileSync(cf, fromDataURL(r.change.image));
+      change = { file: cf, ...r.change.stats };
+    }
+    const rec = record === false ? null : await writeRecord(call, f, { input: opened, job: { width, crop }, output: { format, ...(width ? { width } : {}), ...(crop ? { crop } : {}), pixels: r.pixels }, metrics: r.metrics, change });
+    return { path: f, bytes: buf.length, seconds: Math.round((Date.now() - t0) / 1000), ...(rec ? { record: rec } : {}), ...(await call('info')), pixelsSha256: r.pixels?.sha256 ?? null, metrics: r.metrics, ...(change ? { change } : {}) };
   }, f);
+}));
+
+server.registerTool('measure_relief', {
+  title: 'Measure the relief from lamp or sun photos',
+  description: 'Replaces the relief estimated from the open (evenly lit) photo with relief measured from more photos of the painting: each with one lamp close to the wall (lamp: where it was, in cm from the painting\'s left and top edges and out from its face; same tripod), or in sunlight (sun: where it came from, degrees anticlockwise from the right: 0 right, 90 above, 180 left, and its angle to the painting\'s face). Every photo must be cropped exactly like the open one; a sunlit photo taken by hand must be lined up on it first (tools/realref/register.py). One sun angle cannot tell the depth, so give deepest_mm (the artist\'s deepest relief, lowest point to highest) when you have it. Slow without a GPU (a minute or more). Returns the depth measured, how well each photo lined up, and (with 3+ photos) how well each is predicted by the others.',
+  inputSchema: {
+    photos: z.array(z.object({
+      path: z.string().describe('Absolute path to the photo (.jpg/.png/.webp)'),
+      sun: z.object({ from_deg: z.number().describe('Where the sun came from, in the picture: 0 right, 90 above, 180 left'), angle_deg: z.number().min(1).max(89).describe('Its angle to the painting\'s face') }).optional(),
+      lamp: z.object({ left_cm: z.number(), above_cm: z.number(), out_cm: z.number().positive() }).optional(),
+    })).min(1),
+    painting_width_cm: z.number().positive().optional().describe('The painting\'s width (else as set)'),
+    deepest_mm: z.number().positive().optional().describe('The deepest relief, lowest point to highest, in mm (sets the depth)'),
+  },
+}, changing(async ({ call }, { photos, painting_width_cm, deepest_mm }) => {
+  await needOpen(call);
+  const list = photos.map((p) => {
+    const f = filePath(p.path);
+    if (!fs.existsSync(f)) throw new Error(`No such file: ${f}`);
+    if (!p.sun === !p.lamp) throw new Error(`${path.basename(f)}: give either sun or lamp.`);
+    return { src: dataURL(f), name: path.basename(f), ...(p.sun ? { sun: { azimuthDeg: p.sun.from_deg, elevationDeg: p.sun.angle_deg } } : { lamp: { left: p.lamp.left_cm, above: p.lamp.above_cm, out: p.lamp.out_cm } }) };
+  });
+  return call('measureRelief', { photos: list, widthCm: painting_width_cm, deepestMm: deepest_mm });
 }));
 
 server.registerTool('save_project', {

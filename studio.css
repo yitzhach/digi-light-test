@@ -107,6 +107,9 @@ body.fullView #fullBar { display:flex; gap:6px; position:absolute; z-index:6; to
 .lampFields label { display:flex; justify-content:space-between; align-items:center; gap:6px; }
 .lampFields input[type=number] { width:62px; font:inherit; font-size:12px; background:var(--panel2); color:inherit; border:1px solid var(--line); border-radius:4px; padding:2px 3px; }
 .lampUse { display:flex; gap:6px; align-items:center; font-size:12px; margin:6px 0; }
+.lampFields select { font:inherit; font-size:12px; background:var(--panel2); color:inherit; border:1px solid var(--line); border-radius:4px; padding:1px 2px; }
+.lampDeep { display:flex; gap:6px; align-items:center; font-size:12px; margin:8px 0 2px; color:var(--dim); }
+.lampDeep input { width:62px; font:inherit; font-size:12px; background:var(--panel2); color:inherit; border:1px solid var(--line); border-radius:4px; padding:2px 3px; }
 
 /* Batch preview */
 .batchRange { display:flex; gap:8px; flex-wrap:wrap; color:var(--dim); font-size:12px; margin:6px 0; }

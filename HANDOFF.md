@@ -6,6 +6,28 @@ the upgrade phases, done lists) is kept verbatim in **docs/history.md**; search 
 needs the background. The plan is **docs/roadmap.md**.
 
 ## Now
+- **10-22 (same branch), exactness 3 and 4 done, the sun option started** (roadmap NEXT):
+  - **Change map** (src/changemap.js): `change: true | {map: 'light' | 'colour', range}` on
+    `render` / `export` / `exportMany` → `change: {image, stats}`; the light each pixel was
+    multiplied by (stops; grey = unchanged, orange brighter, blue darker) or how far it is off the
+    photo's own colour at its new brightness (levels), from the photo and the picture alone. CLI
+    `--change-map FILE.png` (`--change-kind colour`), batch `"changeMap"`, MCP `render_preview` /
+    `export_image` `change_map`; numbers in the record. Identity export: `same` 1, plain grey.
+    tests/changemap.mjs (Node), tests/exact.cjs.
+  - **Renderers agree** (tests/renderers.cjs, docs/automation.md "Renderers agree"): the cloud has
+    no GPU but has Mesa llvmpipe through Xvfb (`DIGILIGHT_GL=llvmpipe`; swiftshader | gpu |
+    llvmpipe). Same settings, SwiftShader vs llvmpipe, 3 photos x 5 cases at 900 px: nothing
+    changed bit for bit; else p99 1 level (worst: door under Classic raking, 1.03% of pixels over
+    2 levels, p99 3, max 25, at shadow edges). Stated tolerance: ≤ 2% over 2 levels, p99 ≤ 3,
+    mean ≤ 0.75. `verify` says `withinRendererTolerance` for a picture made on another renderer.
+    Against a real GPU: `RENDERER_B=gpu node tests/renderers.cjs` on the user's computer.
+  - **Sun option, first part**: lamp photos can be sun photos (`{sun: {azimuthDeg, elevationDeg}}`,
+    a row's Light: Sun), depth from the artist's deepest relief (Deepest relief; `deepestMm`),
+    `digilight.measureRelief`, CLI `measure --sun FILE:FROM:ANGLE --width-cm --deepest`, MCP
+    `measure_relief`. Sun drift cut 0.12 (set so the lintel's full range at its known 10.3° is the
+    artist's 1/8"); a broad beam window helped on a synthetic painting (tests/sunrelief.mjs) but
+    hurt on the real lintel, so sun shots keep the lamps' (docs/real-light-test.md "10-22").
+    Lamp photos are now resampled by resample.js (were the browser's drawImage).
 - **10-22 (branch `claude/quirky-allen-tna7jh`): the look-path repeatability bug is fixed.** Two
   causes, both the photo reaching the relief a level apart (the relief turns a level into speckle
   up to 99 deep): (1) resized exports, the sharp zoom and the metrics shrank the photo with the
@@ -21,58 +43,19 @@ needs the background. The plan is **docs/roadmap.md**.
   identity export (that one fails without pinPixels). Records of resized pictures or JPEG photos
   made before 10-22 will not verify (decoded / resized the old way). Still the browser's: the
   preview's copy of the photo (one bilinear drawImage at load; stable in every test so far).
-- **10-21 (merged to `main`):**
-  - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much
-    high-frequency sharpness in most"), so crispGraze is detail 0.02, fine 0.15, elevation 6;
-    LOOK_VERSION 4; goldens updated.
-  - **Guard picks** in (guard options 2, W3 maybe, D4 / D7 kept): whites → exposure only, down until
-    nothing new blows (AIM newBlown 0); darks → room light only, up to 1. The aim applies only to the
-    side over the limit. The old paths stay as options, plus `adjust.levels.outBlack` and
-    `adjust.lift.amount`, and a run's own `limits`; CLI jobs take the guard's options
-    (`"guard": {...}`), so guard alternatives are now a plain round spec (tools/looks/guard2.json).
-  - **Round 5 picks** in (https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB): softer per look.
-    Side lamp: graze detail 0.03 (L04); from the left: fine relief without round 2's ×1.4 (F03);
-    LOOK_VERSION 5, goldens updated (on the samples the looks fit the same exposure as the
-    reviewed L04 / F03, within 0.03). Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
-    were kept too: the user is near the target, so further rounds should be small steps.
-  - **Looks side by side in the app** (roadmap NEXT, first part): Auto thumbnails bigger (three
-    across on a phone); press and hold one to see it on the picture (guarded, no undo step, not
-    picked); **Compare full screen** renders Auto's looks into the batch viewer (`batch.openAuto`,
-    source "Auto looks"); the viewer's **Pin as A** makes Hold flip to that look (P, hold Space).
-    `guard.preview()` fixes a shown look without touching the undo history.
-  - **The user's test photos** (plaster door flat and in raking sun, a banded panel outdoors, a
-    close-up; scratch only, not in the repo): review of today's looks with the guard on,
-    https://claude.ai/artifact/TPRk1CiypEiBBJLewfb5fs. The guard fixes they led to: when the darks
-    fix (room light) blows whites, exposure comes back down to the whites limit; darks aim at half
-    the limit (the guard judges at preview size, and the door's exports showed 0.25% where the
-    preview showed 0.15%).
-  - **Real light test** (**docs/real-light-test.md**, tools in **tools/realref/**): the sunlit door
-    photo lined up on the flat one (0.6 px) is a reference for real raking light. Today's relief,
-    estimated from one flat photo, gives light and shade unrelated to it (correlation about 0, every
-    band, every direction; no setting fixes it; it embosses the paint's outlines). Relief measured
-    from that one sunlit photo through the lamp-photo code: 0.55 / 0.60 (mid / broad) under a
-    sun-like light; review page https://claude.ai/artifact/AvR9yt12cnmo3qtaL46yvG (Hold flips
-    measured / estimated). Roadmap NEXT has the plan: measured relief from 2–3 phone shots in sun.
-    Second piece (panel with a wooden lintel, flat + sunlit) replicated it; the page now has both.
-    Best so far: the side-lamp favourite on measured relief with its graze smoothing off (texture as
-    strong as the real sun's, in the right places). register.py now pools brightness and colour-ratio
-    matches (the lintel pair failed on brightness alone); page.py builds the review page.
-  - **Exact, traceable pictures** (the user, 10-21: the app must be runnable end to end by an AI and
-    give "mathematically pixel for pixel accurate images", never a regenerated look-alike; plan in
-    docs/roadmap.md NEXT, first item). Done: (1) exact identity: Original on top 100% exports the photo
-    bit for bit (the texture filter leaked a sliver of a neighbour into dark pixels even at 1:1; now
-    the photo's own texel is read: gbuffer.js LUMA_FS, shade.js photoLin; tests/exact.cjs); (2)
-    fingerprints: `export / render / exportMany` with `hash: true` (or metrics) return
-    `pixels.sha256` (RGBA before encoding), records hold the photo's and the picture's, and
-    `digilight-cli.cjs verify FILE.json` re-renders a record and checks it pixel for pixel
-    (docs/automation.md "Exact pictures and fingerprints").
+- **10-21 (merged to `main`):** round 4 and 5 picks (LOOK_VERSION 5), the guard picks, Auto looks
+  side by side, the real light test (docs/real-light-test.md), exact identity and fingerprints;
+  in full in **docs/history.md** ("HANDOFF, 10-21").
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
 ## Waiting on the user
 1. (Answered 10-21: build the sun option — "I'm fine with building this out" — after the exactness
    work.) Lintel panel: lintel 3/4" out, panel 20.5" wide, sun 10.3° up; the user says its relief goes
-   up to about 1/8" (the photos gave 2.3–3.05 mm). Depth in the app: ask the artist's deepest relief.
+   up to about 1/8" (the photos gave 2.3–3.05 mm). Depth in the app: ask the artist's deepest relief
+   (done 10-22: Deepest relief / `deepestMm`). New: a second sun photo of the lintel or the door
+   with the board turned about 90°, same sun (both slopes; lets a broad beam window be tested on
+   real photos), and the door's sun elevation and width if known.
 2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
    crushed on every look; the red panel just over): raise the black point a touch, or keep the
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
@@ -85,12 +68,17 @@ needs the background. The plan is **docs/roadmap.md**.
 7. Older, still open (details in docs/history.md): confirm the Shadow light picks (Shade vs
    Negative light; more shade shapes?); overlay defaults (grain 35%, vignette 50%); Broad form
    100% strength; the AI-match texture/depth work.
+8. On the user's computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs` (does a real GPU
+   agree with software GL within the stated tolerance?).
 
 ## Next up
-1. The rest of the exactness plan (roadmap NEXT): a change map (how much each pixel's light changed),
-   GPU and software GL agreeing within a stated tolerance, then the sun option (handheld lining up
-   in the app, a sun lamp, broad forms kept, depth from the artist's number, looks without graze
-   smoothing on measured relief), all drivable through the CLI / MCP with the same checks.
+1. The rest of the sun option (roadmap NEXT, exactness 5): a sun lamp in the renderer (a
+   direction, no falloff; the graze light is a lamp a width away, so measured renders are about a
+   third of the real sun's light and shade, and Fit depth can't use sun rows); handheld lining up
+   in the app (register.py's features + homography, in JS); looks without graze smoothing on
+   measured relief; the sun's direction from the shadows. Ask the user for a second sun shot of
+   the lintel or door with the board turned ~90° (both slopes, and the measurement can then
+   test a broad beam window on real photos).
 2. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
    fit-to-screen; a `?round=` link that renders a round on the user's own GPU); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
@@ -118,6 +106,7 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `automation.js` — `window.digilight` (set, looks, render/export/exportMany with metrics,
   record, guard), URL params, `?bridge` postMessage
 - `toolrail.js`, `touchsliders.js` — one tool at a time (phone strip / desktop rail); phone sliders
+- `changemap.js` — the change map (light / colour per pixel against the photo), DOM-free
 - `resample.js` — the photo at another size (export tiles, sharp zoom, metrics): area average,
   the same pixels every session
 - `gbuffer.js` — single-photo surface estimation; `shade.js` — shading pass (area lights,
@@ -133,7 +122,10 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   look change → `UPDATE_GOLDENS=1 node tests/browser.cjs`, commit the file with the change.
 - `cd tools && npm install` once, then `node tests/mcp.cjs` (`--full` adds Analyze)
 - `node tests/measure.mjs` (measure.js against slow reference maths; no browser, <1 s)
-- `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; ~1 min)
+- `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; change map; ~1 min)
+- `node tests/changemap.mjs`, `node tests/sunrelief.mjs` (Node, no browser, seconds)
+- `node tests/renderers.cjs` (SwiftShader vs llvmpipe through Xvfb, or `RENDERER_B=gpu`: the same
+  pictures within the stated tolerance; ~40 min in the cloud; `--report` only prints)
 - `node tests/repeat-look.cjs [runs]` (the same look in fresh pages, two at a time, gives the same
   pixels; ~10 min)
 - browser.cjs needs the server above running on 8766; the other tests serve the repo themselves.

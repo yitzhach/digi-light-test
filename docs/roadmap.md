@@ -84,12 +84,20 @@ where in the code it lives. **Done 10-19** marks what the same session already b
      decoded once (app.js pinPixels) and resized by our own area average (src/resample.js).
      Still left to the browser: the preview's copy of the photo (one bilinear drawImage at
      load; stable in every test so far, but not our arithmetic).
-  3. A pixel map per picture on request: how much each pixel's light changed (the shading the
-     photo was multiplied by), so an AI or a person can see that nothing else was touched.
-  4. Software-GL and GPU renders agree within a stated tolerance (tested), since an agent may
-     run headless.
+  3. Done 10-22: the change map (src/changemap.js; `change` on render / export / exportMany,
+     CLI `--change-map`, MCP `change_map`): the light each pixel was multiplied by, in stops, or
+     how far it is off the photo's own colour, computed from the photo and the picture alone;
+     none on an identity export (tests/exact.cjs, tests/changemap.mjs).
+  4. Done 10-22: renderers agree (tests/renderers.cjs; docs/automation.md "Renderers agree"):
+     nothing changed is bit for bit everywhere; otherwise at most 2% of pixels over 2 levels,
+     p99 3, mean 0.75. Measured SwiftShader against Mesa llvmpipe (no GPU in the cloud;
+     `DIGILIGHT_GL=llvmpipe`, through Xvfb); against a real GPU: `RENDERER_B=gpu node
+     tests/renderers.cjs` on the user's computer, still to run. `verify` accepts a picture made
+     on another renderer within it.
   5. The sun option below, fully drivable through the CLI / MCP (add photos, line up, measure,
-     set depth), with the same checks.
+     set depth), with the same checks. Done 10-22: measure (sun shots, depth from the artist's
+     number) through `measureRelief`, the CLI `measure` and the MCP `measure_relief`; left: line
+     up in the app, a sun lamp in the renderer, looks on measured relief.
 - **Measured relief from sunlight** (evidence: docs/real-light-test.md, 10-21). On the user's
   plaster door the relief estimated from one flat photo gave light and shade unrelated to real
   raking sunlight (correlation about 0, every band, every direction, no setting helps); the relief
@@ -98,10 +106,13 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   the board turned about 90° between them, could replace the tripod-and-lamp session. Needs:
   - Line up handheld shots in the app (features + homography; tools/realref/register.py does it
     with OpenCV SIFT: 0.6 px median on the door). lampphotos.js `align` only searches ±1% shifts.
-  - A sun lamp in lamp photos: a direction (from the shadows, or the user's answer), no
-    distance falloff; Fit depth with it (it fails with a far point lamp today).
-  - Keep broad forms for sun shots (DRIFT_SIGMA drops anything over 6% of the width, for a lamp's
-    uneven beam; sunlight is even).
+  - Done 10-22: a sun in lamp photos (a direction, `sunPixels`; a row's Light: Sun). Left: a sun
+    lamp in the renderer (the graze light is a lamp a width away; Fit depth needs it), and the
+    sun's direction read from the shadows.
+  - Done 10-22, partly: broad forms for sun shots. The drift cut is 0.12 for sun (set on the
+    lintel's known depth); a broad beam window helped on a synthetic painting and hurt on the
+    real lintel, so it stays the lamps' (docs/real-light-test.md, 10-22).
+  - Done 10-22: depth from the artist's deepest relief (`deepestMm`, Deepest relief field).
   - Depth: one unknown sun elevation leaves the depth scale open (bas-relief ambiguity). Simplest:
     ask the artist how deep the relief goes at most and scale the measured full range to it (on
     the lintel panel the user said about 1/8"; one shadow plus the panel's width gave 2.3–3.05 mm

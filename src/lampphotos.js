@@ -31,9 +31,34 @@
 // is enough to wipe out the finest relief. Each shot is aligned to the even one
 // first, on colour alone (r/sum and b/sum), which lighting barely changes.
 
+//
+// The sun is a lamp too (10-22): so far away that its light comes from one direction
+// everywhere and falls evenly, so a photo taken in sun needs no lamp position, only where
+// the sun was (sunPixels). A sunlit photo is handheld, from another place, outdoors, so it
+// must be lined up onto the painting photo first (tools/realref/register.py for now; align
+// below only finds small shifts). With one sun elevation the depth scale is open (a relief
+// twice as deep under a sun twice as steep looks alike), so the depth comes from the artist:
+// the deepest relief, set against the measured full range (rangeMm).
+
 // Feature sizes, in painting widths, so a photo of any resolution behaves alike.
 export const BEAM_SIGMA = 0.022;      // the beam is taken as smooth beyond this
 export const DRIFT_SIGMA = 0.06;      // heights broader than this are dropped (drift)
+// In sun the light is even, so broader forms are kept: only what is broader than this goes (an
+// uneven flat photo and the lining up leave a slow drift, which this still takes out). Set on
+// the user's lintel panel, where the sun's angle is known (10.3°, from the lintel's shadow) and
+// the artist's deepest relief too (about 1/8", 3.2 mm; the lintel's shadow gave 2.3-3.05 mm):
+// the measured full range came out 2.2 mm at 0.06 (the lamps' DRIFT_SIGMA), 3.2 mm at 0.12 and
+// 4.9 mm at 0.25 (10-22). Light and shade against the real sun is the same at 0.06-0.12 (0.52 /
+// 0.56 / 0.55 mid / broad / forms, tools/realref/score.py): only the depth moves. One piece,
+// so a first value.
+export const SUN_DRIFT_SIGMA = 0.12;
+// The beam window for a sun shot. A sun has no beam, so a broad window (0.25) keeps broader
+// relief, and on a synthetic painting in sun it did (two shots turned 90°: height r 0.93 against
+// 0.20, tests/sunrelief.mjs). On the user's lintel it did worse against the real sun (light and
+// shade r 0.44 / 0.41 / 0.32 against 0.53 / 0.56 / 0.54 with BEAM_SIGMA): a flat photo taken
+// indoors and a sunlit one differ by slow unevenness of their own, which a broad window reads as
+// slopes. So the lamps' window, until a second sun shot can tell the two apart (10-22).
+export const SUN_BEAM_SIGMA = BEAM_SIGMA;
 export const ALIGN_SEARCH = 0.01;     // how far a shot may have moved
 const SHADOW_S = 0.1;                 // shading below this is shadow: no slope to read
 const REFINE = 2;                     // rounds of taking the relief out of the beam
@@ -243,9 +268,20 @@ export function lampPixels(lamp, widthCm, w) {
   return { x: lamp.left * k, y: -lamp.above * k, z: Math.max(0.2, lamp.out) * k };
 }
 
+/** The sun as a lamp in pixels: a point a million widths away in its direction, so its light
+ *  reaches every pixel at the same angle (to well under a millionth). sun: {azimuthDeg (where
+ *  it lies in the picture's plane, anticlockwise from the right: 0 right, 90 up), elevationDeg
+ *  (its angle to the painting's face, 1-89)}. */
+export function sunPixels(sun, w, h) {
+  const a = (+sun.azimuthDeg || 0) * Math.PI / 180, e = Math.min(89, Math.max(1, +sun.elevationDeg || 0)) * Math.PI / 180, D = 1e6 * w;
+  return { x: w / 2 + D * Math.cos(e) * Math.cos(a), y: h / 2 - D * Math.cos(e) * Math.sin(a), z: D * Math.sin(e), sun: true };
+}
+/** A shot's light in pixels: the sun ({sun: {...}}) or a lamp ({left, above, out} in cm). */
+export const shotPixels = (lamp, widthCm, w, h) => (lamp.sun ? sunPixels(lamp.sun, w, h) : lampPixels(lamp, widthCm, w));
+
 /** Normalised shading s, its usable mask and a first guess at the room-light share,
  *  for one shot. D is the shot over the even photo, less the room light. */
-function shading(lum, bad, even, evenOk, w, h) {
+function shading(lum, bad, even, evenOk, w, h, beamSigma = BEAM_SIGMA) {
   const n = w * h, D = new Float32Array(n), valid = new Uint8Array(n);
   for (let i = 0; i < n; i++) { D[i] = lum[i] / Math.max(1e-4, even[i]); valid[i] = !bad[i] && evenOk[i] ? 1 : 0; }
   // First guess at the room light: what the deepest shadows inside the lamp's pool
@@ -256,7 +292,8 @@ function shading(lum, bad, even, evenOk, w, h) {
   const a = 0.9 * Math.max(0, percentiles(D, [0.01], inPool)[0]);
   for (let i = 0; i < n; i++) D[i] -= a;
   const sh = { D, valid, a, s: new Float32Array(n), ok: new Uint8Array(n), beam: null };
-  normalise(sh, boxBlur(D, w, h, BEAM_SIGMA * w));
+  sh.beamSigma = beamSigma;
+  normalise(sh, boxBlur(D, w, h, beamSigma * w));
   return sh;
 }
 // s = D over the beam; usable where lit, not blown and not in shadow.
@@ -440,7 +477,15 @@ function findGlints(sh, warped, evenSat, px, w, h) {
   return out;
 }
 
-export async function measureRelief({ even, shots, w, h, widthCm, onProgress = () => {}, glints = true }) {
+/**
+ * Relief from lamp (or sun) photos. even: the evenly lit painting photo, shots: [{rgba, lamp}]
+ * (lamp {left, above, out} in cm, or {sun: {azimuthDeg, elevationDeg}}), all w x h RGBA.
+ * driftSigma: broader than this is dropped (default DRIFT_SIGMA, SUN_DRIFT_SIGMA when every
+ * shot is in sun); beamSigma: the beam is smooth beyond this (default BEAM_SIGMA, SUN_BEAM_SIGMA
+ * for a sun shot); both in painting widths, for trying other values. Returns {height, w, h, depthMm (2-98% spread), rangeMm (lowest to highest,
+ * both away from the edges), check, shots}.
+ */
+export async function measureRelief({ even, shots, w, h, widthCm, onProgress = () => {}, glints = true, driftSigma, beamSigma }) {
   const n = w * h, evenLum = luminance(even, n);
   const evenSat = new Float32Array(n);
   for (let i = 0; i < n; i++) { const r = even[i * 4], g = even[i * 4 + 1], b = even[i * 4 + 2], mx = Math.max(r, g, b); evenSat[i] = mx > 0 ? (mx - Math.min(r, g, b)) / mx : 0; }
@@ -452,8 +497,8 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   for (let k = 0; k < shots.length; k++) {
     onProgress(`Aligning lamp photo ${k + 1} of ${shots.length}…`); await tick();
     const al = align(even, shots[k].rgba, w, h);
-    const warped = warpShot(shots[k].rgba, w, h, al.map), px = lampPixels(shots[k].lamp, widthCm, w);
-    const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h);
+    const warped = warpShot(shots[k].rgba, w, h, al.map), px = shotPixels(shots[k].lamp, widthCm, w, h);
+    const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h, beamSigma ?? (px.sun ? SUN_BEAM_SIGMA : BEAM_SIGMA));
     S.push({ ...sh, align: al, px, warped, glint: 0, glintMask: null });
   }
   onProgress('Reading the slopes…'); await tick();
@@ -473,7 +518,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
       if (round === 0) fitRoom(sh, pred, w, h);
       const num = new Float32Array(n);
       for (let i = 0; i < n; i++) if (sh.valid[i]) num[i] = sh.D[i]; else pred[i] = 0;
-      const bn = boxBlur(num, w, h, BEAM_SIGMA * w), bd = boxBlur(pred, w, h, BEAM_SIGMA * w);
+      const bn = boxBlur(num, w, h, sh.beamSigma * w), bd = boxBlur(pred, w, h, sh.beamSigma * w);
       for (let i = 0; i < n; i++) bn[i] /= Math.max(1e-4, bd[i]);
       normalise(sh, bn);
       // Glints, once the beam no longer holds the relief (the first beam, a plain local
@@ -491,7 +536,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   }
   onProgress('Building the height…'); await tick();
   const raw = integrate(hx, hy, w, h);
-  const drift = boxBlur(raw, w, h, DRIFT_SIGMA * w);
+  const drift = boxBlur(raw, w, h, (driftSigma ?? (shots.every((s) => s.lamp.sun) ? SUN_DRIFT_SIGMA : DRIFT_SIGMA)) * w);
   const height = new Float32Array(n);
   for (let i = 0; i < n; i++) height[i] = raw[i] - drift[i];
   // Depth over the painting, away from its edges, in mm.
@@ -499,6 +544,9 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   for (let y = m; y < h - m; y++) for (let x = m; x < w - m; x++) inner[y * w + x] = 1;
   const [p2, p98] = percentiles(height, [0.02, 0.98], inner);
   const depthMm = (p98 - p2) * widthCm * 10 / w;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) if (inner[i]) { if (height[i] < lo) lo = height[i]; if (height[i] > hi) hi = height[i]; }
+  const rangeMm = (hi - lo) * widthCm * 10 / w;
   let check = null;
   if (S.length >= 3) {
     onProgress('Checking each lamp photo against the others…'); await tick();
@@ -515,7 +563,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
     });
   }
   return {
-    height, w, h, depthMm, check,
+    height, w, h, depthMm, rangeMm, check,
     shots: S.map((sh) => ({ align: sh.align, room: sh.a, usable: sh.ok.reduce((t, v) => t + v, 0) / n, glint: sh.glint, glintMask: sh.glintMask })),
   };
 }

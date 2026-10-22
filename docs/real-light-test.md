@@ -144,3 +144,38 @@ the board turned between them could replace the tripod-and-lamp session. The app
 lining up handheld shots (features and a homography, as register.py does), a sun lamp
 (a direction, no distance falloff, Fit depth with it), broad forms kept for sun shots, the depth
 from a known thickness, and looks that drop the graze smoothing when the relief is measured.
+
+## 10-22: the sun in the app
+
+Done: a sun shot is a lamp photo with a direction instead of a place (lampphotos.js `sunPixels`:
+`{sun: {azimuthDeg, elevationDeg}}`; in the app, a row's Light: Sun), the depth from the artist's
+deepest relief (Deepest relief; `deepestMm`: Texture depth = the deepest × the measured 2–98%
+spread over the measured full range), and all of it drivable: `digilight.measureRelief`, the
+CLI's `measure` (`--sun FILE:FROM:ANGLE --width-cm --deepest`), the MCP `measure_relief`
+(docs/automation.md, "Measured relief from sunlight"). Fit depth stays lamp-only (it renders the
+graze light, a lamp a painting's width away). Lining up a handheld shot is still register.py.
+
+Settings tried on the lintel (sun 47° from the right, 20°, 50 cm, as before; light and shade
+against the real sun, tools/realref/score.py, mid / broad / forms):
+
+| beam window / drift cut (painting widths) | light-and-shade corr | full range at 10.3° |
+|---|---|---|
+| 0.022 / 0.06 (the lamps') | 0.53 / 0.56 / 0.54 | 2.2 mm |
+| 0.022 / 0.10–0.12 | 0.52 / 0.56 / 0.55 | 3.2 mm (0.12) |
+| 0.25 / 0.06 | 0.44 / 0.41 / 0.30 | |
+| 0.25 / 0.10 | 0.44 / 0.41 / 0.32 | 3.6 mm (0.12), 4.9 (0.18), 6.9 (0.25) |
+
+- The drift cut moves only the depth. At 0.12 the full range at the sun's known 10.3° is 3.2 mm,
+  the artist's "about 1/8"" (the lintel's shadow gave 2.3–3.05 mm): `SUN_DRIFT_SIGMA` 0.12.
+- A broad beam window (a sun has no beam to take out) won on a synthetic painting in sun (two
+  shots turned 90°: height r 0.93 against 0.20; tests/sunrelief.mjs) and lost on the real one,
+  where a flat photo taken indoors and a sunlit one differ by slow unevenness of their own that a
+  broad window reads as slopes. So sun shots keep the lamps' window (`SUN_BEAM_SIGMA`); a second
+  sun shot (the board turned 90°) is what could tell the two apart. Both are options
+  (`driftSigma`, `beamSigma`; the CLI's `--drift`, `--beam`) for trying.
+- The first guess at the sky light reads high on a sunlit photo with no deep shadow (synthetic,
+  sun at 25°: 0.72 against 0.11, relief ×1.6); the user's low-sun photos have deep shadows and
+  read 7–11%. Take sun photos with the sun low enough to cast shadows.
+- The measured renders above (graze 47°, 20°, unsmoothed) are about a third of the real sun's
+  light-and-shade size: the graze light is a lamp a painting's width away, not a sun; a sun lamp
+  in the renderer is still to do.

@@ -7,6 +7,53 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-21 (moved here 10-22)
+- **10-21 (merged to `main`):**
+  - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much
+    high-frequency sharpness in most"), so crispGraze is detail 0.02, fine 0.15, elevation 6;
+    LOOK_VERSION 4; goldens updated.
+  - **Guard picks** in (guard options 2, W3 maybe, D4 / D7 kept): whites → exposure only, down until
+    nothing new blows (AIM newBlown 0); darks → room light only, up to 1. The aim applies only to the
+    side over the limit. The old paths stay as options, plus `adjust.levels.outBlack` and
+    `adjust.lift.amount`, and a run's own `limits`; CLI jobs take the guard's options
+    (`"guard": {...}`), so guard alternatives are now a plain round spec (tools/looks/guard2.json).
+  - **Round 5 picks** in (https://claude.ai/artifact/KWg8gaJavKE9TponXE8PVB): softer per look.
+    Side lamp: graze detail 0.03 (L04); from the left: fine relief without round 2's ×1.4 (F03);
+    LOOK_VERSION 5, goldens updated (on the samples the looks fit the same exposure as the
+    reviewed L04 / F03, within 0.03). Raking fine 0.05 read as "Blurry" (F02), so left out. The unchanged looks (01)
+    were kept too: the user is near the target, so further rounds should be small steps.
+  - **Looks side by side in the app** (roadmap NEXT, first part): Auto thumbnails bigger (three
+    across on a phone); press and hold one to see it on the picture (guarded, no undo step, not
+    picked); **Compare full screen** renders Auto's looks into the batch viewer (`batch.openAuto`,
+    source "Auto looks"); the viewer's **Pin as A** makes Hold flip to that look (P, hold Space).
+    `guard.preview()` fixes a shown look without touching the undo history.
+  - **The user's test photos** (plaster door flat and in raking sun, a banded panel outdoors, a
+    close-up; scratch only, not in the repo): review of today's looks with the guard on,
+    https://claude.ai/artifact/TPRk1CiypEiBBJLewfb5fs. The guard fixes they led to: when the darks
+    fix (room light) blows whites, exposure comes back down to the whites limit; darks aim at half
+    the limit (the guard judges at preview size, and the door's exports showed 0.25% where the
+    preview showed 0.15%).
+  - **Real light test** (**docs/real-light-test.md**, tools in **tools/realref/**): the sunlit door
+    photo lined up on the flat one (0.6 px) is a reference for real raking light. Today's relief,
+    estimated from one flat photo, gives light and shade unrelated to it (correlation about 0, every
+    band, every direction; no setting fixes it; it embosses the paint's outlines). Relief measured
+    from that one sunlit photo through the lamp-photo code: 0.55 / 0.60 (mid / broad) under a
+    sun-like light; review page https://claude.ai/artifact/AvR9yt12cnmo3qtaL46yvG (Hold flips
+    measured / estimated). Roadmap NEXT has the plan: measured relief from 2–3 phone shots in sun.
+    Second piece (panel with a wooden lintel, flat + sunlit) replicated it; the page now has both.
+    Best so far: the side-lamp favourite on measured relief with its graze smoothing off (texture as
+    strong as the real sun's, in the right places). register.py now pools brightness and colour-ratio
+    matches (the lintel pair failed on brightness alone); page.py builds the review page.
+  - **Exact, traceable pictures** (the user, 10-21: the app must be runnable end to end by an AI and
+    give "mathematically pixel for pixel accurate images", never a regenerated look-alike; plan in
+    docs/roadmap.md NEXT, first item). Done: (1) exact identity: Original on top 100% exports the photo
+    bit for bit (the texture filter leaked a sliver of a neighbour into dark pixels even at 1:1; now
+    the photo's own texel is read: gbuffer.js LUMA_FS, shade.js photoLin; tests/exact.cjs); (2)
+    fingerprints: `export / render / exportMany` with `hash: true` (or metrics) return
+    `pixels.sha256` (RGBA before encoding), records hold the photo's and the picture's, and
+    `digilight-cli.cjs verify FILE.json` re-renders a record and checks it pixel for pixel
+    (docs/automation.md "Exact pictures and fingerprints").
+
 
 ## NEXT SESSION STARTS HERE: upgrade phases (user's plan, 10-15)
 One phase per chat. Each phase: build, run tests/browser.cjs (add tests), push to `main`,

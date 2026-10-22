@@ -804,7 +804,7 @@ export function initStudio(api) {
   // window.digilight: the same app for scripts and AI agents (automation.js, docs/automation.md).
   const presetTables={lighting:{names:Object.keys(lighting),apply:n=>{useLighting(n);sync();}},graze:{names:Object.keys(grazePresets),apply:n=>{stopSweep();setGraze({...grazePresets[n]});sync();}},
     looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}}};
-  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,
+  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,lamp,
     openProject:p=>{const run=queue.then(async()=>{loading=true;try{await open(p);}finally{loading=false;}});queue=run.catch(()=>{});return run;}});
   window.__studio={guard,calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 

@@ -17,7 +17,16 @@
 //              (or --photo PATH) and settings and checks it is the same picture, pixel for
 //              pixel: the photo's fingerprint and the picture's (SHA-256 of the RGBA pixels before
 //              encoding) against the record's; with a PNG beside the record, also how many pixels
-//              differ and by how much. --out FILE keeps the re-render. Exit code 1 if not the same.
+//              differ and by how much (made on another renderer, within the stated tolerance counts:
+//              "withinRendererTolerance"). --out FILE keeps the re-render. Exit code 1 if not the same.
+//   measure    relief measured from lamp or sun photos of the painting (the input is the evenly lit
+//              photo; each other photo cropped like it, a sunlit one lined up on it first:
+//              tools/realref/register.py): --sun FILE:FROM:ANGLE (where the sun came from, degrees,
+//              0 right, 90 above, 180 left; its angle to the painting's face) and/or --lamp
+//              FILE:LEFT:ABOVE:OUT (cm from the painting's left and top edges, out from its face),
+//              each repeatable; --width-cm the painting's width; --deepest MM the deepest relief
+//              (lowest point to highest; sets the depth, which one sun angle cannot). Prints what
+//              was measured; with --out also renders it (as render), --save-project keeps it
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
 //              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
 //               "exposureAdd": 0.3, "scale": {"textureDepthMm": 1.2}, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
@@ -28,6 +37,12 @@
 //   --set "a=1;graze.opacity=0.5"   or JSON '{"exposure":0.3}' (repeatable; after the look, so it wins)
 //   --out FILE (.png/.jpg/.webp)  --width N  --preview  --quality 0..1
 //   --crop x,y,w,h   only that part of the export, at full detail (pixels, or fractions of 1)
+//   --change-map FILE.png  also write the change map: how much light each pixel gained or lost
+//                    against the photo (grey unchanged, orange brighter, blue darker, full colour at
+//                    --change-range stops, default 2), or with --change-kind colour how far each pixel
+//                    is off the photo's own colour (black none, white 32 levels or more); its numbers
+//                    go in the output and the record ("change"). A batch job's "changeMap": "FILE.png"
+//                    or {"file", "map", "range"}
 //   render and batch print each picture's metrics against the photo (clipping, darks, detail,
 //   warnings; docs/automation.md); --no-metrics skips them. After the options the guard brings
 //   blown whites / crushed darks back under the limits and says how ("guard"); --no-guard
@@ -42,7 +57,7 @@
 // Exit code 1 with the error on stderr when anything fails.
 const fs = require('fs');
 const path = require('path');
-const { parseSets, fromDataURL, cleanError, launch, openInput, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
+const { parseSets, dataURL, fromDataURL, cleanError, launch, openInput, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
 
 function parseArgs(argv) {
   const o = { _: [], set: [], preset: [] };
@@ -52,7 +67,7 @@ function parseArgs(argv) {
     const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record', 'no-many'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
-    if (k === 'set' || k === 'preset') o[k].push(v); else o[k] = v;
+    if (['set', 'preset', 'sun', 'lamp'].includes(k)) (o[k] ||= []).push(v); else o[k] = v;
   }
   return o;
 }
@@ -91,14 +106,29 @@ async function dress(call, j, analyze, src = {}) {
   return { analysis, guard: g && (g.fixed || !g.ok) ? { ok: g.ok, changes: g.changes, note: g.note } : null };
 }
 
-// Writes j.out; returns the picture's metrics (null with metrics off).
-// Writes the picture; returns its metrics (null with --no-metrics) and its pixels' fingerprint.
+// A job's change map: "FILE.png" or {file, map, range} → {file, opts} (opts for digilight's `change`), or null.
+function changeOf(j) {
+  const c = j.changeMap;
+  if (!c) return null;
+  const o = typeof c === 'string' ? { file: c } : c;
+  if (!o.file || !/\.png$/i.test(o.file)) throw new Error('changeMap is a .png file name (or {file, map, range}).');
+  return { file: o.file, opts: { map: o.map || 'light', ...(o.range != null ? { range: +o.range } : {}) } };
+}
+// Writes the change map beside the picture; returns its numbers with the file's path.
+function writeChange(ch, r) {
+  if (!ch || !r.change) return null;
+  fs.writeFileSync(ch.file, fromDataURL(r.change.image));
+  return { file: path.resolve(ch.file), ...r.change.stats };
+}
+
+// Writes the picture (and its change map); returns its metrics (null with --no-metrics), its
+// pixels' fingerprint and the change map's numbers (null without one).
 async function write(call, j, metrics = true) {
-  const format = (path.extname(j.out).slice(1) || 'png').toLowerCase();
-  const opts = { format, quality: j.quality != null ? +j.quality : 0.92, metrics, hash: true };
+  const format = (path.extname(j.out).slice(1) || 'png').toLowerCase(), ch = changeOf(j);
+  const opts = { format, quality: j.quality != null ? +j.quality : 0.92, metrics, hash: true, change: ch?.opts };
   const r = j.preview ? await call('render', opts) : await call('export', { ...opts, width: j.width ? +j.width : undefined, crop: j.crop || undefined });
   fs.writeFileSync(j.out, fromDataURL(r.image));
-  return { metrics: r.metrics || null, pixels: r.pixels };
+  return { metrics: r.metrics || null, pixels: r.pixels, change: writeChange(ch, r) };
 }
 
 function readJobs(file) {
@@ -124,9 +154,9 @@ async function runJobs(call, jobs, src, { metrics, noGuard, noRecord, many }) {
   if (jobs.some((j) => j.look != null)) { const t = Date.now(), a = await analyzeCached(call, src.input, src); process.stderr.write(`analyzed in ${Math.round((Date.now() - t) / 1000)} s${a.cached ? ' (cached)' : ''}\n`); }
   let failed = 0;
   const fail = (j, e) => { failed++; process.stdout.write(JSON.stringify({ out: path.resolve(j.out), error: cleanError(e) }) + '\n'); };
-  const done = async (j, ms, guard, { metrics: m, pixels }, rec) => {
-    const file = noRecord || j.record === false ? null : await writeRecord(call, path.resolve(j.out), { base: rec, input: src.input, job: recipe(j), output: { ...outputOf(j), pixels }, guard, metrics: m });
-    process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round(ms / 100) / 10, ...(guard ? { guard } : {}), ...(file ? { record: file } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}) }) + '\n');
+  const done = async (j, ms, guard, { metrics: m, pixels, change }, rec) => {
+    const file = noRecord || j.record === false ? null : await writeRecord(call, path.resolve(j.out), { base: rec, input: src.input, job: recipe(j), output: { ...outputOf(j), pixels }, guard, metrics: m, change });
+    process.stdout.write(JSON.stringify({ out: path.resolve(j.out), look: j.look ?? null, s: Math.round(ms / 100) / 10, ...(guard ? { guard } : {}), ...(file ? { record: file } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}), ...(change ? { change } : {}) }) + '\n');
   };
   const waiting = [];
   for (const j of jobs) {
@@ -143,19 +173,36 @@ async function runJobs(call, jobs, src, { metrics, noGuard, noRecord, many }) {
     let res;
     try {
       res = await call('exportMany', part.map(({ j, rec }) => ({ settings: rec.settings, width: j.width ? +j.width : undefined, crop: j.crop || undefined,
-        format: (path.extname(j.out).slice(1) || 'png').toLowerCase(), quality: j.quality != null ? +j.quality : 0.92 })), { metrics, hash: true });
+        format: (path.extname(j.out).slice(1) || 'png').toLowerCase(), quality: j.quality != null ? +j.quality : 0.92, change: changeOf(j)?.opts })), { metrics, hash: true });
     } catch (e) { for (const w of part) fail(w.j, e); continue; }
     const each = (Date.now() - t0) / part.length;
     for (const [k, w] of part.entries()) {
       try {
         fs.writeFileSync(w.j.out, fromDataURL(res[k].image));
-        await done(w.j, w.ms + each, w.guard, { metrics: res[k].metrics || null, pixels: res[k].pixels }, w.rec);
+        await done(w.j, w.ms + each, w.guard, { metrics: res[k].metrics || null, pixels: res[k].pixels, change: writeChange(changeOf(w.j), res[k]) }, w.rec);
       } catch (e) { fail(w.j, e); }
     }
   }
   if (failed) process.exitCode = 1;
 }
 
+// Measured relief from --sun FILE:FROM:ANGLE and --lamp FILE:LEFT:ABOVE:OUT photos (see measure above).
+async function measure(call, o) {
+  const photos = [];
+  const split = (v, n, what) => {
+    const parts = String(v).split(':'), nums = parts.slice(-n).map(Number), file = parts.slice(0, -n).join(':');
+    if (!file || nums.length !== n || !nums.every(Number.isFinite)) throw new Error(`--${what} is ${what === 'sun' ? 'FILE:FROM:ANGLE' : 'FILE:LEFT:ABOVE:OUT'}`);
+    if (!fs.existsSync(file)) throw new Error(`No such file: ${file}`);
+    return { file, nums };
+  };
+  for (const v of o.sun || []) { const { file, nums: [a, e] } = split(v, 2, 'sun'); photos.push({ src: dataURL(file), name: path.basename(file), sun: { azimuthDeg: a, elevationDeg: e } }); }
+  for (const v of o.lamp || []) { const { file, nums: [left, above, out] } = split(v, 3, 'lamp'); photos.push({ src: dataURL(file), name: path.basename(file), lamp: { left, above, out } }); }
+  if (!photos.length) throw new Error('measure needs --sun FILE:FROM:ANGLE or --lamp FILE:LEFT:ABOVE:OUT (repeatable).');
+  return call('measureRelief', { photos, widthCm: o['width-cm'] != null ? +o['width-cm'] : undefined, deepestMm: o.deepest != null ? +o.deepest : undefined, driftSigma: o.drift != null ? +o.drift : undefined, beamSigma: o.beam != null ? +o.beam : undefined });
+}
+
+// Two GL implementations, the same settings: how far apart a picture may be (tests/renderers.cjs).
+const RENDERER_TOL = { over2: 0.02, p99: 3, mean: 0.75 };
 // Re-render a recorded picture and check it is the same, pixel for pixel (see verify above).
 async function verify(file, o) {
   const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -190,13 +237,20 @@ async function verify(file, o) {
         const px = async (u) => { const im = new Image(); im.src = u; await im.decode(); const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, c.width, c.height).data; };
         const [x, y] = await Promise.all([px(a), px(b)]);
         if (x.length !== y.length) return { comparable: false };
-        let n = 0, max = 0;
-        for (let i = 0; i < x.length; i += 4) { const m = Math.max(Math.abs(x[i] - y[i]), Math.abs(x[i + 1] - y[i + 1]), Math.abs(x[i + 2] - y[i + 2])); if (m) n++; if (m > max) max = m; }
-        return { pixelsDiffering: n, of: x.length / 4, maxLevels: max };
+        const hist = new Uint32Array(256), of = x.length / 4;
+        let n = 0, max = 0, sum = 0;
+        for (let i = 0; i < x.length; i += 4) { const m = Math.max(Math.abs(x[i] - y[i]), Math.abs(x[i + 1] - y[i + 1]), Math.abs(x[i + 2] - y[i + 2])); hist[m]++; sum += m; if (m) n++; if (m > max) max = m; }
+        let seen = 0, p99 = 0, over2 = 0;
+        for (let v = 0; v < 256; v++) { seen += hist[v]; if (seen < 0.99 * of) p99 = v + 1; if (v > 2) over2 += hist[v]; }
+        return { pixelsDiffering: n, of, maxLevels: max, over2: Math.round(over2 / of * 1e5) / 1e5, p99, mean: Math.round(sum / of * 1000) / 1000 };
       }, [r.image, `data:image/png;base64,${fs.readFileSync(png).toString('base64')}`]);
     }
+    // Made on another renderer: the same picture within the tolerance tests/renderers.cjs states
+    // (docs/automation.md, Renderers agree) counts as reproduced, and says so.
+    if (res.vsFile?.of && res.renderer.recorded?.name !== res.renderer.now?.name)
+      res.vsFile.withinRendererTolerance = res.vsFile.over2 <= RENDERER_TOL.over2 && res.vsFile.p99 <= RENDERER_TOL.p99 && res.vsFile.mean <= RENDERER_TOL.mean;
     process.stdout.write(JSON.stringify(res, null, 2) + '\n');
-    if (!res.same) process.exitCode = 1;
+    if (!res.same && !res.vsFile?.withinRendererTolerance) process.exitCode = 1;
     if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n');
   } finally { await close(); }
 }
@@ -209,7 +263,7 @@ async function main() {
     process.stdout.write(lines.slice(0, lines.findIndex((l) => !l.startsWith('//'))).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n');
     return;
   }
-  if (!['info', 'analyze', 'describe', 'get', 'render', 'batch', 'verify'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch, verify).`);
+  if (!['info', 'analyze', 'describe', 'get', 'render', 'batch', 'verify', 'measure'].includes(cmd)) throw new Error(`Unknown command "${cmd}" (info, analyze, describe, get, render, batch, verify, measure).`);
   if (cmd === 'verify') return verify(input, o);
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (cmd === 'render' && !o.out) throw new Error('render needs --out FILE.');
@@ -220,20 +274,23 @@ async function main() {
     await openInput(call, input);
     await call('setGuard', false);   // guarded once per job, after all its changes (dress)
     const src = { input, fresh: !!o.fresh };
+    const measured = cmd === 'measure' ? await measure(call, o) : null;
 
     if (jobs) { await runJobs(call, jobs, src, { metrics: !o['no-metrics'], noGuard: !!o['no-guard'], noRecord: !!o['no-record'], many: !o['no-many'] }); if (errors.length) process.stderr.write('page errors:\n' + errors.join('\n') + '\n'); return; }
-    const { analysis, guard } = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set, guard: o['no-guard'] || !['render', 'get'].includes(cmd) ? false : undefined }, cmd === 'analyze', src);
+    const renders = cmd === 'render' || (cmd === 'measure' && o.out);
+    const { analysis, guard } = await dress(call, { preset: o.preset, look: o.look, strength: o.strength, set: o.set, guard: o['no-guard'] || !(renders || cmd === 'get') ? false : undefined }, cmd === 'analyze', src);
 
     let out;
     if (cmd === 'info') out = await call('info');
     else if (cmd === 'analyze') out = analysis;
     else if (cmd === 'describe') out = await call('describe');
     else if (cmd === 'get') out = await call('get', o.path ?? null);
+    else if (cmd === 'measure' && !o.out) out = measured;
     else {
-      const { metrics: m, pixels } = await write(call, o, !o['no-metrics']);
+      const { metrics: m, pixels, change } = await write(call, { ...o, changeMap: o['change-map'] && { file: o['change-map'], map: o['change-kind'], range: o['change-range'] } }, !o['no-metrics']);
       const job = recipe({ ...o, set: o.set.length ? o.set : undefined, preset: o.preset.length ? o.preset : undefined });
-      const rec = o['no-record'] ? null : await writeRecord(call, path.resolve(o.out), { input, job, output: { ...outputOf(o), pixels }, guard, metrics: m });
-      out = { out: path.resolve(o.out), ...(await call('info')), look: o.look ?? null, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}) };
+      const rec = o['no-record'] ? null : await writeRecord(call, path.resolve(o.out), { input, job, output: { ...outputOf(o), pixels }, guard, metrics: m, change });
+      out = { out: path.resolve(o.out), ...(await call('info')), ...(measured ? { measured } : {}), look: o.look ?? null, ...(guard ? { guard } : {}), ...(rec ? { record: rec } : {}), pixelsSha256: pixels?.sha256 ?? null, ...(m ? { metrics: m } : {}), ...(change ? { change } : {}) };
     }
     if (o['save-project']) { fs.writeFileSync(o['save-project'], JSON.stringify(await call('getProject'))); out = { ...out, project: path.resolve(o['save-project']) }; }
     process.stdout.write(JSON.stringify(out, null, 2) + '\n');

@@ -14,6 +14,7 @@ import { ADJUSTMENTS } from './adjust.js';
 import { OVERLAYS } from './overlays.js';
 import { imageMetrics, pictureStats } from './measure.js';
 import { drawResampled } from './resample.js';
+import { changeMap } from './changemap.js';
 
 export const API_VERSION = 1;
 const clone = (v) => structuredClone(v);
@@ -58,7 +59,7 @@ export function parseSets(text) {
   return out;
 }
 
-export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, $ }) {
+export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, lamp, $ }) {
   // One call at a time: each waits for the one before (a render during an Analyze would see its trial looks).
   let queue = Promise.resolve();
   const serial = (fn) => (...args) => { const run = queue.then(() => fn(...args)); queue = run.catch(() => {}); return run; };
@@ -247,16 +248,16 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   }
   // metrics: true → {image, metrics, pixels}: the render's numbers against the photo at the same
   // size and crop (measure.js imageMetrics), measured on the pixels before encoding, and its
-  // fingerprint (pixelsOf); hash: true → {image, pixels}.
-  let photoCache = null;   // the last photo measured: {src, key, stats}
-  function measure(canvas, whole, rect) {
-    const t0 = performance.now(), w = canvas.width, h = canvas.height;
-    const px = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  // fingerprint (pixelsOf); hash: true → {image, pixels}; change: true (or {map, range}) adds
+  // change: {image, stats}, the change map against the same photo pixels (changemap.js).
+  let photoCache = null;   // the last photo drawn: {src, key, px, stats}
+  const pixelsAt = (c) => c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+  // The photo drawn the way the picture's own pixels started: the preview's copy for a preview,
+  // else cut from the full photo as export.js cuts its tiles (resample.js when scaled).
+  // Resampled any other way it differs by a level or so, which counts as clipping.
+  function photoAt(w, h, whole, rect) {
     const s = api.source(), fw = s.naturalWidth || s.width;
-    const key = [whole[0], whole[1], rect ? [rect.x, rect.y, rect.w, rect.h] : ''].join('|');
-    // The photo drawn the way the picture's own pixels started: the preview's copy for a preview,
-    // else cut from the full photo as export.js cuts its tiles (resample.js when scaled).
-    // Resampled any other way it differs by a level or so, which counts as clipping.
+    const key = [w, h, whole[0], whole[1], rect ? [rect.x, rect.y, rect.w, rect.h] : ''].join('|');
     const pv = api.previewSource?.(), usePv = !rect && pv && pv.width === w && pv.height === h && whole[0] === w;
     if (!photoCache || photoCache.src !== (usePv ? pv : s) || photoCache.key !== key) {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -264,10 +265,35 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       if (usePv) g.drawImage(pv, 0, 0);
       else if (kx !== 1 || ky !== 1) drawResampled(g, s, whole[0], whole[1], r.x, r.y, w, h);
       else g.drawImage(s, r.x, r.y, r.w, r.h, 0, 0, w, h);
-      photoCache = { src: usePv ? pv : s, key, stats: pictureStats(px(c), w, h) };
+      photoCache = { src: usePv ? pv : s, key, px: pixelsAt(c), stats: null };
     }
-    const m = imageMetrics(px(canvas), w, h, photoCache.stats);
+    return photoCache;
+  }
+  function measure(canvas, whole, rect) {
+    const t0 = performance.now(), w = canvas.width, h = canvas.height;
+    const p = photoAt(w, h, whole, rect);
+    p.stats ||= pictureStats(p.px, w, h);
+    const m = imageMetrics(pixelsAt(canvas), w, h, p.stats);
     return { ...m, crop: rect || null, ms: Math.round(performance.now() - t0) };
+  }
+  // The change map (changemap.js) of a picture against the photo at the same size and crop:
+  // {image (PNG, or a Blob with as: 'blob'), stats}. opts: true, or {map: 'light' | 'colour', range}.
+  async function change(canvas, whole, rect, opts, as) {
+    const w = canvas.width, h = canvas.height, o = opts === true ? {} : opts;
+    const { pixels, stats } = changeMap(pixelsAt(canvas), photoAt(w, h, whole, rect).px, w, h, { map: o.map ?? 'light', range: o.range ?? 2 });
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').putImageData(new ImageData(pixels, w, h), 0, 0);
+    return { image: await encode(c, { format: 'png', as }), stats: { ...stats, crop: rect || null } };
+  }
+  // What render / export / exportMany return for one canvas, with the options asked for.
+  async function output(c, whole, rect, opts, enc = opts) {
+    if (!opts.metrics && !opts.hash && !opts.change) return encode(c, enc);
+    return {
+      image: await encode(c, enc),
+      metrics: opts.metrics ? measure(c, whole, rect) : undefined,
+      pixels: await pixelsOf(c),
+      ...(opts.change ? { change: await change(c, whole, rect, opts.change, enc.as) } : {}),
+    };
   }
   async function render(opts = {}) {
     needPhoto();
@@ -275,9 +301,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     api.renderNow();
     const c = document.createElement('canvas'); c.width = api.canvas.width; c.height = api.canvas.height;
     c.getContext('2d').drawImage(api.canvas, 0, 0);
-    if (!opts.metrics && !opts.hash) return encode(c, opts);
-    const metrics = opts.metrics ? measure(c, [c.width, c.height]) : undefined;
-    return { image: await encode(c, opts), metrics, pixels: await pixelsOf(c) };
+    return output(c, [c.width, c.height], undefined, opts);
   }
   async function exportImage(opts = {}) {
     needPhoto();
@@ -286,11 +310,9 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const rect = opts.crop ? cropRect(opts.crop, opts.width) : undefined;
     const out = opts.width ? await api.renderAt(opts.width, rect) : await api.exportFull(rect);
     const c = out?.canvas || out;
-    if (!opts.metrics && !opts.hash) return encode(c, opts);
     const s = api.source(), fw = s.naturalWidth || s.width, fh = s.naturalHeight || s.height;
     const W = opts.width ? Math.max(1, Math.min(fw, Math.round(opts.width))) : fw;
-    const metrics = opts.metrics ? measure(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect) : undefined;
-    return { image: await encode(c, opts), metrics, pixels: await pixelsOf(c) };
+    return output(c, [W, opts.width ? Math.max(1, Math.round(fh * W / fw)) : fh], rect, opts);
   }
   // Several pictures at once, for rounds of looks: items [{settings, width?, crop?, format?,
   // quality?}], each made as export() would make it from those settings (taken as they are:
@@ -323,9 +345,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
           const canvases = await api.exportStates(part.map((m) => m.st), { width: g.W === fw ? undefined : g.W, rect: g.rect || undefined });
           for (const [k, m] of part.entries()) {
             const it = items[m.i], enc = { format: it.format || opts.format, quality: it.quality ?? opts.quality, as: opts.as };
-            out[m.i] = opts.metrics || opts.hash
-              ? { metrics: opts.metrics ? measure(canvases[k], whole, g.rect) : undefined, image: await encode(canvases[k], enc), pixels: await pixelsOf(canvases[k]) }
-              : await encode(canvases[k], enc);
+            out[m.i] = await output(canvases[k], whole, g.rect || undefined, { ...opts, change: it.change ?? opts.change }, enc);
           }
         }
       }
@@ -361,6 +381,36 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       renderer: api.renderer?.() || null, photo: { width: s.naturalWidth || s.width, height: s.naturalHeight || s.height, sample: api.sample?.() || null, pixelsSha256: photoPx.sha256 },
       look, ...clone(extra), settings: settings() };
   }
+  // Relief measured from lamp or sun photos (Measure relief · lamp photos; lampphotos.js):
+  // photos [{src (URL, data URL or Blob), lamp: {left, above, out} (cm from the painting's
+  // left and top edges, and out from its face)} or {src, sun: {azimuthDeg, elevationDeg}}],
+  // each cropped like the painting photo (a sunlit one lined up on it first). widthCm sets the
+  // painting's width; deepestMm (the artist's deepest relief) sets the depth from it. Returns
+  // what was measured; the picture then uses the measured relief (one undo step).
+  async function measureRelief({ photos, widthCm, deepestMm, glints = true, fit = true, driftSigma, beamSigma } = {}) {
+    needPhoto();
+    if (state.mode !== 'single') throw new Error('Measured relief works on a single photograph.');
+    if (!Array.isArray(photos) || !photos.length || photos.some((p) => !p?.src || (!p.sun && !p.lamp))) throw new Error('measureRelief takes photos: [{src, lamp: {left, above, out}} or {src, sun: {azimuthDeg, elevationDeg}}].');
+    for (const p of photos) {
+      if (p.sun && !(Number.isFinite(+p.sun.azimuthDeg) && +p.sun.elevationDeg >= 1 && +p.sun.elevationDeg <= 89)) throw new Error('sun is {azimuthDeg (0 right, 90 above, 180 left), elevationDeg (1–89, to the painting\'s face)}.');
+      if (!p.sun && !['left', 'above', 'out'].every((k) => Number.isFinite(+p.lamp[k]))) throw new Error('lamp is {left, above, out} in cm.');
+    }
+    if (deepestMm != null && !(deepestMm > 0)) throw new Error('deepestMm must be over 0.');
+    if (widthCm != null) apply({ ...settings(), paintingWidthCm: +widthCm });
+    const blobs = await Promise.all(photos.map(async (p) => (p.src instanceof Blob ? p.src : (await fetch(String(p.src))).blob())));
+    lamp.rows.length = 0;
+    await lamp.addFiles(blobs.map((b, i) => new File([b], photos[i].name || `photo ${i + 1}`, { type: b.type || 'image/jpeg' })));
+    if (lamp.rows.length !== photos.length) throw new Error('A photo could not be opened.');
+    photos.forEach((p, i) => { lamp.rows[i].lamp = p.sun ? { sun: { azimuthDeg: +p.sun.azimuthDeg, elevationDeg: +p.sun.elevationDeg } } : { left: +p.lamp.left, above: +p.lamp.above, out: Math.max(0.2, +p.lamp.out) }; });
+    lamp.renderRows();
+    const r = await lamp.measure({ glints, fit, deepest: deepestMm ?? null, driftSigma, beamSigma });
+    if (!r) throw new Error($('lampStatus').textContent || 'The relief could not be measured.');
+    await idle();
+    return { depthMm: r.depthMm, rangeMm: r.rangeMm, deepestMm: r.deepestMm, textureDepthMm: state.textureDepthMm, sun: r.sun, check: r.check,
+      shots: r.shots.map((x) => ({ align: x.align && { map: x.align.map, rms: x.align.rms, used: x.align.used, of: x.align.of }, room: x.room, usable: x.usable, glint: x.glint })),
+      fit: r.fit ? { depth: r.fit.depth, reached: r.fit.reached } : null, ...info() };
+  }
+
   async function getProject(opts = {}) {
     needPhoto();
     const p = await project();
@@ -395,6 +445,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     guard: serial(async (o = {}) => { needPhoto(); return guard.run({ ...o, fix: o.fix !== false, amend: false }); }),
     lastGuard: () => guard.last, setGuard: (on) => { guard.enabled = !!on; return guard.enabled; },
     record: serial(async (extra) => record(extra)),
+    measureRelief: serial(measureRelief),
     getProject: serial(getProject), setProject: serial(setProject),
   };
   window.digilight = digilight;

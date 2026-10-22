@@ -32,9 +32,10 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `looks()` | the looks from the last Analyze: `[{index, name, kind, note, exposure}]` |
 | `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
 | `undo()` / `redo()` | `true` if there was a step |
-| `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below) |
+| `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below); `change: true` (or `{map, range}`) adds `change: {image, stats}`, the change map (below) |
 | `exportMany(items, {metrics, format, quality})` | several pictures at once: `items` `[{settings, width?, crop?, format?, quality?}]` (settings from `settings()` or a record, taken as they are). Items that need the same relief (same surface settings, size and crop) share one tiled pass, so the relief is built once for all of them, not once per picture; returns what `export` returns for each, in order, and puts the settings back. The CLI `batch` uses it |
-| `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` as `render` |
+| `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` and `change` as `render` |
+| `measureRelief({photos, widthCm, deepestMm})` | relief measured from lamp or sun photos instead of estimated from the one photo (the app's Measure relief · lamp photos): `photos` `[{src, lamp: {left, above, out}}]` (cm from the painting's left and top edges, out from its face; one tripod) or `[{src, sun: {azimuthDeg, elevationDeg}}]` (where the sun came from: 0 right, 90 above, 180 left; its angle to the face), each cropped like the painting photo, a sunlit one lined up on it first (tools/realref/register.py). `deepestMm`, the artist's deepest relief (lowest to highest), sets the depth (one sun angle cannot: see [Measured relief from sunlight](#measured-relief-from-sunlight)). Returns `{depthMm, rangeMm, textureDepthMm, check, shots, ...info()}`; one undo step |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
 | `setProject(objOrJSON)` | opens a project |
 
@@ -155,6 +156,89 @@ tests/repeat-look.cjs (fresh pages two at a time, one with a fresh Analyze) and 
 JPEG identity) check it. Records made before 10-22 of resized pictures, or from JPEG photos,
 will not verify: their photo was decoded or resized the old way.
 
+### Change map
+
+What a picture changed, pixel by pixel, against the photo it was made from (`src/changemap.js`):
+proof, from the two pictures alone, that each pixel is the photo's own pixel under some light
+and nothing else was touched. `render`, `export` and `exportMany` (per item or for all) take
+`change: true` or `{map: 'light' | 'colour', range}`, and return `change: {image, stats}`
+(the map as a PNG at the picture's size; the photo is the same pixels the metrics use):
+
+- **light** (default): the light each pixel was multiplied by, in stops (log2 of the render's
+  linear luma over the photo's). Grey = unchanged, orange = brighter, blue = darker, full colour
+  at `range` stops (default 2).
+- **colour**: how far each pixel is off the photo's own colour at its new brightness (the photo's
+  linear RGB times that light), in levels, the largest channel. Black = the photo's colour,
+  white = 32 levels or more. A coloured lamp, warmth (Kelvin), the Colour tool and clipping
+  show here; light alone, however strong, does not.
+- `stats`: `same` (share of pixels identical to the photo), `light` (stops: `min`, `p01`,
+  `p05`, `p50`, `p95`, `p99`, `max`; `brighter` / `darker` the shares moved over 0.05 stop),
+  `colour` (levels: `p50`, `p95`, `p99`, `max`; `off` the share over 4 levels: under that is
+  8-bit rounding), `crop`.
+
+With nothing changed (Original on top 100%) `same` is 1 and the map is plain grey
+(tests/exact.cjs). The CLI writes it with `--change-map FILE.png` (`--change-kind colour`,
+`--change-range N`; a batch job's `"changeMap": "FILE.png"` or `{file, map, range}`), the MCP
+`render_preview` returns it as a second image (`change_map: "light" | "colour"`) and
+`export_image` writes `FILE-change.png` beside the picture; the numbers go in the output and
+the record (`change`). `node tests/changemap.mjs` checks the maths on pictures whose change is
+known.
+
+### Renderers agree
+
+The same settings must give the same picture whatever draws it: an agent may render headless in
+software GL while a person looks on a GPU. `node tests/renderers.cjs` renders the same pictures
+(random noise, the sample painting, the user's plaster door; nothing changed, three presets and
+an Analyze look; 900 px) in two GL implementations and compares them pixel for pixel. In the
+cloud there is no GPU, so it sets Chromium's SwiftShader against Mesa's llvmpipe (another shader
+compiler and rasteriser, drawn through Xvfb: `DIGILIGHT_GL=llvmpipe` for the CLI too); on a
+computer with a graphics card, `RENDERER_B=gpu node tests/renderers.cjs` sets SwiftShader
+against it. The stated tolerance:
+
+- **Nothing changed** (Original on top 100%): bit for bit, on every renderer (the photo's own
+  texel; no GL arithmetic touches it).
+- **Anything else**: at most 2% of pixels more than 2 levels apart (0–255, the largest channel),
+  the 99th percentile within 3 levels, the mean within 0.75 level; the change map's median light
+  within 0.02 stop.
+
+Measured 10-22 (SwiftShader / llvmpipe): about half the pixels differ by one level (rounding in
+linear light); presets and looks p99 1 level, mean 0.11–0.50, max 2–9; the worst, the door under
+Classic raking, 1.03% over 2 levels, p99 3, mean 0.59, max 25 (pixels on a cast shadow's edge,
+where the two step the shadow march differently). Metrics and the change map agree to their
+rounding (detail per scale within 0.02). A fingerprint (`pixels.sha256`) belongs to one renderer:
+`verify` on another renderer reports a different fingerprint and which renderer each was made on;
+with a PNG beside the record it also says whether the two are within this tolerance
+(`vsFile.withinRendererTolerance`, exit code 0 if so).
+
+### Measured relief from sunlight
+
+Sunlight is an even, distant lamp: one photo of the painting in low sun, besides the evenly lit
+one, measures the relief instead of guessing it from one photo (docs/real-light-test.md: on the
+user's plaster door, light and shade correlation with the real sun about 0 for the one-photo
+estimate, 0.55 / 0.60 mid / broad measured). `measureRelief` with `sun`, the CLI's `measure`
+and the MCP `measure_relief` do it:
+
+```
+node tools/digilight-cli.cjs measure flat.jpg --sun sun-lined.jpg:40:10.3 --width-cm 52 --deepest 3.2 --out relit.jpg
+```
+
+- Line the sunlit photo up on the flat one first (handheld, from another spot):
+  `python3 tools/realref/register.py flat.jpg sun.jpg sun-lined.jpg` (the app's own lining up
+  only finds small shifts, for a tripod's creep).
+- The sun has a direction, no position: `FROM` where it came from in the picture (0° right,
+  90° above, 180° left), `ANGLE` its angle to the painting's face.
+- Depth: one sun angle cannot tell a shallow relief under a high sun from a deep one under a low
+  sun. Give `--deepest` (mm, lowest point to highest) and Texture depth is scaled to it;
+  without it the depth is what the angle given implies.
+- One sun photo gives the slopes along the sun's light only; a second with the painting turned
+  about 90° gives both (and a third lets the measurement check itself).
+- Take it with the sun low enough to cast shadows (10–30° to the face): the sky light's share is
+  read from the deepest shadows, and without any it reads high and the relief deep.
+- Measured relief drops forms broader than 12% of the width (6% for lamps) and reads relief up to
+  about stroke scale in detail (docs/real-light-test.md, 10-22, for what was tried);
+  `--drift` / `--beam` (`driftSigma`, `beamSigma`, in painting widths) try other values.
+- Tests: `node tests/sunrelief.mjs` (a synthetic painting in sun, known relief).
+
 ## Bridges
 
 ### URL parameters (run once on open)
@@ -196,7 +280,10 @@ Needs Node and the tools' packages (`cd tools && npm install`, then
 `npx playwright install chromium` once); in cloud sessions set
 `DIGILIGHT_BROWSER=/opt/pw-browsers/chromium`. It serves the repository itself
 (`DIGILIGHT_URL=https://digi-light-test.bobdylan2000.workers.dev/` uses the live site instead,
-`DIGILIGHT_GPU=1` the computer's graphics card instead of software rendering).
+`DIGILIGHT_GPU=1` the computer's graphics card instead of software rendering;
+`DIGILIGHT_GL=swiftshader|gpu|llvmpipe` picks the GL by name: llvmpipe is Mesa's software GL,
+another implementation than Chromium's SwiftShader, drawn through Xvfb on Linux; see
+[Renderers](#renderers-agree)).
 
 ```
 node tools/digilight-cli.cjs <command> <input> [options]
@@ -205,12 +292,16 @@ node tools/digilight-cli.cjs <command> <input> [options]
 - **input**: a photo path or http(s) URL, a `.digilight.json` project, or `sample:painting` / `sample:dsc8382`
 - **commands**: `info`, `analyze` (JSON readout and looks), `describe` (settable paths),
   `get` (settings after the options; `--path a.b` for one), `render` (writes `--out`),
+  `measure` (relief from `--sun FILE:FROM:ANGLE` / `--lamp FILE:LEFT:ABOVE:OUT` photos,
+  `--width-cm`, `--deepest MM`; see [Measured relief from sunlight](#measured-relief-from-sunlight)),
+  `verify` (re-renders a record and checks it),
   `batch` (many renders from one Analyze, see below)
 - **options**, applied in this order: `--preset kind:name` (repeatable), `--look NAME|N
   --strength 0..1`, then `--set "a=1;b.c=2"` or JSON (repeatable; after the look, so it wins); output: `--out FILE.png|.jpg|.webp`,
   `--width N` (else full size), `--crop x,y,w,h` (only that part, at full detail: pixels, or
   fractions of 1; a true 100% loupe for a fraction of a full export's time), `--preview` (the
-  preview size), `--quality`, `--save-project FILE`
+  preview size), `--quality`, `--save-project FILE`, `--change-map FILE.png` (the change map,
+  above; `--change-kind colour`, `--change-range N`)
 
 `render` and `batch` print each picture's metrics (below); `--no-metrics` skips them.
 
@@ -241,7 +332,7 @@ node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
 (string, object or a list), `exposureAdd` (stops added to the exposure the look fitted, so
 "+0.3" means the same on every photo), `scale` (`{"textureDepthMm": 1.2}`: each setting times a
 factor, on the value the look set, so "20% deeper" means the same on every photo, kept inside the setting's range), `addLights` (a list of `{kind, fields}` as `addLight`),
-`width`, `crop`, `preview`, `quality`). Prints one JSON line per file.
+`width`, `crop`, `preview`, `quality`, `changeMap`). Prints one JSON line per file.
 
 **Analyze is cached on disk.** The CLI and the MCP server keep each finished Analyze in
 `~/.cache/digilight/analysis` (one ~0.5 MB file per photo), so analyzing the same photo
@@ -345,8 +436,9 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |
 | `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
-| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings |
-| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`) |
+| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings; `change_map` `light` / `colour` adds the change map as a second picture, with its numbers |
+| `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`); `change_map` also writes `FILE-change.png` |
+| `measure_relief` | relief measured from lamp or sun photos (`photos` `[{path, sun: {from_deg, angle_deg}} or {path, lamp: {left_cm, above_cm, out_cm}}]`, `painting_width_cm`, `deepest_mm`) |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |
 
 The server keeps one DigiLight page open for the whole chat, so each tool works on the
