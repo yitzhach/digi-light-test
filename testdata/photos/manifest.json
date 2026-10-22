@@ -1,0 +1,21 @@
+{
+ "about": "The user's plaster pieces (10-21). See README.md and docs/real-light-test.md.",
+ "pieces": {
+  "door": {
+   "flat": "door-flat-crop.jpg", "flatOriginal": "door-flat.jpg", "cropBox": [100, 60, 1380, 1865],
+   "sun": "door-sun.jpg", "sunLined": "door-sun-lined.jpg",
+   "sun_direction": "upper left (shadows inside the recessed dark block), about 135 deg (0 right, 90 up)",
+   "sun_elevation_deg": null, "width_cm": null,
+   "notes": "Elevation and width unknown; measure_sun.cjs was run with 30 deg, 60 cm."
+  },
+  "lintel": {
+   "flat": "lintel-flat-crop.jpg", "flatOriginal": "lintel-flat.jpg", "cropBox": [98, 116, 1386, 1786],
+   "sun": "lintel-sun.jpg", "sunLined": "lintel-sun-lined.jpg",
+   "sun_direction": "upper right, about 40 deg (lintel shadow)",
+   "sun_elevation_deg": 10.3, "width_in": 20.5, "lintel_protrusion_in": 0.75, "deepest_relief_in": 0.125,
+   "notes": "Elevation from the lintel's shadow (264 px = 0.205 of the panel width); 11.9-13.6 deg if the block sits 1/8-1/4 in lower. The lintel stands off the plaster: its cast shadow is not measurable from shading."
+  },
+  "band": { "flat": "band-outdoor-crop.jpg", "flatOriginal": "band-outdoor.jpg", "cropBox": [236, 45, 1132, 1945], "notes": "Outdoors, even daylight; colour (orange band) and a near-black band." },
+  "closeup": { "flat": "closeup-flat.jpg", "notes": "Already cropped; near-black band: room light alone cannot keep it from crushing (guard)." }
+ }
+}

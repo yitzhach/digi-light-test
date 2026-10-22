@@ -66,7 +66,7 @@ needs the background. The plan is **docs/roadmap.md**.
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
 3. White plaster: should the favourites keep whites white (neutral greys: plaster b* 16 → ~12;
    the sunlit photo is 3.9)?
-4. May the test photos be kept as a private test set (now only in a session's scratch space)?
+4. (Answered 10-22: the test photos are in the repo, testdata/photos/, public is fine.)
 5. Is the guard chip welcome (screenshots sent 10-20)?
 6. docs/roadmap.md §6: lamp photos per piece (measured relief), evenness slider, blind voting,
    phone or iMac, default look for uploaders, 16-bit / TIFF output.

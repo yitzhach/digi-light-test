@@ -3,8 +3,8 @@
 The user sent two photos of the same plaster piece (the "door"): one indoors in flat light,
 one outdoors in raking sunlight, handheld from another spot. With the sunlit one lined up on
 the flat one, it is a reference for what raking light really does to this piece, and every
-relit picture can be measured against it. The photos are the user's and are not in the repo
-(kept as a private test set only if the user agrees).
+relit picture can be measured against it. The photos (and the user's other test photos) are in
+**testdata/photos/** (README.md, manifest.json), committed with the user's OK (10-22).
 
 ## How to rerun
 
