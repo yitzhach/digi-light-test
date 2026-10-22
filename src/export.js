@@ -13,6 +13,7 @@
 import { makeTarget, bindTarget } from './gl.js';
 import { uploadShotArray } from './photometric.js';
 import { FORM_OUTER } from './gbuffer.js';
+import { drawResampled } from './resample.js';
 
 /**
  * How far outside a tile the surface passes reach, in pixels. Getting this wrong
@@ -118,8 +119,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
         const from = [px0 * kx, py0 * ky, pw * kx, ph * ky];
 
         cut.width = pw; cut.height = ph;
-        // Resampling down in one step wants a better filter than the default.
-        if (kx !== 1 || ky !== 1) cutx.imageSmoothingQuality = 'high';
+        const resized = kx !== 1 || ky !== 1;
 
         let targets;
         if (photometric) {
@@ -141,7 +141,10 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           });
         } else {
           cutx.clearRect(0, 0, pw, ph);
-          cutx.drawImage(source, ...from, 0, 0, pw, ph);
+          // Resized: our own area average (resample.js), the same pixels in every session;
+          // the browser's high-quality drawImage was not. At 1:1 drawImage is an exact copy.
+          if (resized) drawResampled(cutx, source, W, H, px0, py0, pw, ph);
+          else cutx.drawImage(source, ...from, 0, 0, pw, ph);
           gl.bindTexture(gl.TEXTURE_2D, tex);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, cut);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);

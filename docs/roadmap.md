@@ -77,8 +77,13 @@ where in the code it lives. **Done 10-19** marks what the same session already b
      (tests/exact.cjs). The 2-level gap seen first was mostly JPEG decoding (another decoder);
      from a PNG, 109 dark pixels were one level up: the texture filter leaked a neighbour in.
   2. Done 10-21: fingerprints (photo and picture pixels, SHA-256) in every record, and the CLI's
-     `verify`. It found an open bug at once: a look applied the same way can export different
-     pixels in different sessions (tests/repeat-look.cjs).
+     `verify`. It found a bug at once: a look applied the same way could export different
+     pixels in different sessions (tests/repeat-look.cjs). Fixed 10-22: the browser shrank the
+     photo for resized exports with a high-quality filter that is not stable under load, and a
+     JPEG read through a GPU canvas and a CPU canvas came out a level apart; now the photo is
+     decoded once (app.js pinPixels) and resized by our own area average (src/resample.js).
+     Still left to the browser: the preview's copy of the photo (one bilinear drawImage at
+     load; stable in every test so far, but not our arithmetic).
   3. A pixel map per picture on request: how much each pixel's light changed (the shading the
      photo was multiplied by), so an AI or a person can see that nothing else was touched.
   4. Software-GL and GPU renders agree within a stated tolerance (tested), since an agent may

@@ -1,6 +1,9 @@
 // exact.cjs — the app's pictures are calculated from the photo, never regenerated:
 //  1. with nothing changed (Original on top 100%), a full-size export is the photo bit for bit;
-//  2. the same settings give the same pixels, every time.
+//  2. the same settings give the same pixels, every time;
+//  3. resized, the photo is resampled by resample.js: exact block means, and a resized identity
+//     export is that resample bit for bit;
+//  4. a JPEG is decoded once (one decoder path), and exports as decoded with nothing changed.
 // The photo is random noise at an odd size, the hardest case: every pixel sits beside unrelated
 // ones, so any filtering, shift or rounding on the way through linear light shows. (The user,
 // 10-21: "mathematically pixel for pixel accurate images", not a look-alike. Before the fix,
@@ -46,7 +49,36 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       await d.set({ originalTop: 0, exposure: 0.4, 'graze.enabled': true });
       const a = await pixels(await asURL(await d.export({ format: 'png' })));
       const b = await pixels(await asURL(await d.export({ format: 'png' })));
-      return { size: [same.w, same.h], identity: differ(same.px, photo), repeat: differ(a.px, b.px), relit: differ(a.px, photo) };
+      // 3. Resized, the photo goes through resample.js (the browser's own high-quality downscale
+      // was not the same from one session to the next): exact means, any region the same pixels
+      // as the whole, and a resized identity export is exactly that resample.
+      const { resampleRegion } = await import('/src/resample.js');
+      const c2 = document.createElement('canvas'); c2.width = 1200; c2.height = 898;
+      c2.getContext('2d').putImageData(g.getImageData(0, 0, 1200, 898), 0, 0);
+      const half = resampleRegion(c2, 600, 449, 0, 0, 600, 449).data;
+      let boxOff = 0;
+      for (let y = 0; y < 449; y++) for (let x = 0; x < 600; x++) for (let k = 0; k < 3; k++) {
+        const at = (dx, dy) => photo[((2 * y + dy) * W + 2 * x + dx) * 4 + k];
+        if (half[(y * 600 + x) * 4 + k] !== Math.round((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)) / 4)) boxOff++;
+      }
+      const RW = 517, RH = Math.round(H * RW / W), whole = resampleRegion(c, RW, RH, 0, 0, RW, RH).data;
+      const part = resampleRegion(c, RW, RH, 100, 50, 200, 150).data;
+      let tile = 0;
+      for (let y = 0; y < 150; y++) for (let x = 0; x < 200; x++) for (let k = 0; k < 4; k++) if (part[(y * 200 + x) * 4 + k] !== whole[((y + 50) * RW + x + 100) * 4 + k]) tile++;
+      await d.set({ originalTop: 1, exposure: 0, 'graze.enabled': false });
+      const small = await pixels(await asURL(await d.export({ format: 'png', width: RW })));
+      // 4. A JPEG: the app decodes it once (app.js pinPixels, a CPU canvas; a GPU-backed one
+      // converts from YUV itself, a level apart on a quarter of the values), so the identity
+      // export is that decode bit for bit.
+      const jpeg = c.toDataURL('image/jpeg', 0.9);
+      await d.load(jpeg);
+      await d.set({ originalTop: 1 });
+      const jpegOut = await pixels(await asURL(await d.export({ format: 'png' })));
+      const im = new Image(); im.src = jpeg; await im.decode();
+      const jc = document.createElement('canvas'); jc.width = W; jc.height = H;
+      const jx = jc.getContext('2d', { willReadFrequently: true }); jx.drawImage(im, 0, 0);
+      return { size: [same.w, same.h], identity: differ(same.px, photo), repeat: differ(a.px, b.px), relit: differ(a.px, photo),
+        boxOff, tile, smallSize: [small.w, small.h], resized: differ(small.px, whole), jpeg: differ(jpegOut.px, jx.getImageData(0, 0, W, H).data) };
     });
     assert.deepEqual(r.size, [1201, 899]);
     assert.equal(r.identity.n, 0, 'nothing changed: the export is the photo, bit for bit ' + JSON.stringify(r.identity));
@@ -54,6 +86,13 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
     assert.equal(r.repeat.n, 0, 'the same settings give the same pixels ' + JSON.stringify(r.repeat));
     assert.ok(r.relit.n > 0, 'and a relit picture does change them');
     console.log('PASS repeatable: the same relit settings exported twice, identical pixels', JSON.stringify(r.relit));
+    assert.equal(r.boxOff, 0, 'a near half-size resample is the mean of each 2 x 2 block');
+    assert.equal(r.tile, 0, 'a region of a resample is the same pixels as the whole there');
+    assert.deepEqual(r.smallSize, [517, 387]);
+    assert.equal(r.resized.n, 0, 'a resized identity export is the resample, bit for bit ' + JSON.stringify(r.resized));
+    console.log('PASS resized: area-average resample (block means, regions = whole), and the export at 517 px is it bit for bit');
+    assert.equal(r.jpeg.n, 0, 'a JPEG with nothing changed exports as decoded, bit for bit ' + JSON.stringify(r.jpeg));
+    console.log('PASS JPEG identity: the photo decoded once, exported bit for bit');
     assert.deepEqual(s.errors, []);
   } finally { await s.close(); }
 })().catch((e) => { console.error(e); process.exit(1); });

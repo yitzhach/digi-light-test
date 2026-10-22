@@ -143,11 +143,17 @@ records keep it as `output.pixels`. `node tools/digilight-cli.cjs verify FILE.js
 the same picture, pixel for pixel (exit code 1 if not; with a PNG beside the record, how many
 pixels differ and by how much).
 
-Known gap (10-21): a picture made by applying a look (Analyze, `applyLook`, the guard) can export
-differently from the same settings set directly, in some page sessions and not others: the
-red-panel sample's side-lamp favourite at 900 px came out as one of two fingerprints, speckled
-apart over most pixels (up to 99 levels), with every recorded setting and measurement the same;
-set directly, the settings give the same picture every time. Under investigation (HANDOFF.md).
+Fixed 10-22 (was a known gap): a picture made by applying a look could export differently in
+different page sessions (two fingerprints for the red-panel favourite at 900 px, speckled apart
+up to 99 levels), because the photo itself reached the relief a level apart: a resized export,
+the sharp zoom and the metrics shrank it with the browser's high-quality drawImage, which is not
+stable under load (two pages at once, or a fresh Analyze, gave the other picture), and a JPEG
+decoded through a GPU-backed canvas differs from a CPU-backed one by a level on a quarter of its
+values. The photo is now decoded once into a plain canvas (app.js `pinPixels`) and resized by
+src/resample.js (an area average in sRGB; a tile's pixels are the whole picture's there).
+tests/repeat-look.cjs (fresh pages two at a time, one with a fresh Analyze) and tests/exact.cjs (block means, resized and
+JPEG identity) check it. Records made before 10-22 of resized pictures, or from JPEG photos,
+will not verify: their photo was decoded or resized the old way.
 
 ## Bridges
 

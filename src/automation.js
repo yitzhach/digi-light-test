@@ -13,6 +13,7 @@
 import { ADJUSTMENTS } from './adjust.js';
 import { OVERLAYS } from './overlays.js';
 import { imageMetrics, pictureStats } from './measure.js';
+import { drawResampled } from './resample.js';
 
 export const API_VERSION = 1;
 const clone = (v) => structuredClone(v);
@@ -254,14 +255,15 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const s = api.source(), fw = s.naturalWidth || s.width;
     const key = [whole[0], whole[1], rect ? [rect.x, rect.y, rect.w, rect.h] : ''].join('|');
     // The photo drawn the way the picture's own pixels started: the preview's copy for a preview,
-    // else cut from the full photo as export.js cuts its tiles (a GPU canvas, high quality when
-    // scaled). Resampled any other way it differs by a level or so, which counts as clipping.
+    // else cut from the full photo as export.js cuts its tiles (resample.js when scaled).
+    // Resampled any other way it differs by a level or so, which counts as clipping.
     const pv = api.previewSource?.(), usePv = !rect && pv && pv.width === w && pv.height === h && whole[0] === w;
     if (!photoCache || photoCache.src !== (usePv ? pv : s) || photoCache.key !== key) {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       const g = c.getContext('2d'), kx = fw / whole[0], ky = (s.naturalHeight || s.height) / whole[1], r = rect || { x: 0, y: 0, w, h };
       if (usePv) g.drawImage(pv, 0, 0);
-      else { if (kx !== 1 || ky !== 1) g.imageSmoothingQuality = 'high'; g.drawImage(s, r.x * kx, r.y * ky, r.w * kx, r.h * ky, 0, 0, w, h); }
+      else if (kx !== 1 || ky !== 1) drawResampled(g, s, whole[0], whole[1], r.x, r.y, w, h);
+      else g.drawImage(s, r.x, r.y, r.w, r.h, 0, 0, w, h);
       photoCache = { src: usePv ? pv : s, key, stats: pictureStats(px(c), w, h) };
     }
     const m = imageMetrics(px(canvas), w, h, photoCache.stats);

@@ -272,10 +272,25 @@ function setCompare(img) {
   render();
 }
 
+// The photo's pixels, decoded once into a plain canvas that everything after draws from. The same
+// JPEG drawn into a GPU-backed canvas and a CPU-backed one came out a level apart on a quarter
+// of its values (10-22: the GPU path converts from YUV itself), and Chromium may move a canvas
+// from one to the other on its own, so pictures made from the image itself were not the same
+// from one session to the next. Copies of this canvas at 1:1 are exact on either path.
+function pinPixels(src) {
+  if (src instanceof HTMLCanvasElement) return src;
+  const c = document.createElement('canvas');
+  c.width = src.naturalWidth || src.width; c.height = src.naturalHeight || src.height;
+  c.getContext('2d', { willReadFrequently: true }).drawImage(src, 0, 0);
+  if (src.dataset?.sample) c.dataset.sample = src.dataset.sample;
+  return c;
+}
+
 async function setSource(src, keep = false) {
   const { gl } = glctx;
-  const w = src.width || src.naturalWidth;
-  const h = src.height || src.naturalHeight;
+  src = pinPixels(src);
+  const w = src.width;
+  const h = src.height;
   $('err').style.display = 'none';
   fullSource = src; fullW = w; fullH = h;
 

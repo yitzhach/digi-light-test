@@ -6,6 +6,21 @@ the upgrade phases, done lists) is kept verbatim in **docs/history.md**; search 
 needs the background. The plan is **docs/roadmap.md**.
 
 ## Now
+- **10-22 (branch `claude/quirky-allen-tna7jh`): the look-path repeatability bug is fixed.** Two
+  causes, both the photo reaching the relief a level apart (the relief turns a level into speckle
+  up to 99 deep): (1) resized exports, the sharp zoom and the metrics shrank the photo with the
+  browser's `drawImage` at 'high' quality, which is not stable under load (two pages at once, or a
+  fresh Analyze, gave the other picture; every uniform the same, the export's own photo texture
+  not); now src/resample.js does it (area average in sRGB from an exact 1:1 copy; a tile's pixels
+  are the whole picture's there). (2) A JPEG drawn into a GPU-backed canvas differs from a
+  CPU-backed one by a level on a quarter of its values, and Chromium can switch a canvas between
+  them; now the photo is decoded once into a plain canvas (app.js `pinPixels`). The red panel's
+  photo at 900 px moved by mean 3.5 levels (the new filter is a touch sharper: mean gradient 53.9
+  vs 51.9). tests/repeat-look.cjs passes (pages two at a time, one with a fresh Analyze) and is a
+  routine test now; tests/exact.cjs adds block means, a resized identity export and a JPEG
+  identity export (that one fails without pinPixels). Records of resized pictures or JPEG photos
+  made before 10-22 will not verify (decoded / resized the old way). Still the browser's: the
+  preview's copy of the photo (one bilinear drawImage at load; stable in every test so far).
 - **10-21 (merged to `main`):**
   - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much
     high-frequency sharpness in most"), so crispGraze is detail 0.02, fine 0.15, elevation 6;
@@ -51,9 +66,6 @@ needs the background. The plan is **docs/roadmap.md**.
     `pixels.sha256` (RGBA before encoding), records hold the photo's and the picture's, and
     `digilight-cli.cjs verify FILE.json` re-renders a record and checks it pixel for pixel
     (docs/automation.md "Exact pictures and fingerprints").
-  - **Open bug found by verify:** the same look applied the same way can export different pixels in
-    different page sessions (tests/repeat-look.cjs reproduces it; details there). Setting the
-    recorded settings directly is repeatable. So a record of a look-made picture may not verify.
   - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
     goldens, exportMany, make_round.py).
 
@@ -75,17 +87,11 @@ needs the background. The plan is **docs/roadmap.md**.
    100% strength; the AI-match texture/depth work.
 
 ## Next up
-1. Fix the look-path repeatability bug (tests/repeat-look.cjs must pass, then add it to the routine
-   tests). Leads: after applyLook + guard, every JSON-able state field equals the setSettings path,
-   so look for GPU-side state the export reuses: gbuffer.js caches (buildGraze / buildShadow /
-   buildStroke keyed by sigma only?), `builtSurface` / `strokeMeasuredAt`, textures left from the
-   guard's many renderNow calls; try `api.dirty()` + renderNow before the export; bisect (skip the
-   guard; skip analyzeCached; applyLook strength 1 vs setSettings of its target).
-2. The rest of the exactness plan (roadmap NEXT): a change map (how much each pixel's light changed),
+1. The rest of the exactness plan (roadmap NEXT): a change map (how much each pixel's light changed),
    GPU and software GL agreeing within a stated tolerance, then the sun option (handheld lining up
    in the app, a sun lamp, broad forms kept, depth from the artist's number, looks without graze
    smoothing on measured relief), all drivable through the CLI / MCP with the same checks.
-3. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
+2. Roadmap NEXT, in order (docs/roadmap.md): the rest of the in-app part (the sharp layer at
    fit-to-screen; a `?round=` link that renders a round on the user's own GPU); agent tools
    (`render_preview` region + stats, a `compare` tool); narrower Analyze cache (photo
    measurements apart from look fitting); faster metrics.
@@ -112,6 +118,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `automation.js` — `window.digilight` (set, looks, render/export/exportMany with metrics,
   record, guard), URL params, `?bridge` postMessage
 - `toolrail.js`, `touchsliders.js` — one tool at a time (phone strip / desktop rail); phone sliders
+- `resample.js` — the photo at another size (export tiles, sharp zoom, metrics): area average,
+  the same pixels every session
 - `gbuffer.js` — single-photo surface estimation; `shade.js` — shading pass (area lights,
   graze, overlays, adjustments); `export.js` — tiled export (several variants per relief build)
 - `gl.js` (WebGL2, `caps.software` for SwiftShader), `kelvin.js`, `photocheck.js`, `probe.js`,
@@ -126,7 +134,9 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `cd tools && npm install` once, then `node tests/mcp.cjs` (`--full` adds Analyze)
 - `node tests/measure.mjs` (measure.js against slow reference maths; no browser, <1 s)
 - `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; ~1 min)
-- `node tests/repeat-look.cjs [runs]` (the open repeatability bug: fails until fixed)
+- `node tests/repeat-look.cjs [runs]` (the same look in fresh pages, two at a time, gives the same
+  pixels; ~10 min)
+- browser.cjs needs the server above running on 8766; the other tests serve the repo themselves.
 - Do not edit `src/` while a test or a render runs: later test blocks and each CLI run load it
   fresh. Render from a snapshot (`git archive HEAD | tar -x -C DIR`, copy tools/node_modules).
 
@@ -163,4 +173,6 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - tests/browser.cjs's zoom block ("zoom to 1000%") failed once on 10-21 on its last check, the undo
   history one step longer (22 vs 21) after the brush undo, and passed on the re-run of the same
   code: a timing race to look into if it comes back.
+- tests/browser.cjs's phone slider block ("tap jumps", a 50 ms wait) failed once on 10-22 while three
+  other headless pages ran beside it, and passed run alone: run browser.cjs on its own.
 - Whenever you push to `main`, update this file (CLAUDE.md).

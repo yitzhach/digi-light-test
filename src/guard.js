@@ -13,6 +13,7 @@
 // behind the user's back: a chip on the picture says what is clipping and offers Fix.
 
 import { CLIP_HI, CLIP_LO, LIMITS } from './measure.js';
+import { resampleRegion } from './resample.js';
 
 const AMBIENT_MAX = 1;
 const WHITES = ['exposure'], DARKS = ['ambient'];
@@ -45,11 +46,14 @@ export function initGuard({ state, api, snapshot, restore, history, historyUI, $
   function photoClip(w, h) {
     const pv = api.previewSource?.(), s = pv && pv.width === w && pv.height === h ? pv : api.source();
     if (photo && photo.src === s && photo.w === w && photo.h === h) return photo.clip;
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const g = c.getContext('2d', { willReadFrequently: true });
-    if (s !== pv) g.imageSmoothingQuality = 'high';
-    g.drawImage(s, 0, 0, w, h);
-    photo = { src: s, w, h, clip: clipMask(g.getImageData(0, 0, w, h).data) };
+    let data;
+    if (s === pv) {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.drawImage(s, 0, 0, w, h);
+      data = g.getImageData(0, 0, w, h).data;
+    } else data = resampleRegion(s, w, h, 0, 0, w, h).data;   // as export tiles cut it
+    photo = { src: s, w, h, clip: clipMask(data) };
     return photo.clip;
   }
   // The relit picture is what is judged, whatever the screen shows (Split, Original, a diagnostic
