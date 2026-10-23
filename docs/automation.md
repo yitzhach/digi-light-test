@@ -49,7 +49,9 @@ Paths are dotted names into `settings()`. The common ones:
 - Lights: `lights.N.x|y|z|power|kelvin|cone|softness|falloff|aimX|aimY|size|lift|enabled|useKelvin|hex` (N from 0; `x`, `y` in painting widths, 0,0 bottom left)
 - Shadow lights (lights with `kind` `shade` or `negative`): `lights.N.kind`, `lights.N.dark` (a shade's Darkness, 0–1), `lights.N.shape` (`pool`, `window`, `blinds`, `leaves`),
   `lights.N.patternSize` (0.25–4), `lights.N.patternRot` (0–360°), `lights.N.size` (shape blur); `kelvin` is the tint of the light left in the shadow
-- Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill`
+- Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill|sun`;
+  `graze.sun: true` makes it the sun: one direction everywhere, no falloff, even over the painting,
+  `elevation` up to 60° (20° without; turn the sun off at 20° or less)
 - Colour tool: `adjust.on`, `adjust.opacity`, `adjust.<name>.<field>`, e.g. `adjust.relief.amount`, `adjust.relief.form` (Broad form), `adjust.relief.formSize` (Broad size, 0–400%), `adjust.exposure.exposure`, `adjust.hueSat.saturation`; `adjust.curves.rgb` is a list of `[x, y]` points (0–1)
 - Overlays: `overlays.<grain|vignette|leak|window|pool>.on|opacity|...`
 - Layers: `layers` (a list of `{mode, source, opacity, enabled}`), `layersOn`, `originalTop`
@@ -232,6 +234,15 @@ node tools/digilight-cli.cjs measure flat.jpg --sun sun-lined.jpg:40:10.3 --widt
   without it the depth is what the angle given implies.
 - One sun photo gives the slopes along the sun's light only; a second with the painting turned
   about 90° gives both (and a third lets the measurement check itself).
+- Light like this (a sun row; `digilight` after `measureRelief`: the panel's button) makes the
+  graze light that sun (`graze.sun`), its room light the sky's share read in the photo; without a
+  deepest relief, Fit depth then fits Texture depth to the photo's stroke contrast under it.
+  Depth from the artist and depth from contrast disagree for now: one sun photo flattens the
+  stroke-scale slopes about 2.4× (the lintel: deepest 1/8" gives 1.76 mm, Fit depth 4.0 mm;
+  tests/sun.cjs: a photo made at 1 mm fits 2.5 mm), so the artist's depth gives true geometry
+  with about a third of the real sun's light and shade, Fit depth the real sun's contrast with
+  exaggerated broad forms (docs/real-light-test.md).
+- Looks made by Analyze on measured relief drop their graze smoothing (Detail 0, Fine 100%).
 - Take it with the sun low enough to cast shadows (10–30° to the face): the sky light's share is
   read from the deepest shadows, and without any it reads high and the relief deep.
 - Measured relief drops forms broader than 12% of the width (6% for lamps) and reads relief up to

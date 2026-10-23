@@ -328,6 +328,12 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
         const c = g?.enabled ? Math.cos(g.angle * Math.PI / 180) : 0;
         if (side && Math.abs(c) > 0.26 && (side === 'right') !== (c > 0)) g.angle = mirrorAngle(g.angle);
       }
+      // On measured relief the graze light shows all of it: Detail 0, Fine 100%. The looks' graze
+      // smoothing is tuned to hide a one-photo estimate's grain; measured relief has none to hide,
+      // and on the user's door it smoothed away real detail (side-lamp favourite against the real
+      // sun, light and shade 0.17 / 0.17 / 0.40 smoothed, 0.23 / 0.48 / 0.56 not, fine / mid / broad;
+      // texture x1.01 / 1.74 / 1.99 against the sun's x2.00 / 1.91 / 1.78; docs/real-light-test.md).
+      if (A.measured) for (const it of items) if (it.settings.graze?.enabled) Object.assign(it.settings.graze, { detail: 0, fine: 1 });
       // Made in an order that shares G-buffer builds; shown in the order above. Built-in
       // looks fit their exposure; a saved look keeps its own, moved by as much as the
       // Gallery look's fit moved from 0 on this photo (how much brighter or darker it needs).

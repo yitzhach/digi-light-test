@@ -120,7 +120,7 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
   // seen from the painting's centre, and the relief is read from that direction.
   function applyLamp(l) {
     const c = lampAngles(l, state.paintingWidthCm, aspect());
-    setGraze({ lamp: l, angle: (Math.round(c.angle * 2) / 2) % 360, elevation: Math.min(20, Math.max(1, Math.round(c.elevation * 2) / 2)) });
+    setGraze({ lamp: l, sun: false, angle: (Math.round(c.angle * 2) / 2) % 360, elevation: Math.min(20, Math.max(1, Math.round(c.elevation * 2) / 2)) });
     if (state.photoDiffuse < 0.5 && Math.round(c.angle) !== state.azimuthDeg) { state.azimuthDeg = Math.round(c.angle); api.dirty(); }
   }
 
@@ -285,6 +285,13 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
     applyLamp({ ...l }); draft = null;
     sync(); renderGraze(); api.render(); checkpoint();
   }
+  /** Light it like a sun photo: the graze light becomes that sun (a direction, even). */
+  function useSun(sun, extra = {}) {
+    setGraze({ opacity: 1, fill: state.graze.fill ?? GRAZE_AMBIENT, ...extra, sun: true, lamp: null,
+      angle: ((Math.round(sun.azimuthDeg * 2) / 2) % 360 + 360) % 360, elevation: Math.round(sun.elevationDeg * 10) / 10 });
+    draft = null;
+    sync(); renderGraze(); api.render(); checkpoint();
+  }
   // Clipped highlights or crushed shadows in the photo: no shading there to match.
   function checkPhoto() {
     const src = api.source(), c = src ? clippingOf(src) : null;
@@ -295,5 +302,5 @@ export function initCalibrate({ state, api, after, setGraze, renderGraze, syncQu
   document.addEventListener('digilight:source', checkPhoto);
   checkPhoto();
   sync();
-  return { sync, measure, autoFit, useLamp, checkPhoto, units: () => units, forgetDraft: () => { draft = null; } };
+  return { sync, measure, autoFit, useLamp, useSun, checkPhoto, units: () => units, forgetDraft: () => { draft = null; } };
 }

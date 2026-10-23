@@ -7,6 +7,50 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-22 (moved here 10-23)
+- **10-22 (same branch), exactness 3 and 4 done, the sun option started** (roadmap NEXT):
+  - **Change map** (src/changemap.js): `change: true | {map: 'light' | 'colour', range}` on
+    `render` / `export` / `exportMany` → `change: {image, stats}`; the light each pixel was
+    multiplied by (stops; grey = unchanged, orange brighter, blue darker) or how far it is off the
+    photo's own colour at its new brightness (levels), from the photo and the picture alone. CLI
+    `--change-map FILE.png` (`--change-kind colour`), batch `"changeMap"`, MCP `render_preview` /
+    `export_image` `change_map`; numbers in the record. Identity export: `same` 1, plain grey.
+    tests/changemap.mjs (Node), tests/exact.cjs.
+  - **Renderers agree** (tests/renderers.cjs, docs/automation.md "Renderers agree"): the cloud has
+    no GPU but has Mesa llvmpipe through Xvfb (`DIGILIGHT_GL=llvmpipe`; swiftshader | gpu |
+    llvmpipe). Same settings, SwiftShader vs llvmpipe, 3 photos x 5 cases at 900 px: nothing
+    changed bit for bit; else p99 1 level (worst: door under Classic raking, 1.03% of pixels over
+    2 levels, p99 3, max 25, at shadow edges). Stated tolerance: ≤ 2% over 2 levels, p99 ≤ 3,
+    mean ≤ 0.75. `verify` says `withinRendererTolerance` for a picture made on another renderer.
+    Against a real GPU: `RENDERER_B=gpu node tests/renderers.cjs` on the user's computer.
+  - **Sun option, first part**: lamp photos can be sun photos (`{sun: {azimuthDeg, elevationDeg}}`,
+    a row's Light: Sun), depth from the artist's deepest relief (Deepest relief; `deepestMm`),
+    `digilight.measureRelief`, CLI `measure --sun FILE:FROM:ANGLE --width-cm --deepest`, MCP
+    `measure_relief`. Sun drift cut 0.12 (set so the lintel's full range at its known 10.3° is the
+    artist's 1/8"); a broad beam window helped on a synthetic painting (tests/sunrelief.mjs) but
+    hurt on the real lintel, so sun shots keep the lamps' (docs/real-light-test.md "10-22").
+    Lamp photos are now resampled by resample.js (were the browser's drawImage).
+- **10-22 (branch `claude/quirky-allen-tna7jh`): the look-path repeatability bug is fixed.** Two
+  causes, both the photo reaching the relief a level apart (the relief turns a level into speckle
+  up to 99 deep): (1) resized exports, the sharp zoom and the metrics shrank the photo with the
+  browser's `drawImage` at 'high' quality, which is not stable under load (two pages at once, or a
+  fresh Analyze, gave the other picture; every uniform the same, the export's own photo texture
+  not); now src/resample.js does it (area average in sRGB from an exact 1:1 copy; a tile's pixels
+  are the whole picture's there). (2) A JPEG drawn into a GPU-backed canvas differs from a
+  CPU-backed one by a level on a quarter of its values, and Chromium can switch a canvas between
+  them; now the photo is decoded once into a plain canvas (app.js `pinPixels`). The red panel's
+  photo at 900 px moved by mean 3.5 levels (the new filter is a touch sharper: mean gradient 53.9
+  vs 51.9). tests/repeat-look.cjs passes (pages two at a time, one with a fresh Analyze) and is a
+  routine test now; tests/exact.cjs adds block means, a resized identity export and a JPEG
+  identity export (that one fails without pinPixels). Records of resized pictures or JPEG photos
+  made before 10-22 will not verify (decoded / resized the old way). Still the browser's: the
+  preview's copy of the photo (one bilinear drawImage at load; stable in every test so far).
+- **10-21 (merged to `main`):** round 4 and 5 picks (LOOK_VERSION 5), the guard picks, Auto looks
+  side by side, the real light test (docs/real-light-test.md), exact identity and fingerprints;
+  in full in **docs/history.md** ("HANDOFF, 10-21").
+  - Everything older: **docs/history.md** (the 10-20 overnight work: guard, metrics, records,
+    goldens, exportMany, make_round.py).
+
 ## HANDOFF, 10-21 (moved here 10-22)
 - **10-21 (merged to `main`):**
   - **Round 4 picks** in: L02 kept (raking 6° with the old smoothing; the user found "a bit much

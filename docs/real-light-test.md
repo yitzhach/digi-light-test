@@ -179,3 +179,26 @@ against the real sun, tools/realref/score.py, mid / broad / forms):
 - The measured renders above (graze 47°, 20°, unsmoothed) are about a third of the real sun's
   light-and-shade size: the graze light is a lamp a painting's width away, not a sun; a sun lamp
   in the renderer is still to do.
+
+### 10-23: a sun in the renderer
+
+`graze.sun` (the Graze light's Sun button): the graze light as a direction, no falloff, so the
+whole painting gets the same light at the same angle; Light like this on a sun row uses it, so
+Fit depth works with sun photos. Lintel, measured with the true geometry (40°, 10.3°, 52.07 cm,
+deepest 1/8"), rendered at that sun (unsmoothed graze, room light from the sky share 6.7%):
+
+| render | light-and-shade corr (fine/mid/broad/forms) | shade size / the sun's | texture × flat (fine/mid/broad/forms) |
+|---|---|---|---|
+| one-photo estimate, sun | 0.02 / 0.12 / 0.15 / 0.22 | 2.05 / 1.64 / 0.86 / 0.81 | 5.73 / 3.47 / 1.57 / 1.44 |
+| measured, the lamp at the same angle | 0.14 / 0.51 / 0.53 / 0.48 | 0.22 / 0.39 / 0.38 / 0.36 | 0.81 / 1.01 / 1.00 / 0.94 |
+| measured, sun, depth from the artist (1.76 mm) | **0.17 / 0.57 / 0.63 / 0.60** | 0.18 / 0.33 / 0.32 / 0.28 | 0.99 / 1.25 / 1.21 / 1.14 |
+| measured, sun, Fit depth (4.0 mm) | 0.12 / 0.47 / 0.53 / 0.51 | 0.52 / 1.13 / 1.20 / 0.98 | 1.54 / 2.57 / 2.11 / 1.46 |
+| the real sun | 1 | 1 | 3.51 / 2.66 / 1.96 / 1.46 |
+
+- The sun beats the lamp at the same angle on every band: the lamp's pool falls off across the
+  panel (on the sample painting, 2.5 stops left to right against 0.15 for the sun).
+- Depth from the artist: the best light and shade so far, at a third of its size. Fit depth: the
+  real sun's texture size at stroke and broad scale, a little less well placed. The two depths
+  differ 2.3×; tests/sun.cjs finds the same on a photo the app made itself (made at 1 mm, fits
+  2.5 mm). One sun photo flattens the stroke-scale slopes; the lamps' narrow beam window
+  (SUN_BEAM_SIGMA) is the likely cause, and a second sun shot turned 90° the likely cure.

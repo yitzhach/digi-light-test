@@ -13,6 +13,7 @@ import { measureRelief, align } from './lampphotos.js';
 import { resampleRegion } from './resample.js';
 import { textureScore, fitDepth as fitDepthTo, BIG_MM } from './texscore.js';
 import { clippingOf, CLIP_HI, CLIP_LO } from './photocheck.js';
+import { FILL_MAX } from './presets.js';
 
 const CM = { in: 2.54, cm: 1 };
 const LAMP_ROOM = 0.25;   // graze room light for Light like this (see lightLike)
@@ -50,7 +51,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       el.innerHTML = `<canvas class="lampThumb" width="64" height="${Math.max(8, Math.round(64 * r.h / r.w))}"></canvas>
         <div class="lampFields">
           <div class="lampName"><span title="${r.name.replace(/"/g, '&quot;')}">${i + 1}. ${r.name.replace(/</g, '&lt;')}</span>
-            <button data-act="light" title="Graze light becomes this lamp"${sun ? ' disabled' : ''}>Light like this</button>
+            <button data-act="light" title="Graze light becomes this ${sun ? 'sun' : 'lamp'}">Light like this</button>
             <button data-act="compare" class="${comparing === i ? 'on' : ''}" title="Before / Split show this photo">Compare</button>
             <button data-act="del" aria-label="Remove lamp photo ${i + 1}">✕</button></div>
           ${r.clip?.warn ? `<p class="note warn lampClip">${r.clip.warn}</p>` : ''}
@@ -89,7 +90,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       host.append(el);
     });
     $('lampMeasure').disabled = busy || !rows.length;
-    $('lampFit').disabled = busy || !rows.some((r) => !r.lamp.sun) || !api.source();
+    $('lampFit').disabled = busy || !rows.length || !api.source();
     $('lampDeepUnit').textContent = units() === 'in' ? 'in' : 'mm';
     $('lampSample').hidden = api.sample() !== 'dsc8382' || rows.some((r) => r.name.startsWith('DSC_83'));
     const m = api.measured.get();
@@ -160,7 +161,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
         shots: rows.map((r) => ({ rgba: pixels(r.img, w, h), lamp: { ...r.lamp } })), glints, driftSigma, beamSigma,
         onProgress: (m) => { $('lampStatus').textContent = m; },
       });
-      res.shots.forEach((s, i) => { rows[i].map = s.align.map; });
+      res.shots.forEach((s, i) => { rows[i].map = s.align.map; rows[i].room = s.room; });
       res.deepestMm = deepest || null;
       res.sun = rows.every((r) => r.lamp.sun);
       api.measured.set(res.height, w, h, { depthMm: res.depthMm, rangeMm: res.rangeMm, deepestMm: res.deepestMm, check: res.check, shots: res.shots });
@@ -173,7 +174,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       $('lampResult').innerHTML = report(res);
       if (comparing >= 0) compare(comparing);
     } finally { busy = false; renderRows(); }
-    if (fit && !deepest && !res.sun) res.fit = await fitDepth({ fill: LAMP_ROOM, auto: true, lamps: rows.map((r, i) => (r.lamp.sun ? -1 : i)).filter((i) => i >= 0) });
+    // Fit depth: the lamps at LAMP_ROOM, a sun at its photo's sky share.
+    if (fit && !deepest) res.fit = await fitDepth({ fill: LAMP_ROOM, auto: true });
     return res;
   }
   $('lampMeasure').onclick = () => measure();
@@ -183,7 +185,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     const u = units(), wTxt = `${(W() / CM[u]).toFixed(u === 'in' ? 1 : 0)} ${u}`;
     const lines = [res.deepestMm
       ? `<b>Measured relief scaled to the deepest relief given, ${res.deepestMm.toFixed(2)} mm</b> (lowest to highest): Texture depth ${(res.depthMm * res.deepestMm / res.rangeMm).toFixed(2)} mm (2–98% spread) on a ${wTxt} wide painting. As measured, at the light's angles given: ${res.rangeMm.toFixed(2)} mm lowest to highest, ${res.depthMm.toFixed(2)} mm spread.`
-      : res.sun ? `<b>Measured relief ${res.depthMm.toFixed(2)} mm deep</b> (2–98% spread) on a ${wTxt} wide painting, at the sun angle given (${res.rangeMm.toFixed(2)} mm lowest to highest): give the deepest relief to set the depth from it instead.`
+      : res.sun ? `<b>Measured relief ${res.depthMm.toFixed(2)} mm deep</b> (2–98% spread) on a ${wTxt} wide painting, at the sun angle given (${res.rangeMm.toFixed(2)} mm lowest to highest); Texture depth is set to it, then fitted to the photo's stroke contrast under that sun (Fit depth, below). Give the deepest relief to set the depth from it instead.`
         : `<b>Measured relief ${res.depthMm.toFixed(2)} mm deep</b> (2–98% spread) on a ${wTxt} wide painting; Texture depth is set to it, then fitted to the photos' stroke contrast (Fit depth, below).`];
     const al = res.shots.map((s, i) => {
       const [ax, bx, cx, ay, by, cy] = s.align.map, w = res.w, h = res.h;
@@ -207,9 +209,17 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // the three lamps, against 0.304 with each photo's measured room share and 0.31-0.37 at
   // the graze default 0.06; twice the share tied with it). `keepFill` (Fit depth) leaves
   // the room light the user set.
+  // A sun photo's sun: the graze light as the sun (graze.sun), its room light the sky's share the
+  // measurement read in that photo (rows[i].room: the share of a sunlit flat patch's brightness
+  // that is sky; graze fill f against the sun's 0.35 on flat paint gives f / (f + 0.35)), else
+  // a tenth (the user's sunlit photos read 7-11%).
   function lightLike(i, keepFill = false) {
-    if (rows[i].lamp.sun) return;   // the graze light is a lamp a painting's width away
     const raw = api.measured.get()?.on ? { detail: 0, clean: 0, fine: 1, soft: 0 } : {};
+    if (rows[i].lamp.sun) {
+      const a = Math.min(0.5, Math.max(0, rows[i].room ?? 0.1));
+      cal.useSun(rows[i].lamp.sun, keepFill ? raw : { ...raw, fill: Math.min(FILL_MAX, +(0.35 * a / (1 - a)).toFixed(3)) });
+      return;
+    }
     cal.useLamp(rows[i].lamp, keepFill ? raw : { ...raw, fill: LAMP_ROOM });
   }
 
@@ -272,7 +282,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // fit reached a match (Measure relief runs it so).
   async function fitDepth({ lamps, lo = 0.25, hi = 10, fill, auto = false } = {}) {
     if (busy || !rows.length || !api.source()) return null;
-    const use = (lamps ?? rows.map((_, i) => i)).filter((i) => rows[i] && !rows[i].lamp.sun);
+    const use = (lamps ?? rows.map((_, i) => i)).filter((i) => rows[i]);
     if (!use.length) return null;
     busy = true; fitStop = false; renderRows();
     const snap = snapshot(), d0 = state.textureDepthMm, w = api.canvas.width, h = api.canvas.height;
@@ -289,7 +299,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
         state.physical = 1; state.textureDepthMm = d; api.dirty();
         let lg = 0;
         for (const [k, i] of use.entries()) {
-          lightLike(i, true);
+          lightLike(i, !rows[i].lamp.sun);   // a sun at its own sky share
           const sc = textureScore(renderPixels(), w, h, mmPerPx(), { mask: masks[k] }).score, ratio = sc / Math.max(1e-6, photo[k]);
           per[k].push([d, ratio, sc]); lg += Math.log(Math.max(1e-6, ratio));
         }

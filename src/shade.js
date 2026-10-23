@@ -94,7 +94,8 @@ uniform vec4  uMaskOverlay;                   // while painting a mask: tint whe
 
 // Graze effect: one extra hard light almost in the painting's plane, rendered on its
 // own and cross-faded over the main lighting by uGrazeOpacity (0 = off).
-uniform vec3  uGrazePos;
+uniform vec3  uGrazePos;       // the graze lamp, or with uGrazeSun the direction to the sun
+uniform float uGrazeSun;
 uniform vec3  uGrazeColor;     // colour times power
 uniform float uGrazeOpacity;
 uniform sampler2D uGrazeNormal; // its own relief, smoothed to the graze Detail: rgb normal, a height
@@ -504,16 +505,17 @@ void main() {
     vec3 gF0 = mix(vec3(0.04 * uSpecular), clamp(gAlb, 0.0, 1.0), uMetallic);
     // Shadows always full strength and crisp here: that is the point of grazing light.
     vec3 g = gAlb * uAmbientColor * uGrazeFill * gAo;
-    vec3 Lv = vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
-    float dist = max(length(Lv), 1e-4);
-    vec3 L = Lv / dist;
+    // The sun: one direction everywhere, no falloff; its size reads as at one painting width.
+    vec3 Lv = uGrazeSun > 0.5 ? uGrazePos : vec3(uGrazePos.x, uGrazePos.y * uAspect, uGrazePos.z) - P;
+    float dist = uGrazeSun > 0.5 ? 1.0 : max(length(Lv), 1e-4);
+    vec3 L = uGrazeSun > 0.5 ? normalize(Lv) : Lv / dist;
     float srcAngle = atan(uGrazeSize / dist);
     float wrap = sin(srcAngle);
     float NoLw = (dot(gN, L) + wrap) / (1.0 + wrap);
     if (NoLw > 0.0) {
       float aSrc = min(1.0, a + uGrazeSize / (2.0 * dist));
       float shadow = shadowMarch(uGrazeNormal, vUV, L, max(srcAngle, 0.012), 1.0, uGrazeBias, uGrazeReach);
-      g += brdf(gN, V, L, gNoV, NoLw, gAlb, gF0, aSrc) * uGrazeColor * pow(0.5 / dist, 2.0) * shadow;
+      g += brdf(gN, V, L, gNoV, NoLw, gAlb, gF0, aSrc) * uGrazeColor * (uGrazeSun > 0.5 ? 1.0 : pow(0.5 / dist, 2.0)) * shadow;
     }
     g *= shade * strokes / uGrazeWhiteBalance;
     g *= exp2(uExposure);
@@ -744,7 +746,14 @@ export class Shader {
       gPow = grazePower(c.dist, Math.max(0.2, c.elevation));
       gPos = lampPosition(g.lamp, state.paintingWidthCm, aspect);
     }
-    gl.uniform3fv(u.uGrazePos, gPos);
+    // The sun: the direction to it (x right, y up in painting widths, z out), and the power that
+    // gives flat paint what the plain graze light gives the painting's centre (grazePower at half
+    // a width, where the falloff is 1).
+    const sun = !!g?.sun && !g?.lamp;
+    gl.uniform1f(u.uGrazeSun, sun ? 1 : 0);
+    gl.uniform3fv(u.uGrazePos, sun ? [Math.cos(gEl) * Math.cos(gDir), Math.cos(gEl) * Math.sin(gDir), Math.sin(gEl)] : gPos);
+    const wbPow = gPow;   // the white balance weighs it as the plain graze light at its place
+    if (sun) gPow = grazePower(0.5, g.elevation);
     gl.uniform1f(u.uGrazeFill, g?.fill ?? GRAZE_AMBIENT);
     gl.uniform1f(u.uGrazeLift, g?.lift ?? 0);
     // The plain graze light stands for a distant one, so its lift is even; a calibrated lamp's fades.
@@ -771,7 +780,7 @@ export class Shader {
     const balance = (white) => white.map((v) => 1 + wb * (v - 1));
     const amb = room.map((v) => v * state.ambient);
     gl.uniform3fv(u.uWhiteBalance, balance(sceneWhite(lights, aspect, amb)));
-    const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: gPow, enabled: true, cone: 0, falloff: 2 };
+    const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: wbPow, enabled: true, cone: 0, falloff: 2 };
     gl.uniform3fv(u.uGrazeWhiteBalance, balance(sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)))));
     setAdjustUniforms(gl, u, state, (curves) => this.curveLUT(curves), reliefView);
     setOverlayUniforms(gl, u, state, reliefView);

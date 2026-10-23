@@ -1,4 +1,4 @@
-import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, LOOK_NEUTRAL, ROOM_NEUTRAL_K, STROKE_SIZE_MIN, STROKE_SIZE_MAX, looks, LOOK_KEYS, LIGHT_KINDS, SHADE_SHAPES } from './presets.js';
+import { textures, materials, lighting, photoDirections, EVEN_SHARE, SIDE_SHARE, SHADOW_DETAIL, DEPTH_GUIDE, History, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, MAX_LAYERS, blendModes, layerSources, GRAZE_EL_MIN, GRAZE_EL_MAX, GRAZE_SUN_EL_MAX, grazePresets, GRAZE_DETAIL_MAX, GRAZE_FINE_DEG, LAMP_OUT_MIN, FILL_MAX, GRAZE_AMBIENT, LOOK_NEUTRAL, ROOM_NEUTRAL_K, STROKE_SIZE_MIN, STROKE_SIZE_MAX, looks, LOOK_KEYS, LIGHT_KINDS, SHADE_SHAPES } from './presets.js';
 import { initLampPhotos } from './lampui.js';
 import { initProbe } from './probe.js';
 import { strokeDirection, nearerSide } from './photocheck.js';
@@ -90,7 +90,7 @@ export function initStudio(api) {
     <div class="row"><label for="grazeLift">Shadow lift</label><input id="grazeLift" type="range" min="-1" max="1" step="0.01"><output data-own></output></div>
     <div class="calScore"><button id="grazeBest" title="Light across the painting's main stroke direction, where it shows the strokes most">Best raking direction</button></div>
     <p class="note" id="grazeBestNote"></p>
-    <div class="views"><button id="grazeGrey" title="The graze light falls on an even grey instead of the paint's colour">Grey surface</button><button id="grazeReliefOnly" title="Graze light alone, at 100%, on grey">Relief only</button><button id="grazeColourOver" title="Relief only, with the photo's colour laid over it (an Overlay layer)">Colour over relief</button></div>
+    <div class="views"><button id="grazeSun" title="The graze light as the sun: one direction everywhere, even over the whole painting, and up to ${GRAZE_SUN_EL_MAX}° to the wall (off: a lamp a painting's width away)">Sun</button><button id="grazeGrey" title="The graze light falls on an even grey instead of the paint's colour">Grey surface</button><button id="grazeReliefOnly" title="Graze light alone, at 100%, on grey">Relief only</button><button id="grazeColourOver" title="Relief only, with the photo's colour laid over it (an Overlay layer)">Colour over relief</button></div>
     <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
     <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
     <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do. Softness: a bigger lamp, from a bare bulb to a strip light; softer shadow edges and calmer grain. Shadow lift: right of centre brightens the dark paint and recesses the graze light falls on, left deepens them, less the farther a calibrated lamp is (each light has its own Shadow lift too).</p></div>`;
@@ -225,6 +225,7 @@ export function initStudio(api) {
     grazeBox.classList.toggle('grazeOff', !g.enabled);
     $('grazeEye')?.sync();
     $('grazeOpacity').value = g.opacity; $('grazeOpacity').nextElementSibling.textContent = `${Math.round(g.opacity * 100)}%`;
+    $('grazeElevation').max = g.sun ? GRAZE_SUN_EL_MAX : GRAZE_EL_MAX;
     $('grazeElevation').value = g.elevation; $('grazeElevation').nextElementSibling.textContent = `${g.elevation.toFixed(1)}°`;
     // Detail is a fraction of the painting's width; shown in mm on this painting.
     const mm = g.detail * state.paintingWidthCm * 10;
@@ -236,13 +237,22 @@ export function initStudio(api) {
     const gl = g.lift ?? 0; $('grazeLift').value = gl; $('grazeLift').nextElementSibling.textContent = Math.abs(gl) < 0.005 ? 'off' : `${gl > 0 ? '+' : '−'}${Math.round(Math.abs(gl) * 100)}%`;
     const match = Object.entries(grazePresets).find(([, v]) => Object.entries(v).every(([k, x]) => Math.abs(g[k] - x) < 1e-6));
     $('grazePreset').value = match ? match[0] : '';
-    $('grazeReadout').textContent += g.lamp ? ' · calibrated lamp' : '';
+    $('grazeReadout').textContent += g.lamp ? ' · calibrated lamp' : g.sun ? ' · sun' : '';
+    $('grazeSun').classList.toggle('on', !!g.sun && !g.lamp);
     $('grazeGrey').classList.toggle('on', (g.grey ?? 0) > 0);
     cal?.sync();
   }
   // Adjusting any graze control shows the effect, so the change is visible.
   // Turning the dial or Angle to wall leaves a calibrated lamp (lamp: null).
-  function setGraze(change) { Object.assign(state.graze, change, { enabled: true }); if (state.graze.lamp == null) delete state.graze.lamp; renderGraze(); render(); }
+  function setGraze(change) {
+    Object.assign(state.graze, change, { enabled: true });
+    if (state.graze.lamp == null) delete state.graze.lamp;
+    if (!state.graze.sun) delete state.graze.sun;
+    else if (state.graze.elevation > GRAZE_SUN_EL_MAX) state.graze.elevation = GRAZE_SUN_EL_MAX;
+    // A lamp's angle stops at GRAZE_EL_MAX; the sun's may stand higher.
+    if (!state.graze.sun && state.graze.elevation > GRAZE_EL_MAX) state.graze.elevation = GRAZE_EL_MAX;
+    renderGraze(); render();
+  }
   const grazeAngle = deg => ((Math.round(deg * 2) / 2) % 360 + 360) % 360;
   $('grazeVis').onclick = () => { state.graze.enabled = !state.graze.enabled; renderGraze(); render(); };
   $('grazeOpacity').oninput = e => setGraze({ opacity: +e.target.value });
@@ -259,6 +269,7 @@ export function initStudio(api) {
   // there, darker in the shadows and lighter on faces turned to the light.
   const COLOUR_OVER = { mode: 'overlay', source: 'original', opacity: 1, enabled: true };
   const isColourOver = L => L.mode === COLOUR_OVER.mode && L.source === COLOUR_OVER.source && !L.mask;
+  $('grazeSun').onclick = () => { setGraze({ sun: !(state.graze.sun && !state.graze.lamp), lamp: null }); checkpoint(); };
   $('grazeGrey').onclick = () => { setGraze({ grey: (state.graze.grey ?? 0) > 0 ? 0 : 1 }); checkpoint(); };
   function reliefOnly(colour) {
     const layers = state.layers || (state.layers = []);
@@ -707,8 +718,9 @@ export function initStudio(api) {
     // Graze settings saved before Detail, Shadow length, Clean shadows or Softness
     // existed open with those at their neutral values, so they look as they did.
     const g=p.settings.graze??GRAZE_DEFAULT, detail=g?.detail??0, fine=g?.fine??1, reach=g?.reach??0, clean=g?.clean??0, soft=g?.soft??0;
-    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean,soft].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>GRAZE_EL_MAX||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1||soft<0||soft>1)throw new Error('Invalid graze light.');
+    if(typeof g!=='object'||![g.angle,g.elevation,g.opacity,detail,fine,reach,clean,soft].every(Number.isFinite)||g.angle<0||g.angle>=360||g.elevation<GRAZE_EL_MIN||g.elevation>(g.sun&&g.lamp==null?GRAZE_SUN_EL_MAX:GRAZE_EL_MAX)||g.opacity<0||g.opacity>1||detail<0||detail>GRAZE_DETAIL_MAX||fine<0||fine>1||reach<0||reach>1||clean<0||clean>1||soft<0||soft>1)throw new Error('Invalid graze light.');
     settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean,soft};
+    if(g.sun!=null){if(typeof g.sun!=='boolean')throw new Error('Invalid graze light.');if(g.sun&&g.lamp==null)settings.graze.sun=true;}
     if(g.grey!=null){if(!Number.isFinite(g.grey)||g.grey<0||g.grey>1)throw new Error('Invalid graze light.');settings.graze.grey=g.grey;}
     // Calibrate: the measured lamp (cm from the painting's edges) and room light.
     if(g.lift!=null){if(!Number.isFinite(g.lift)||g.lift<-1||g.lift>1)throw new Error('Invalid graze light.');settings.graze.lift=g.lift;}

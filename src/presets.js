@@ -112,6 +112,10 @@ const grazeZ = GRAZE_DISTANCE * Math.tan(GRAZE_DEG * Math.PI / 180);
 // Graze effect (Graze light section): a small hard source, a dim fill so shadows read
 // as shadows, and the range of angles off the wall its slider offers.
 export const GRAZE_SIZE = 0.005, GRAZE_AMBIENT = 0.06, GRAZE_EL_MIN = 1, GRAZE_EL_MAX = 20;
+// Graze light as the sun (graze.sun, 10-22): a direction, no distance, so every point gets the
+// same light at the same angle (the plain graze light is a lamp a painting's width away). The
+// sun of a sunlit photo stands higher than a raking lamp, so its angle may go up to this.
+export const GRAZE_SUN_EL_MAX = 60;
 // Graze Detail, in painting widths: relief narrower than this casts no graze shadow
 // and is shaded only as a light GRAZE_FINE_DEG off the wall would show it, times
 // the Fine texture amount. A light e degrees off the wall multiplies every slope's

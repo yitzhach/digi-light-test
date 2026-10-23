@@ -96,8 +96,9 @@ where in the code it lives. **Done 10-19** marks what the same session already b
      on another renderer within it.
   5. The sun option below, fully drivable through the CLI / MCP (add photos, line up, measure,
      set depth), with the same checks. Done 10-22: measure (sun shots, depth from the artist's
-     number) through `measureRelief`, the CLI `measure` and the MCP `measure_relief`; left: line
-     up in the app, a sun lamp in the renderer, looks on measured relief.
+     number) through `measureRelief`, the CLI `measure` and the MCP `measure_relief`; done 10-23:
+     a sun in the renderer (`graze.sun`), Fit depth with sun photos, looks unsmoothed on measured
+     relief; left: line up a handheld photo in the app, the slope flattening (see below).
 - **Measured relief from sunlight** (evidence: docs/real-light-test.md, 10-21). On the user's
   plaster door the relief estimated from one flat photo gave light and shade unrelated to real
   raking sunlight (correlation about 0, every band, every direction, no setting helps); the relief
@@ -106,9 +107,10 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   the board turned about 90° between them, could replace the tripod-and-lamp session. Needs:
   - Line up handheld shots in the app (features + homography; tools/realref/register.py does it
     with OpenCV SIFT: 0.6 px median on the door). lampphotos.js `align` only searches ±1% shifts.
-  - Done 10-22: a sun in lamp photos (a direction, `sunPixels`; a row's Light: Sun). Left: a sun
-    lamp in the renderer (the graze light is a lamp a width away; Fit depth needs it), and the
-    sun's direction read from the shadows.
+  - Done 10-22: a sun in lamp photos (a direction, `sunPixels`; a row's Light: Sun). Done 10-23:
+    a sun in the renderer (`graze.sun`), Light like this and Fit depth with a sun photo. Left:
+    the sun's direction read from the shadows; one sun photo flattens stroke-scale slopes about
+    2.4× (artist's depth and Fit depth disagree by that; docs/real-light-test.md, 10-23).
   - Done 10-22, partly: broad forms for sun shots. The drift cut is 0.12 for sun (set on the
     lintel's known depth); a broad beam window helped on a synthetic painting and hurt on the
     real lintel, so it stays the lamps' (docs/real-light-test.md, 10-22).
@@ -117,6 +119,7 @@ where in the code it lives. **Done 10-19** marks what the same session already b
     ask the artist how deep the relief goes at most and scale the measured full range to it (on
     the lintel panel the user said about 1/8"; one shadow plus the panel's width gave 2.3–3.05 mm
     from the photos alone). Or the sun's elevation from a shadow of a known height.
+  - Done 10-23: Analyze's looks on measured relief drop the graze smoothing (Detail 0, Fine 1).
   - Looks on measured relief without the graze smoothing tuned for the estimate's grain (detail
     0.02–0.03, fine 0.15): on the door it smoothed real detail (68% of the photo's fine texture);
     without it the side-lamp favourite matched the real sun's texture strength (×1.0 / 1.7 / 2.0
