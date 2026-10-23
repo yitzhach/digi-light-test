@@ -35,7 +35,7 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below); `change: true` (or `{map, range}`) adds `change: {image, stats}`, the change map (below) |
 | `exportMany(items, {metrics, format, quality})` | several pictures at once: `items` `[{settings, width?, crop?, format?, quality?}]` (settings from `settings()` or a record, taken as they are). Items that need the same relief (same surface settings, size and crop) share one tiled pass, so the relief is built once for all of them, not once per picture; returns what `export` returns for each, in order, and puts the settings back. The CLI `batch` uses it |
 | `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` and `change` as `render` |
-| `measureRelief({photos, widthCm, deepestMm})` | relief measured from lamp or sun photos instead of estimated from the one photo (the app's Measure relief · lamp photos): `photos` `[{src, lamp: {left, above, out}}]` (cm from the painting's left and top edges, out from its face; one tripod) or `[{src, sun: {azimuthDeg, elevationDeg}}]` (where the sun came from: 0 right, 90 above, 180 left; its angle to the face), each cropped like the painting photo, a sunlit one lined up on it first (tools/realref/register.py). `deepestMm`, the artist's deepest relief (lowest to highest), sets the depth (one sun angle cannot: see [Measured relief from sunlight](#measured-relief-from-sunlight)). Returns `{depthMm, rangeMm, textureDepthMm, check, shots, ...info()}`; one undo step |
+| `measureRelief({photos, widthCm, deepestMm, lineUp})` | relief measured from lamp or sun photos instead of estimated from the one photo (the app's Measure relief · lamp photos): `photos` `[{src, lamp: {left, above, out}}]` (cm from the painting's left and top edges, out from its face; one tripod) or `[{src, sun: {azimuthDeg, elevationDeg}}]` (where the sun came from: 0 right, 90 above, 180 left; its angle to the face), each cropped like the painting photo or handheld: a photo shaped unlike the painting photo is lined up on it first (src/lineup.js), as is one with `lineUp: true` (its own, or for all; `false` never). `deepestMm`, the artist's deepest relief (lowest to highest), sets the depth (one sun angle cannot: see [Measured relief from sunlight](#measured-relief-from-sunlight)). Returns `{depthMm, rangeMm, textureDepthMm, check, shots, ...info()}` (`shots[i].lineUp`: `{H, matches, inliers, patches, errorPx, covered}` when lined up); one undo step |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
 | `setProject(objOrJSON)` | opens a project |
 
@@ -221,12 +221,18 @@ estimate, 0.55 / 0.60 mid / broad measured). `measureRelief` with `sun`, the CLI
 and the MCP `measure_relief` do it:
 
 ```
-node tools/digilight-cli.cjs measure flat.jpg --sun sun-lined.jpg:40:10.3 --width-cm 52 --deepest 3.2 --out relit.jpg
+node tools/digilight-cli.cjs measure flat.jpg --sun sun.jpg:40:10.3 --width-cm 52 --deepest 3.2 --out relit.jpg
 ```
 
-- Line the sunlit photo up on the flat one first (handheld, from another spot):
-  `python3 tools/realref/register.py flat.jpg sun.jpg sun-lined.jpg` (the app's own lining up
-  only finds small shifts, for a tripod's creep).
+- The sunlit photo can be given as taken (handheld, from another spot, background and all): a
+  photo shaped unlike the flat one is lined up on it (src/lineup.js, 10-24: SIFT-like features on
+  brightness and on the colour ratio, a RANSAC homography, then refined with patches over the
+  whole painting; then the lamp photos' own alignment). `--line-up` (`lineUp: true`, MCP
+  `line_up`) lines up one shaped like it too. On the user's door and lintel it lands within a
+  median 0.4 / 0.8 preview px of tools/realref/register.py (OpenCV), and the relief measured from
+  it correlates 0.95 / 0.99 with the one from register.py's (tests/lineup.cjs; 15-20 s each
+  with the measurement). The painting must fill a good part of the photo (at least 12 matching
+  points must agree; 120-250 did here).
 - The sun has a direction, no position: `FROM` where it came from in the picture (0° right,
   90° above, 180° left), `ANGLE` its angle to the painting's face.
 - Depth: one sun angle cannot tell a shallow relief under a high sun from a deep one under a low
@@ -237,18 +243,20 @@ node tools/digilight-cli.cjs measure flat.jpg --sun sun-lined.jpg:40:10.3 --widt
 - Light like this (a sun row; `digilight` after `measureRelief`: the panel's button) makes the
   graze light that sun (`graze.sun`), its room light the sky's share read in the photo; without a
   deepest relief, Fit depth then fits Texture depth to the photo's stroke contrast under it.
-  Depth from the artist and depth from contrast disagree for now: one sun photo flattens the
-  stroke-scale slopes about 2.4× (the lintel: deepest 1/8" gives 1.76 mm, Fit depth 4.0 mm;
-  tests/sun.cjs: a photo made at 1 mm fits 2.5 mm), so the artist's depth gives true geometry
-  with about a third of the real sun's light and shade, Fit depth the real sun's contrast with
-  exaggerated broad forms (docs/real-light-test.md).
+  Since 10-24 a sun photo's shadows are read (the surface falls away at least as steeply as the
+  sun's rays) and its broad forms dropped like a lamp's: on a stand-in of known relief made by the
+  app (tests/sunflat.cjs) the artist's depth now gives the true stroke slopes (1.06; before 0.32)
+  and Fit depth comes near (0.72). On the real lintel the two still differ 1.8× (deepest 1/8"
+  gives 1.58 mm, Fit depth 2.85 mm; before 1.76 / 4.0): the photo has more contrast than the
+  renderer gives that relief (docs/real-light-test.md, "10-24"). Prefer the artist's depth.
 - Looks made by Analyze on measured relief drop their graze smoothing (Detail 0, Fine 100%).
 - Take it with the sun low enough to cast shadows (10–30° to the face): the sky light's share is
   read from the deepest shadows, and without any it reads high and the relief deep.
-- Measured relief drops forms broader than 12% of the width (6% for lamps) and reads relief up to
-  about stroke scale in detail (docs/real-light-test.md, 10-22, for what was tried);
+- Measured relief drops forms broader than 6% of the width and reads relief up to
+  about stroke scale in detail (docs/real-light-test.md, 10-22 and 10-24, for what was tried);
   `--drift` / `--beam` (`driftSigma`, `beamSigma`, in painting widths) try other values.
-- Tests: `node tests/sunrelief.mjs` (a synthetic painting in sun, known relief).
+- Tests: `node tests/sunrelief.mjs` (a synthetic painting in sun, known relief), `node tests/sunflat.cjs`
+  (the app's own sun render of a known relief on the lintel's paint, with slow unevenness; ~4 min).
 
 ## Bridges
 
@@ -304,7 +312,7 @@ node tools/digilight-cli.cjs <command> <input> [options]
 - **commands**: `info`, `analyze` (JSON readout and looks), `describe` (settable paths),
   `get` (settings after the options; `--path a.b` for one), `render` (writes `--out`),
   `measure` (relief from `--sun FILE:FROM:ANGLE` / `--lamp FILE:LEFT:ABOVE:OUT` photos,
-  `--width-cm`, `--deepest MM`; see [Measured relief from sunlight](#measured-relief-from-sunlight)),
+  `--width-cm`, `--deepest MM`, `--line-up`; see [Measured relief from sunlight](#measured-relief-from-sunlight)),
   `verify` (re-renders a record and checks it),
   `batch` (many renders from one Analyze, see below)
 - **options**, applied in this order: `--preset kind:name` (repeatable), `--look NAME|N
@@ -449,7 +457,7 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
 | `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings; `change_map` `light` / `colour` adds the change map as a second picture, with its numbers |
 | `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`); `change_map` also writes `FILE-change.png` |
-| `measure_relief` | relief measured from lamp or sun photos (`photos` `[{path, sun: {from_deg, angle_deg}} or {path, lamp: {left_cm, above_cm, out_cm}}]`, `painting_width_cm`, `deepest_mm`) |
+| `measure_relief` | relief measured from lamp or sun photos (`photos` `[{path, sun: {from_deg, angle_deg}} or {path, lamp: {left_cm, above_cm, out_cm}}]`, each optionally `line_up` (a handheld photo; one shaped unlike the open photo is lined up anyway), `painting_width_cm`, `deepest_mm`) |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |
 
 The server keeps one DigiLight page open for the whole chat, so each tool works on the

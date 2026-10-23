@@ -13,6 +13,8 @@ reprojection error in FLAT's pixels. On the user's plaster door (10-21): 134 of 
 inliers, median error 0.6 px, 98.9% of the frame covered. On their panel with a wooden lintel
 in hard sun, brightness alone with fewer features kept 6 of 18 matches (too few to trust).
 Needs numpy and opencv-python-headless (pip install opencv-python-headless).
+Since 10-24 the app lines a handheld photo up itself (src/lineup.js, `lineUp`); this stays as the
+reference it is checked against (testdata/photos/manifest.json sunToFlat, tests/lineup.cjs).
 """
 import argparse
 import sys

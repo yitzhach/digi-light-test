@@ -385,10 +385,12 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   // Relief measured from lamp or sun photos (Measure relief · lamp photos; lampphotos.js):
   // photos [{src (URL, data URL or Blob), lamp: {left, above, out} (cm from the painting's
   // left and top edges, and out from its face)} or {src, sun: {azimuthDeg, elevationDeg}}],
-  // each cropped like the painting photo (a sunlit one lined up on it first). widthCm sets the
-  // painting's width; deepestMm (the artist's deepest relief) sets the depth from it. Returns
-  // what was measured; the picture then uses the measured relief (one undo step).
-  async function measureRelief({ photos, widthCm, deepestMm, glints = true, fit = true, driftSigma, beamSigma } = {}) {
+  // each cropped like the painting photo, or handheld: a photo shaped unlike it is lined up on it
+  // (lineup.js), as is one with lineUp: true (a photo's own, or for all; false: never). widthCm
+  // sets the painting's width; deepestMm (the artist's deepest relief) sets the depth from it.
+  // Returns what was measured (per shot `lineUp`: the homography and how well it held, when lined
+  // up); the picture then uses the measured relief (one undo step).
+  async function measureRelief({ photos, widthCm, deepestMm, glints = true, fit = true, driftSigma, beamSigma, lineUp } = {}) {
     needPhoto();
     if (state.mode !== 'single') throw new Error('Measured relief works on a single photograph.');
     if (!Array.isArray(photos) || !photos.length || photos.some((p) => !p?.src || (!p.sun && !p.lamp))) throw new Error('measureRelief takes photos: [{src, lamp: {left, above, out}} or {src, sun: {azimuthDeg, elevationDeg}}].');
@@ -402,13 +404,17 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     lamp.rows.length = 0;
     await lamp.addFiles(blobs.map((b, i) => new File([b], photos[i].name || `photo ${i + 1}`, { type: b.type || 'image/jpeg' })));
     if (lamp.rows.length !== photos.length) throw new Error('A photo could not be opened.');
-    photos.forEach((p, i) => { lamp.rows[i].lamp = p.sun ? { sun: { azimuthDeg: +p.sun.azimuthDeg, elevationDeg: +p.sun.elevationDeg } } : { left: +p.lamp.left, above: +p.lamp.above, out: Math.max(0.2, +p.lamp.out) }; });
+    photos.forEach((p, i) => {
+      lamp.rows[i].lamp = p.sun ? { sun: { azimuthDeg: +p.sun.azimuthDeg, elevationDeg: +p.sun.elevationDeg } } : { left: +p.lamp.left, above: +p.lamp.above, out: Math.max(0.2, +p.lamp.out) };
+      const hand = p.lineUp ?? lineUp;
+      if (hand != null) lamp.rows[i].lineUp = !!hand;
+    });
     lamp.renderRows();
     const r = await lamp.measure({ glints, fit, deepest: deepestMm ?? null, driftSigma, beamSigma });
     if (!r) throw new Error($('lampStatus').textContent || 'The relief could not be measured.');
     await idle();
     return { depthMm: r.depthMm, rangeMm: r.rangeMm, deepestMm: r.deepestMm, textureDepthMm: state.textureDepthMm, sun: r.sun, check: r.check,
-      shots: r.shots.map((x) => ({ align: x.align && { map: x.align.map, rms: x.align.rms, used: x.align.used, of: x.align.of }, room: x.room, usable: x.usable, glint: x.glint })),
+      shots: r.shots.map((x) => ({ align: x.align && { map: x.align.map, rms: x.align.rms, used: x.align.used, of: x.align.of }, room: x.room, usable: x.usable, glint: x.glint, lineUp: x.lineUp })),
       fit: r.fit ? { depth: r.fit.depth, reached: r.fit.reached } : null, ...info() };
   }
 

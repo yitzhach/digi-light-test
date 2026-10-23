@@ -7,9 +7,12 @@
 // measurement is saved in projects (reliefsave.js); the photos are not.
 // A photo can be taken in sun instead (10-22): its row says where the sun was (from, and
 // its angle to the painting's face), and Deepest relief (the artist's number) sets the depth,
-// which one sun angle cannot. A sunlit photo is handheld: line it up first (see lampphotos.js).
+// which one sun angle cannot. A sunlit photo is handheld, from another spot (10-24): a photo not
+// cropped like the painting photo, or one whose row says Handheld, is lined up on it first
+// (lineup.js: features and one homography), then measured as the others.
 
 import { measureRelief, align } from './lampphotos.js';
+import { lineUp, warpPhoto } from './lineup.js';
 import { resampleRegion } from './resample.js';
 import { textureScore, fitDepth as fitDepthTo, BIG_MM } from './texscore.js';
 import { clippingOf, CLIP_HI, CLIP_LO } from './photocheck.js';
@@ -25,7 +28,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. Saved projects keep the measured relief, not the photos. Glare from varnish reads as steep slopes: glints are found and left out, and a polarising filter on the lamp with a crossed one on the lens removes most of it before it happens.</p>
     <div id="lampRows"></div>
     <label class="lampDeep">Deepest relief (optional) <input type="number" id="lampDeep" step="0.01" min="0" placeholder="—"> <span id="lampDeepUnit"></span></label>
-    <p class="note">In sun: set a photo's row to Sun, with where the sun came from (0° right, 90° above, 180° left) and its angle to the painting's face. One sun angle cannot tell a shallow relief under a high sun from a deep one under a low sun, so give the deepest relief (from the painted face's lowest point to its highest), and the measurement is scaled to it. A sunlit photo taken by hand must be lined up on the painting photo first.</p>
+    <p class="note">In sun: set a photo's row to Sun, with where the sun came from (0° right, 90° above, 180° left) and its angle to the painting's face. One sun angle cannot tell a shallow relief under a high sun from a deep one under a low sun, so give the deepest relief (from the painted face's lowest point to its highest), and the measurement is scaled to it. A photo taken by hand from another spot needs no cropping: one shaped unlike the painting photo, or marked Handheld, is lined up on it (the painting must fill a good part of it).</p>
     <div class="calScore"><button id="lampAdd">Add lamp photos…</button><input type="file" id="lampFile" accept="image/*" multiple hidden><button id="lampSample" hidden>Add the sample's lamp photos</button></div>
     <div class="calScore"><button id="lampMeasure" disabled>Measure relief</button><output id="lampStatus"></output></div>
     <label class="lampUse"><input type="checkbox" id="lampUse" disabled> Use measured relief</label>
@@ -35,7 +38,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   </div>`;
   after.after(box);
 
-  const rows = [];        // {name, img, w, h, lamp: {left, above, out} in cm, map}
+  const rows = [];        // {name, img, w, h, lamp: {left, above, out} in cm, map, lineUp, lined, warped}
   let comparing = -1, busy = false;
   const units = () => cal.units();
   const fmt = (cm) => +(cm / CM[units()]).toFixed(2);
@@ -55,6 +58,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
             <button data-act="compare" class="${comparing === i ? 'on' : ''}" title="Before / Split show this photo">Compare</button>
             <button data-act="del" aria-label="Remove lamp photo ${i + 1}">✕</button></div>
           ${r.clip?.warn ? `<p class="note warn lampClip">${r.clip.warn}</p>` : ''}
+          <label>Handheld (line it up)<input type="checkbox" data-act="hand"${handheld(r) ? ' checked' : ''}></label>
+          ${r.lined ? `<p class="note">Lined up: ${linedTxt(r.lined)}.</p>` : ''}
           <label>Light<select data-act="kind"><option value="lamp"${sun ? '' : ' selected'}>Lamp</option><option value="sun"${sun ? ' selected' : ''}>Sun</option></select></label>
           ${sun ? `<label>Sun from (°)<input type="number" step="1" data-s="azimuthDeg" value="${sun.azimuthDeg}"></label>
           <label>Sun to the face (°)<input type="number" step="0.5" min="1" max="89" data-s="elevationDeg" value="${sun.elevationDeg}"></label>` : `
@@ -64,6 +69,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
         </div>`;
       const tc = el.querySelector('canvas'), tx = tc.getContext('2d');
       tx.imageSmoothingQuality = 'high'; tx.drawImage(r.img, 0, 0, tc.width, tc.height);
+      el.querySelector('[data-act=hand]').onchange = (e) => { r.lineUp = e.target.checked; r.map = null; renderRows(); };
       el.querySelector('[data-act=kind]').onchange = (e) => {
         r.lamp = e.target.value === 'sun' ? { sun: { azimuthDeg: 135, elevationDeg: 20 } } : guess(i);
         renderRows();
@@ -136,6 +142,28 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
     work.width = w; work.height = h; wctx.drawImage(img, 0, 0);
     return wctx.getImageData(0, 0, w, h).data;
   }
+  // Lined up first: as the row says, else when it is not shaped like the painting photo.
+  const shapeOff = (r) => { const a = api.canvas.height / api.canvas.width; return Math.abs(r.h / r.w - a) > 0.02 * a; };
+  function handheld(r) { return r.lineUp ?? shapeOff(r); }
+  // The row's photo at the preview's size: lined up (and kept, for Compare and Fit depth) when
+  // handheld, else resampled. Null, with the reason in the status line, when it cannot be lined up.
+  function rowPixels(r, ev, w, h) {
+    if (!handheld(r)) { r.lined = r.warped = null; return pixels(r.img, w, h); }
+    const key = `${w}x${h}`;
+    if (r.warped?.key !== key || r.warped.src !== api.source()) {
+      work.width = r.w; work.height = r.h; wctx.drawImage(r.img, 0, 0);
+      const full = wctx.getImageData(0, 0, r.w, r.h).data, L = lineUp(ev, w, h, full, r.w, r.h);
+      if (!L.H) { $('lampStatus').textContent = `${r.name} could not be lined up on the painting photo (${L.inliers || L.matches} matching points; at least 12 must agree). Use a photo where the painting fills more of the frame.`; return null; }
+      const rgba = warpPhoto(full, r.w, r.h, L.H, w, h, w, h), c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').putImageData(new ImageData(rgba, w, h), 0, 0);
+      r.lined = { H: L.H, matches: L.matches, inliers: L.inliers, patches: L.patches, errorPx: L.errorPx, covered: L.covered };
+      r.warped = { key, src: api.source(), rgba, canvas: c }; r.map = null;
+    }
+    return r.warped.rgba;
+  }
+  const photoOf = (r) => r.warped?.canvas || r.img;
+  const linedTxt = (L) => `${L.inliers} of ${L.matches} matching points agree${L.errorPx != null ? `, then ${L.patches} patches over the painting within ${L.errorPx.toFixed(1)} px` : ''}, ${Math.round(L.covered * 100)}% covered`;
+
   // Deepest relief, in mm (the field is in Calibrate's units: inches, else mm); null if not set.
   const deepestMm = () => { const v = +$('lampDeep').value; return v > 0 ? v * (units() === 'in' ? 25.4 : 1) : null; };
 
@@ -150,18 +178,21 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   async function measure({ glints = true, fit = true, deepest = deepestMm(), driftSigma, beamSigma } = {}) {
     const w = api.canvas.width, h = api.canvas.height, src = api.source();
     if (!src || !rows.length || busy) return null;
-    const aspect = h / w;
-    const off = rows.find((r) => Math.abs(r.h / r.w - aspect) > 0.02 * aspect);
-    if (off) { $('lampStatus').textContent = `${off.name} is not cropped like the painting photo (shape differs). Crop all photos alike.`; return null; }
     busy = true; renderRows(); $('lampResult').textContent = '';
     let res;
     try {
+      const even = pixels(src, w, h), shots = [];
+      for (const r of rows) {
+        if (handheld(r)) { $('lampStatus').textContent = `Lining up ${r.name}…`; await new Promise((ok) => setTimeout(ok, 0)); }
+        const rgba = rowPixels(r, even, w, h);
+        if (!rgba) return null;
+        shots.push({ rgba, lamp: { ...r.lamp } });
+      }
       res = await measureRelief({
-        even: pixels(src, w, h), w, h, widthCm: W(),
-        shots: rows.map((r) => ({ rgba: pixels(r.img, w, h), lamp: { ...r.lamp } })), glints, driftSigma, beamSigma,
+        even, w, h, widthCm: W(), shots, glints, driftSigma, beamSigma,
         onProgress: (m) => { $('lampStatus').textContent = m; },
       });
-      res.shots.forEach((s, i) => { rows[i].map = s.align.map; rows[i].room = s.room; });
+      res.shots.forEach((s, i) => { rows[i].map = s.align.map; rows[i].room = s.room; s.lineUp = rows[i].lined || null; });
       res.deepestMm = deepest || null;
       res.sun = rows.every((r) => r.lamp.sun);
       api.measured.set(res.height, w, h, { depthMm: res.depthMm, rangeMm: res.rangeMm, deepestMm: res.deepestMm, check: res.check, shots: res.shots });
@@ -192,6 +223,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       const dx = ax * w / 2 + bx * h / 2 + cx, dy = ay * w / 2 + by * h / 2 + cy, zoom = (ax + by) / 2 * 100;
       return `${i + 1}: ${Math.hypot(dx, dy).toFixed(1)} px${Math.abs(zoom) >= 0.05 ? `, zoom ${zoom > 0 ? '+' : ''}${zoom.toFixed(2)}%` : ''}${s.align.used < s.align.of / 2 ? ' (uncertain)' : ''}`;
     });
+    const hand = res.shots.map((s, i) => (s.lineUp ? `${i + 1}: ${linedTxt(s.lineUp)}` : null)).filter(Boolean);
+    if (hand.length) lines.push(`Handheld photos lined up on the painting photo: ${hand.join(' · ')}.`);
     lines.push(`Lined up to the painting photo: ${al.join(' · ')}. Room light${res.sun ? ' (sky)' : ''}: ${res.shots.map((s) => Math.round(s.room * 100) + '%').join(', ')} of each photo's brightness.`);
     if (res.shots.some((s) => s.glint != null)) lines.push(`Glints left out: ${res.shots.map((s) => (s.glint * 100).toFixed(2) + '%').join(', ')} of each lamp photo.`);
     if (res.check) {
@@ -225,6 +258,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
 
   // The lamp photo at the preview's size, lined up as the measurement found it.
   function lined(r, w = api.canvas.width, h = api.canvas.height) {
+    // A handheld photo not lined up yet (Compare before Measure) is lined up now.
+    if (handheld(r) && api.source() && (r.warped?.key !== `${w}x${h}` || r.warped.src !== api.source())) rowPixels(r, pixels(api.source(), w, h), w, h);
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d');
     if (r.map) {
@@ -234,7 +269,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
       const ia = e / det, ib = -b / det, id = -d / det, ie = a / det;
       x.setTransform(ia, id, ib, ie, -(ia * cx + ib * cy), -(id * cx + ie * cy));
     }
-    x.drawImage(r.img, 0, 0, w, h);
+    x.drawImage(photoOf(r), 0, 0, w, h);
     return c;
   }
   // Before / Split show the lamp photo, lined up.
@@ -269,7 +304,7 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // shading: left out of both scores.
   function scorePhoto(i) {
     const w = api.canvas.width, h = api.canvas.height, r = rows[i];
-    if (!r.map) r.map = align(pixels(api.source(), w, h), pixels(r.img, w, h), w, h).map;
+    if (!r.map) r.map = align(pixels(api.source(), w, h), pixels(photoOf(r), w, h), w, h).map;
     const px = pixels(lined(r, w, h), w, h), mask = new Uint8Array(w * h);
     for (let k = 0; k < w * h; k++) {
       const a = px[k * 4], b = px[k * 4 + 1], c = px[k * 4 + 2];

@@ -21,5 +21,7 @@ _headers are).
 | closeup-flat.jpg | close-up of another piece (grey / white / black band), indoors, flat light |
 
 Pairs (flat + sun of the same piece, lined up): door, lintel. A flat crop plus its "-lined" sun
-photo is what tools/realref/score.py and measure_sun.cjs take. The door and the lintel panel
+photo is what tools/realref/score.py and measure_sun.cjs take; the app also takes the raw sun
+photo and lines it up itself (src/lineup.js, tests/lineup.cjs). manifest.json `sunToFlat`:
+register.py's homography from the raw sun photo to the flat crop, to check that against. The door and the lintel panel
 are different pieces (checked: 6–7 feature matches between them against 174–491 within a pair).

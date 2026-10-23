@@ -303,12 +303,13 @@ server.registerTool('export_image', {
 
 server.registerTool('measure_relief', {
   title: 'Measure the relief from lamp or sun photos',
-  description: 'Replaces the relief estimated from the open (evenly lit) photo with relief measured from more photos of the painting: each with one lamp close to the wall (lamp: where it was, in cm from the painting\'s left and top edges and out from its face; same tripod), or in sunlight (sun: where it came from, degrees anticlockwise from the right: 0 right, 90 above, 180 left, and its angle to the painting\'s face). Every photo must be cropped exactly like the open one; a sunlit photo taken by hand must be lined up on it first (tools/realref/register.py). One sun angle cannot tell the depth, so give deepest_mm (the artist\'s deepest relief, lowest point to highest) when you have it. Slow without a GPU (a minute or more). Returns the depth measured, how well each photo lined up, and (with 3+ photos) how well each is predicted by the others.',
+  description: 'Replaces the relief estimated from the open (evenly lit) photo with relief measured from more photos of the painting: each with one lamp close to the wall (lamp: where it was, in cm from the painting\'s left and top edges and out from its face; same tripod), or in sunlight (sun: where it came from, degrees anticlockwise from the right: 0 right, 90 above, 180 left, and its angle to the painting\'s face). Every photo must be cropped exactly like the open one, or be handheld: a photo shaped unlike the open one (or with line_up) is lined up on it first, by matching features (the painting must fill a good part of it). One sun angle cannot tell the depth, so give deepest_mm (the artist\'s deepest relief, lowest point to highest) when you have it. Slow without a GPU (a minute or more). Returns the depth measured, how well each photo lined up (with lineUp for one lined up from a handheld shot), and (with 3+ photos) how well each is predicted by the others.',
   inputSchema: {
     photos: z.array(z.object({
       path: z.string().describe('Absolute path to the photo (.jpg/.png/.webp)'),
       sun: z.object({ from_deg: z.number().describe('Where the sun came from, in the picture: 0 right, 90 above, 180 left'), angle_deg: z.number().min(1).max(89).describe('Its angle to the painting\'s face') }).optional(),
       lamp: z.object({ left_cm: z.number(), above_cm: z.number(), out_cm: z.number().positive() }).optional(),
+      line_up: z.boolean().optional().describe('Line it up on the open photo first (a handheld photo from another spot); by default only a photo shaped unlike the open one is'),
     })).min(1),
     painting_width_cm: z.number().positive().optional().describe('The painting\'s width (else as set)'),
     deepest_mm: z.number().positive().optional().describe('The deepest relief, lowest point to highest, in mm (sets the depth)'),
@@ -319,7 +320,7 @@ server.registerTool('measure_relief', {
     const f = filePath(p.path);
     if (!fs.existsSync(f)) throw new Error(`No such file: ${f}`);
     if (!p.sun === !p.lamp) throw new Error(`${path.basename(f)}: give either sun or lamp.`);
-    return { src: dataURL(f), name: path.basename(f), ...(p.sun ? { sun: { azimuthDeg: p.sun.from_deg, elevationDeg: p.sun.angle_deg } } : { lamp: { left: p.lamp.left_cm, above: p.lamp.above_cm, out: p.lamp.out_cm } }) };
+    return { src: dataURL(f), name: path.basename(f), ...(p.line_up != null ? { lineUp: p.line_up } : {}), ...(p.sun ? { sun: { azimuthDeg: p.sun.from_deg, elevationDeg: p.sun.angle_deg } } : { lamp: { left: p.lamp.left_cm, above: p.lamp.above_cm, out: p.lamp.out_cm } }) };
   });
   return call('measureRelief', { photos: list, widthCm: painting_width_cm, deepestMm: deepest_mm });
 }));

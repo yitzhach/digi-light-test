@@ -43,15 +43,17 @@
 // Feature sizes, in painting widths, so a photo of any resolution behaves alike.
 export const BEAM_SIGMA = 0.022;      // the beam is taken as smooth beyond this
 export const DRIFT_SIGMA = 0.06;      // heights broader than this are dropped (drift)
-// In sun the light is even, so broader forms are kept: only what is broader than this goes (an
-// uneven flat photo and the lining up leave a slow drift, which this still takes out). Set on
-// the user's lintel panel, where the sun's angle is known (10.3°, from the lintel's shadow) and
-// the artist's deepest relief too (about 1/8", 3.2 mm; the lintel's shadow gave 2.3-3.05 mm):
-// the measured full range came out 2.2 mm at 0.06 (the lamps' DRIFT_SIGMA), 3.2 mm at 0.12 and
-// 4.9 mm at 0.25 (10-22). Light and shade against the real sun is the same at 0.06-0.12 (0.52 /
-// 0.56 / 0.55 mid / broad / forms, tools/realref/score.py): only the depth moves. One piece,
-// so a first value.
-export const SUN_DRIFT_SIGMA = 0.12;
+// The drift cut for sun shots: the lamps' (10-24). It was 0.12 (10-22), set so the lintel panel's
+// measured full range matched the artist's 1/8", but that range was partly made up: with shadows
+// read as flat ground (see normalise), what one sun shot gives beyond its beam window is mostly
+// error (on stand-ins of known relief the broad band correlated about 0 with the truth, at 2-5
+// times its size), and it set the range the artist's depth scales by, so the strokes came out
+// three times too shallow (tests/sunflat.cjs: 0.32 of the truth's slopes before, 1.06 since). On
+// the lintel at the artist's depth, light and shade against the real sun (mid / broad / forms,
+// tools/realref/score.py): 0.57 / 0.64 / 0.62 before, 0.67 / 0.80 / 0.83 with shadows read and
+// 0.12, 0.68 / 0.80 / 0.82 at 0.06, where its size rose (broad 0.29 -> 0.41 of the sun's) and Fit
+// depth came nearer the artist's (4.43 -> 2.85 mm against 1.58-1.77).
+export const SUN_DRIFT_SIGMA = DRIFT_SIGMA;
 // The beam window for a sun shot. A sun has no beam, so a broad window (0.25) keeps broader
 // relief, and on a synthetic painting in sun it did (two shots turned 90°: height r 0.93 against
 // 0.20, tests/sunrelief.mjs). On the user's lintel it did worse against the real sun (light and
@@ -60,7 +62,8 @@ export const SUN_DRIFT_SIGMA = 0.12;
 // slopes. So the lamps' window, until a second sun shot can tell the two apart (10-22).
 export const SUN_BEAM_SIGMA = BEAM_SIGMA;
 export const ALIGN_SEARCH = 0.01;     // how far a shot may have moved
-const SHADOW_S = 0.1;                 // shading below this is shadow: no slope to read
+const SHADOW_S = 0.1;                 // shading below this is shadow: no slope to read (lamps)
+const BRIGHT_S = 3;                   // ... above this, a glint more likely than a facet (lamps)
 const REFINE = 2;                     // rounds of taking the relief out of the beam
 const CHECK_BAND = [0.0022, 0.009];   // stroke-scale band the check scores
 // Glints (varnish, wet-looking impasto) under a spot lamp read as steep slopes. A pixel
@@ -128,7 +131,7 @@ function percentiles(a, ps, mask) {
 
 // Colour without brightness, band-passed: what a pigment boundary looks like
 // under any light. Two channels, r/sum and b/sum.
-function colourBands(rgba, w, h) {
+export function colourBands(rgba, w, h) {
   const n = w * h, big = Math.max(4, Math.round(0.006 * w)), out = [];
   for (const ch of [0, 2]) {
     const c = new Float32Array(n);
@@ -158,7 +161,7 @@ function ncc(ref, mov, w, x0, y0, P, dx, dy) {
   }
   return aa > 0 && bb > 0 ? ab / Math.sqrt(aa * bb) : 0;
 }
-function bestShift(ref, mov, w, x0, y0, P, cx, cy, R) {
+export function bestShift(ref, mov, w, x0, y0, P, cx, cy, R) {
   let best = -2, bx = cx, by = cy;
   const score = new Map();
   for (let dy = cy - R; dy <= cy + R; dy++) for (let dx = cx - R; dx <= cx + R; dx++) {
@@ -241,7 +244,7 @@ function solve3x3(A, b) {
 }
 
 /** The shot's luminance resampled onto the even photo's pixels (bilinear), a mask of
- *  pixels that are blown (any channel at 250+) or fell outside the shot, and each
+ *  pixels that are blown (any channel at 250+), transparent or fell outside the shot, and each
  *  pixel's saturation and whether it is near-white (for the glint test). */
 export function warpShot(rgba, w, h, map) {
   const n = w * h, lum = luminance(rgba, n), out = new Float32Array(n), bad = new Uint8Array(n), sat = new Float32Array(n), white = new Uint8Array(n);
@@ -252,7 +255,8 @@ export function warpShot(rgba, w, h, map) {
     const x0 = Math.min(w - 2, Math.floor(sx)), y0 = Math.min(h - 2, Math.floor(sy)), fx = sx - x0, fy = sy - y0, j = y0 * w + x0;
     out[i] = (lum[j] * (1 - fx) + lum[j + 1] * fx) * (1 - fy) + (lum[j + w] * (1 - fx) + lum[j + w + 1] * fx) * fy;
     const k = (Math.round(sy) * w + Math.round(sx)) * 4;
-    if (rgba[k] >= 250 || rgba[k + 1] >= 250 || rgba[k + 2] >= 250) bad[i] = 1;
+    // Blown, or (a handheld photo lined up, lineup.js) outside what it covers.
+    if (rgba[k] >= 250 || rgba[k + 1] >= 250 || rgba[k + 2] >= 250 || rgba[k + 3] < 255) bad[i] = 1;
     const mx = Math.max(rgba[k], rgba[k + 1], rgba[k + 2]), mn = Math.min(rgba[k], rgba[k + 1], rgba[k + 2]);
     sat[i] = mx > 0 ? (mx - mn) / mx : 0; white[i] = mx >= GLINT.white ? 1 : 0;
   }
@@ -281,7 +285,7 @@ export const shotPixels = (lamp, widthCm, w, h) => (lamp.sun ? sunPixels(lamp.su
 
 /** Normalised shading s, its usable mask and a first guess at the room-light share,
  *  for one shot. D is the shot over the even photo, less the room light. */
-function shading(lum, bad, even, evenOk, w, h, beamSigma = BEAM_SIGMA) {
+function shading(lum, bad, even, evenOk, w, h, px, beamSigma = BEAM_SIGMA) {
   const n = w * h, D = new Float32Array(n), valid = new Uint8Array(n);
   for (let i = 0; i < n; i++) { D[i] = lum[i] / Math.max(1e-4, even[i]); valid[i] = !bad[i] && evenOk[i] ? 1 : 0; }
   // First guess at the room light: what the deepest shadows inside the lamp's pool
@@ -291,17 +295,29 @@ function shading(lum, bad, even, evenOk, w, h, beamSigma = BEAM_SIGMA) {
   for (let i = 0; i < n; i++) inPool[i] = pool[i] > cut && valid[i] ? 1 : 0;
   const a = 0.9 * Math.max(0, percentiles(D, [0.01], inPool)[0]);
   for (let i = 0; i < n; i++) D[i] -= a;
-  const sh = { D, valid, a, s: new Float32Array(n), ok: new Uint8Array(n), beam: null };
+  const sh = { D, valid, a, s: new Float32Array(n), ok: new Uint8Array(n), beam: null, px };
   sh.beamSigma = beamSigma;
   normalise(sh, boxBlur(D, w, h, beamSigma * w));
   return sh;
 }
 // s = D over the beam; usable where lit, not blown and not in shadow.
+// In sun (10-24) a shadow is read too, not left out. The sun comes from one known angle, so where
+// it does not reach, the surface falls away from it at least as steeply as its rays: a facet turned
+// away, or a cast shadow, whose length times tan(elevation) is the height of the step casting it.
+// Read as shading 0, its slope along the sun is exactly the rays', so a shadow's height drop comes
+// out as the step's. Left out, its slope was 0 and the integration took every shadow for flat
+// ground; at a low sun that is many pixels (the lintel at 10.3°: 10%), and the strokes came out
+// too shallow, their beam (the local mean) pulled down beside them. Its predicted shading is then
+// about 0, so it drops out of the refined beam by itself. Bright facets too: a matte facet facing a
+// sun e above the face is up to 1/sin(e) times as bright as flat paint (5.6 at 10°), so the lamps'
+// cap of 3 left the steepest lit slopes out; above GLINT.near times that it is a glint.
 function normalise(sh, beam) {
-  const { D, valid, s, ok } = sh;
+  const { D, valid, s, ok } = sh, sun = sh.px?.sun;
+  const top = sun ? GLINT.near * Math.hypot(1, sh.px.x / sh.px.z, sh.px.y / sh.px.z) : BRIGHT_S;
   for (let i = 0; i < D.length; i++) {
     s[i] = D[i] / Math.max(1e-4, beam[i]);
-    ok[i] = valid[i] && beam[i] > 1e-3 && s[i] > SHADOW_S && s[i] < 3 ? 1 : 0;
+    if (sun) s[i] = Math.max(0, s[i]);
+    ok[i] = valid[i] && beam[i] > 1e-3 && (sun || s[i] > SHADOW_S) && s[i] < top ? 1 : 0;
   }
   sh.beam = beam;
 }
@@ -498,7 +514,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
     onProgress(`Aligning lamp photo ${k + 1} of ${shots.length}…`); await tick();
     const al = align(even, shots[k].rgba, w, h);
     const warped = warpShot(shots[k].rgba, w, h, al.map), px = shotPixels(shots[k].lamp, widthCm, w, h);
-    const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h, beamSigma ?? (px.sun ? SUN_BEAM_SIGMA : BEAM_SIGMA));
+    const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h, px, beamSigma ?? (px.sun ? SUN_BEAM_SIGMA : BEAM_SIGMA));
     S.push({ ...sh, align: al, px, warped, glint: 0, glintMask: null });
   }
   onProgress('Reading the slopes…'); await tick();

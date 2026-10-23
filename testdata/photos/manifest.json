@@ -1,9 +1,10 @@
 {
- "about": "The user's plaster pieces (10-21). See README.md and docs/real-light-test.md.",
+ "about": "The user's plaster pieces (10-21). See README.md and docs/real-light-test.md. sunToFlat: the homography taking a pixel of the raw sun photo to the flat crop (tools/realref/register.py, recomputed 10-24; warping with it gives the -lined photo within JPEG noise, 1.7 levels).",
  "pieces": {
   "door": {
    "flat": "door-flat-crop.jpg", "flatOriginal": "door-flat.jpg", "cropBox": [100, 60, 1380, 1865],
    "sun": "door-sun.jpg", "sunLined": "door-sun-lined.jpg",
+   "sunToFlat": [[0.795855399, 0.0165310052, -9.2554588], [0.0165198218, 0.809966146, -28.2733128], [1.73336681e-05, 2.74105325e-05, 1]],
    "sun_direction": "upper left (shadows inside the recessed dark block), about 135 deg (0 right, 90 up)",
    "sun_elevation_deg": null, "width_cm": null,
    "notes": "Elevation and width unknown; measure_sun.cjs was run with 30 deg, 60 cm."
@@ -11,6 +12,7 @@
   "lintel": {
    "flat": "lintel-flat-crop.jpg", "flatOriginal": "lintel-flat.jpg", "cropBox": [98, 116, 1386, 1786],
    "sun": "lintel-sun.jpg", "sunLined": "lintel-sun-lined.jpg",
+   "sunToFlat": [[0.954884132, -0.0245895717, -78.0019606], [0.0337252867, 0.95189138, -98.8112301], [8.48206934e-06, 2.88642079e-06, 1]],
    "sun_direction": "upper right, about 40 deg (lintel shadow)",
    "sun_elevation_deg": 10.3, "width_in": 20.5, "lintel_protrusion_in": 0.75, "deepest_relief_in": 0.125,
    "notes": "Elevation from the lintel's shadow (264 px = 0.205 of the panel width); 11.9-13.6 deg if the block sits 1/8-1/4 in lower. The lintel stands off the plaster: its cast shadow is not measurable from shading."

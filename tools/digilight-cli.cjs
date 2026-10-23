@@ -20,8 +20,8 @@
 //              differ and by how much (made on another renderer, within the stated tolerance counts:
 //              "withinRendererTolerance"). --out FILE keeps the re-render. Exit code 1 if not the same.
 //   measure    relief measured from lamp or sun photos of the painting (the input is the evenly lit
-//              photo; each other photo cropped like it, a sunlit one lined up on it first:
-//              tools/realref/register.py): --sun FILE:FROM:ANGLE (where the sun came from, degrees,
+//              photo; each other photo cropped like it, or handheld: one shaped unlike it is lined up
+//              on it, --line-up lines up every one): --sun FILE:FROM:ANGLE (where the sun came from, degrees,
 //              0 right, 90 above, 180 left; its angle to the painting's face) and/or --lamp
 //              FILE:LEFT:ABOVE:OUT (cm from the painting's left and top edges, out from its face),
 //              each repeatable; --width-cm the painting's width; --deepest MM the deepest relief
@@ -64,7 +64,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record', 'no-many'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record', 'no-many', 'line-up'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (['set', 'preset', 'sun', 'lamp'].includes(k)) (o[k] ||= []).push(v); else o[k] = v;
@@ -198,7 +198,7 @@ async function measure(call, o) {
   for (const v of o.sun || []) { const { file, nums: [a, e] } = split(v, 2, 'sun'); photos.push({ src: dataURL(file), name: path.basename(file), sun: { azimuthDeg: a, elevationDeg: e } }); }
   for (const v of o.lamp || []) { const { file, nums: [left, above, out] } = split(v, 3, 'lamp'); photos.push({ src: dataURL(file), name: path.basename(file), lamp: { left, above, out } }); }
   if (!photos.length) throw new Error('measure needs --sun FILE:FROM:ANGLE or --lamp FILE:LEFT:ABOVE:OUT (repeatable).');
-  return call('measureRelief', { photos, widthCm: o['width-cm'] != null ? +o['width-cm'] : undefined, deepestMm: o.deepest != null ? +o.deepest : undefined, driftSigma: o.drift != null ? +o.drift : undefined, beamSigma: o.beam != null ? +o.beam : undefined });
+  return call('measureRelief', { photos, widthCm: o['width-cm'] != null ? +o['width-cm'] : undefined, deepestMm: o.deepest != null ? +o.deepest : undefined, driftSigma: o.drift != null ? +o.drift : undefined, beamSigma: o.beam != null ? +o.beam : undefined, lineUp: o['line-up'] ? true : undefined });
 }
 
 // Two GL implementations, the same settings: how far apart a picture may be (tests/renderers.cjs).

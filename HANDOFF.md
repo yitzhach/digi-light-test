@@ -6,48 +6,45 @@ the upgrade phases, done lists) is kept verbatim in **docs/history.md**; search 
 needs the background. The plan is **docs/roadmap.md**.
 
 ## Now
-All work so far is on `main` (10-23; branch `claude/quirky-allen-tna7jh` merged).
-- **10-23: the sun in the renderer.** `graze.sun` (Graze light › Sun): the graze light as a
-  direction, no falloff, even over the painting, Angle to wall up to 60° (20° without). A sun
-  photo's Light like this uses it (room light = the sky share read in that photo), so Fit depth
-  works with sun photos. Analyze's looks on measured relief drop their graze smoothing (Detail 0,
-  Fine 1). On the lintel (true geometry: 40°, 10.3°, 52.07 cm), measured relief under the sun:
-  light-and-shade r 0.57 / 0.63 / 0.60 (mid / broad / forms), the best yet (lamp at the same
-  angle 0.51 / 0.53 / 0.48; one-photo estimate ~0.15) but at a third of the real sun's size.
-  **Open problem:** one sun photo flattens stroke-scale slopes ~2.4×: depth from the artist's
-  1/8" gives 1.76 mm (true geometry, weak contrast), Fit depth 4.0 mm (true contrast, broad forms
-  exaggerated); tests/sun.cjs sees the same on a photo the app made at 1 mm (fits 2.5 mm).
-  Details: docs/real-light-test.md "10-23". tests/sun.cjs.
-- **10-22: exactness 3 and 4, the sun option's first part, the repeatability fix.**
-  - Change map (src/changemap.js; `change` on render / export / exportMany, CLI `--change-map`,
-    MCP `change_map`): the light each pixel was multiplied by (stops) or how far it is off the
-    photo's own colour, from the photo and the picture alone; identity export = no change.
-  - Renderers agree (tests/renderers.cjs): SwiftShader vs Mesa llvmpipe (`DIGILIGHT_GL=llvmpipe`,
-    through Xvfb; the cloud has no GPU): nothing changed bit for bit; else within ≤ 2% of pixels
-    over 2 levels, p99 ≤ 3, mean ≤ 0.75 (worst: door under Classic raking, 1.03%, p99 3).
-  - Sun photos for measured relief: `{sun: {azimuthDeg, elevationDeg}}` (a row's Light: Sun),
-    depth from the artist's deepest relief (`deepestMm`), `digilight.measureRelief`, CLI
-    `measure --sun FILE:FROM:ANGLE --width-cm --deepest`, MCP `measure_relief`. Sun drift cut 0.12
-    (the lintel's known depth); beam window kept at the lamps' 0.022 (a broad one won on a
-    synthetic painting, lost on the real lintel). Lamp photos resampled by resample.js.
-  - Repeatability fix: the photo is decoded once (app.js `pinPixels`) and resized by our own area
-    average (src/resample.js); tests/repeat-look.cjs. Records of resized pictures or JPEG photos
-    made before 10-22 will not verify.
-  - In full: docs/history.md ("HANDOFF, 10-22").
-- **10-21:** round 4 and 5 picks (LOOK_VERSION 5), guard picks, Auto looks side by side, the real
-  light test, exact identity and fingerprints: docs/history.md ("HANDOFF, 10-21"). Older: docs/history.md.
+All work so far is on `main` (10-24; branch `claude/quirky-allen-tna7jh`).
+- **10-24: the sun slope flattening, found and mostly fixed** (Next up 1 of 10-23). A stand-in
+  where the truth is known (tests/sunflat.cjs: the lintel's paint, a known relief as measured
+  relief, the app's own sun render of it, slow unevenness) showed it: one sun photo left every
+  shadowed pixel out (slope 0 = flat ground; 10% of the lintel at 10.3°) and capped bright facets
+  at the lamps' 3, so the strokes came out shallow, and the drift cut 0.12 kept the resulting
+  error as broad relief, which set the range the artist's depth scales by. Now (lampphotos.js, sun
+  only; lamps unchanged) a shadow is read as falling away at the sun's angle (a cast shadow comes
+  out as its step), facets up to 1.2/sin(elevation) are read, SUN_DRIFT_SIGMA = the lamps' 0.06.
+  Stand-in: depth from the artist's range 0.32 → 1.06 of the truth's stroke slopes, Fit depth
+  0.72; tests/sun.cjs's 1 mm photo fits 0.96 mm (was 2.5). **Lintel at the artist's 1/8": light
+  and shade with the real sun 0.68 / 0.80 / 0.82** (mid / broad / forms; was 0.57 / 0.64 / 0.62),
+  its size 0.36 / 0.41 / 0.35 of the sun's (was 0.30 / 0.29 / 0.23). Not reached: Fit depth and the
+  artist's still differ **1.8×** on the lintel (1.58 vs 2.85 mm; was 1.76 vs 4.0), while on the
+  stand-in they agree the other way (0.68), so the rest is in the real photos (phone processing,
+  sub-pixel roughness, or a deepest relief over 1/8"): docs/real-light-test.md "10-24".
+- **10-24: a handheld photo lined up in the app** (Next up 2 of 10-23; src/lineup.js). A photo
+  shaped unlike the painting photo (or marked Handheld in its row; `lineUp`, CLI `--line-up`, MCP
+  `line_up`) is lined up on it: SIFT-like features on brightness and colour ratio, RANSAC
+  homography, refined with patches over the painting, then the usual `align`. The raw door-sun.jpg
+  / lintel-sun.jpg land within a median 0.36 / 0.79 preview px of register.py's (max 0.79 / 1.60),
+  relief r 0.945 / 0.986 against the -lined photos', depth within 4% (tests/lineup.cjs). The row
+  and the report say how it went; Compare shows it lined up. register.py stays as the reference
+  (manifest.json `sunToFlat`).
+- **10-23: the sun in the renderer** (`graze.sun`; Light like this and Fit depth with sun photos;
+  Analyze's looks unsmoothed on measured relief). Details: docs/real-light-test.md "10-23",
+  docs/history.md "HANDOFF, 10-23".
+- Older (10-22 change map, renderers agree, sun photos for measured relief, the repeatability fix;
+  10-21 and before): docs/history.md.
 
 ## Waiting on the user
-1. (Answered 10-21: build the sun option — "I'm fine with building this out" — after the exactness
-   work.) Lintel panel: lintel 3/4" out, panel 20.5" wide, sun 10.3° up; the user says its relief goes
-   up to about 1/8" (the photos gave 2.3–3.05 mm). Depth in the app: ask the artist's deepest relief
-   (done 10-22: Deepest relief / `deepestMm`). New: a second sun photo of the lintel or the door
-   with the board turned about 90°, same sun (both slopes; lets a broad beam window be tested on
-   real photos), and the door's sun elevation and width if known.
-   Until the slope flattening is fixed (Next up 1): for measured relief from one sun photo,
-   should the app keep the artist's depth (true geometry, about a third of the sun's contrast)
-   or fit the depth to the photo (the sun's contrast, broad forms exaggerated)? Today: the
-   artist's when given, else fitted.
+1. Lintel panel (10-24): after the fix its relief from the sunlit photo, scaled to "about 1/8""
+   lowest to highest, gives the best light and shade yet but only about 0.4 of the real sun's
+   contrast; matching the contrast needs about 2.85 mm Texture depth, i.e. about 5.7 mm (≈ 7/32")
+   lowest to highest. Is 1/8" the deepest point to the highest across the whole panel, plaster
+   only (the wooden lintel aside)? A ruler across a deep groove would settle it. Also still
+   welcome: a second sun photo of the lintel or the door with the board turned about 90°, same
+   sun (both slopes), and the door's sun elevation and width if known. The app keeps the artist's
+   depth when given (best placement), else fits it (reads deep on sun photos).
 2. Guard, when room light at 1.0 is not enough (the close-up's near-black band: 2–6% stays newly
    crushed on every look; the red panel just over): raise the black point a touch, or keep the
    black black? (The user found D4 / D7 "bit dark", W3 "a bit too bright".)
@@ -64,21 +61,11 @@ All work so far is on `main` (10-23; branch `claude/quirky-allen-tna7jh` merged)
    agree with software GL within the stated tolerance?).
 
 ## Next up
-1. **Sun slope flattening** (the open problem above). One sun photo reads stroke-scale slopes
-   ~2.4× too shallow. Reproduce it where the truth is known: tests/sun.cjs makes a sun photo
-   with the app at a known depth and measures it back (made at 1 mm, Fit depth 2.5 mm); add
-   slow unevenness to that stand-in (as a real indoor flat photo has) and find a beam window /
-   refine scheme (lampphotos.js SUN_BEAM_SIGMA, REFINE, `beamSigma`) that recovers the depth
-   on it AND keeps or beats the lintel's light-and-shade r (0.57 / 0.63 / 0.60 at the artist's
-   depth; tools/realref/score.py; recipe in docs/real-light-test.md "10-23"). Success: Fit depth
-   and the artist's 1/8" agree within ~25% on the lintel.
-2. **Line up a handheld photo in the app** (roadmap NEXT, measured relief from sunlight): today
-   tools/realref/register.py (OpenCV SIFT + homography, 0.6–0.9 px) does it outside the app.
-   In JS: features robust to the light change (register.py pools brightness and colour-ratio
-   matches), RANSAC homography, then the existing `align` for the last pixel; exposed in the
-   lamp panel, `measureRelief` (`lineUp: true`), the CLI `measure` and the MCP `measure_relief`.
-   Test: door-sun.jpg / lintel-sun.jpg (raw) against their -lined versions (testdata/photos).
-3. The sun's direction read from the cast shadows (so the user needn't give it); then roadmap
+1. The lintel's remaining 1.8× (Waiting 1): if the 1/8" stands, try a rough-surface term for the
+   graze light at low angles (grain below a pixel shadows itself at a 10° sun, which a Lambert
+   render of a pixel-scale height cannot), checked against the lintel and door sun photos
+   (tools/realref/sun_score.cjs renders artist / fit / orig in the app, then tools/realref/score.py).
+2. The sun's direction read from the cast shadows (so the user needn't give it); then roadmap
    NEXT in order: the sharp layer at fit-to-screen, a `?round=` link (a round on the user's own
    GPU), agent tools (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
@@ -110,7 +97,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `gbuffer.js` — single-photo surface estimation; `shade.js` — shading pass (area lights,
   graze, overlays, adjustments); `export.js` — tiled export (several variants per relief build)
 - `gl.js` (WebGL2, `caps.software` for SwiftShader), `kelvin.js`, `photocheck.js`, `probe.js`,
-  `texscore.js`, `lampphotos.js` + `lampui.js` (measured relief), `photometric.js`,
+  `texscore.js`, `lampphotos.js` + `lampui.js` (measured relief), `lineup.js` (a handheld photo
+  lined up: features + homography), `photometric.js`,
   `register.js`, `sphere.js` (multi-photo path), `synth.js` (test painting)
 
 ## Run / test
@@ -123,7 +111,9 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; change map; ~1 min)
 - `node tests/changemap.mjs`, `node tests/sunrelief.mjs` (Node, no browser, seconds)
 - `node tests/sun.cjs` (graze.sun checks and evenness, a sun photo through Light like this and Fit
-  depth; ~3 min)
+  depth; ~3 min); `node tests/sunflat.cjs` (one sun photo of a known relief: its depth comes back;
+  ~4 min); `node tests/lineup.cjs` (the raw door / lintel sun photos lined up in the app against
+  register.py; ~2 min)
 - `node tests/renderers.cjs` (SwiftShader vs llvmpipe through Xvfb, or `RENDERER_B=gpu`: the same
   pictures within the stated tolerance; ~40 min in the cloud; `--report` only prints)
 - `node tests/repeat-look.cjs [runs]` (the same look in fresh pages, two at a time, gives the same

@@ -202,3 +202,88 @@ deepest 1/8"), rendered at that sun (unsmoothed graze, room light from the sky s
   differ 2.3×; tests/sun.cjs finds the same on a photo the app made itself (made at 1 mm, fits
   2.5 mm). One sun photo flattens the stroke-scale slopes; the lamps' narrow beam window
   (SUN_BEAM_SIGMA) is the likely cause, and a second sun shot turned 90° the likely cure.
+
+### 10-24: the slope flattening, found
+
+Where the truth is known first (tests/sunflat.cjs): the lintel's flat photo as the paint, a known
+relief of small steep features over a few mm (drips, strokes, a little broad form) put in as
+measured relief at 1.5 mm, the app's own render of it under the lintel's sun (graze.sun, 40°,
+10.3°, sky 7%) as the sun photo, times ±25% slow unevenness (a tilt and broad blotches). One sun
+photo measures no broad forms, so the yardstick is the depth at which the measured relief's
+stroke-scale slopes along the sun are as steep as the truth's. A Node stand-in (Lambert, cast
+shadows, the indoor light's own soft shading, phone-like local contrast as an option) was used to
+try things quickly; the scripts are not kept.
+
+What flattened the strokes:
+- **Shadows read as flat ground.** At a low sun many pixels get no sun (the lintel at 10.3°:
+  10.3%, plus 2.5% over the lamps' brightness cap of 3, where a matte facet can reach 1/sin 10.3° =
+  5.6). They were left out, and left out a pixel's slope is 0, which the integration takes as
+  flat: the slopes read back reproduced only 0.44-0.52 of the photo's shading before integrating
+  (0.99 with them read). Their darkness also pulled the beam (the local mean) down beside them,
+  so lit pixels looked turned to the sun: spurious broad relief, 2-5 times the truth's broad band
+  at correlation about 0.
+- **The drift cut kept that error** (SUN_DRIFT_SIGMA 0.12, 10-22): it set the full range, and the
+  artist's depth (Texture depth = the deepest × spread / range) then squashed the strokes. 0.12
+  had been chosen so the lintel's range met 1/8", with the flattening in it.
+- Not it: the slow unevenness (the stand-in flattened as much without it), De-light
+  (albedoSuppress 0 against 0.7: Fit depth 3.93 against 4.0 mm on the lintel), the renderer (a
+  plain Lambert render of the lintel's measured relief gave the same third of the sun's contrast).
+
+The fix (lampphotos.js, sun shots only; lamps as before): a pixel the sun did not reach is read as
+shading 0 (the surface falls away at least as steeply as the sun's rays: a turned-away facet, or a
+cast shadow whose length times tan(elevation) is the step casting it, which comes out as that
+step), bright facets up to 1.2 × 1/sin(elevation) are read, and the drift cut is the lamps' 0.06.
+
+| stand-in (in the app) | measured follows truth (stroke r) | depth from the artist's range / truth | Fit depth / truth | Fit / artist |
+|---|---|---|---|---|
+| before | 0.78 | 0.32 | 0.86 | 2.69 |
+| shadows read, drift 0.12 | 0.84 | 0.97 | 0.73 | 0.75 |
+| shadows read, drift 0.06 (now) | 0.84 | 1.06 | 0.72 | 0.68 |
+
+Fit depth fits the photo's contrast, which the measurement's own noise adds to, so it comes out a
+little shallow. tests/sun.cjs's photo made at 1 mm now fits 0.96 mm (before 2.5).
+
+The lintel (true geometry: 40°, 10.3°, 52.07 cm; rendered under that sun with Light like this by
+tools/realref/sun_score.cjs, scored by tools/realref/score.py, light and shade mid / broad / forms;
+before = this code before 10-24, rerun):
+
+| lintel | Texture depth | light-and-shade r | its size / the real sun's |
+|---|---|---|---|
+| before, deepest 1/8" | 1.76 mm | 0.57 / 0.64 / 0.62 | 0.30 / 0.29 / 0.23 |
+| before, Fit depth | 4.00 mm | 0.47 / 0.53 / 0.50 | 1.01 / 1.06 / 0.87 |
+| shadows read, drift 0.12, deepest 1/8" | 1.77 mm | 0.67 / 0.80 / 0.83 | 0.26 / 0.29 / 0.24 |
+| shadows read, drift 0.12, Fit depth | 4.43 mm | 0.58 / 0.69 / 0.72 | 0.86 / 1.11 / 0.96 |
+| **now, deepest 1/8"** | **1.58 mm** | **0.68 / 0.80 / 0.82** | 0.36 / 0.41 / 0.35 |
+| now, Fit depth | 2.85 mm | 0.58 / 0.70 / 0.72 | 0.87 / 1.12 / 0.93 |
+
+The best light and shade so far, at the artist's depth. But Fit depth and the artist's still differ
+1.8× (before 2.3×), not the ~25% hoped for, while on the stand-in they agree the other way (0.68).
+So the rest is in the real photos, not the measurement: the real sun photo has more contrast than
+the renderer gives any relief whose lowest to highest is 1/8". Likely, in some mix:
+- the phone's own processing of a bright outdoor scene (local contrast, sharpening): on the Node
+  stand-in an unsharp mask of 0.6-1 moved Fit / artist from 0.92 to 1.37-1.44 and left the
+  artist's depth where it was;
+- plaster rougher than the pixels: at a 10° sun, grain below a pixel shadows itself, which a
+  Lambert render of a pixel-scale height cannot;
+- a deepest relief over 1/8" (Fit depth's 2.85 mm spread means about 5.7 mm lowest to highest), or
+  a sun lower than the 10.3° read from the lintel's shadow (11.9-13.6°, if the block sits lower,
+  would widen the gap).
+Its depth from the artist is the one to use; Fit depth on a sun photo reads deep.
+
+### 10-24: lining up in the app
+
+The app now lines a handheld sunlit photo up itself (src/lineup.js; `lineUp`, automatic for a
+photo shaped unlike the painting photo): SIFT-like features (difference-of-Gaussian blobs, 4 x 4
+x 8 gradient histograms) on brightness and on the colour ratio r / (r + g + b), each evened out
+locally, matched with the ratio test and pooled (as register.py), a RANSAC homography, then
+refined with 9 x 9 patches over the painting matched on colour (features crowd on texture and on
+the wooden lintel, whose parallax pulled the first fit up to 4-7 px off at the far corners), and
+the lamp photos' own alignment after that. Against register.py's homography (manifest.json
+`sunToFlat`), raw sun photo in, preview pixels (tests/lineup.cjs, in the app):
+
+| piece | feature matches agreeing | patches kept | off register.py (median / max) | relief r against the -lined photo's | depth |
+|---|---|---|---|---|---|
+| door | 252 of 305 | 49 | 0.36 / 0.79 px | 0.945 | 3.53 against 3.41 mm |
+| lintel | 122 of 214 | 53 | 0.79 / 1.60 px | 0.986 | 1.85 against 1.84 mm |
+
+Lining up and measuring together took 15-22 s in the headless app (lining up alone: 7-8 s in Node).
