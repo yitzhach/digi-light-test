@@ -268,7 +268,32 @@ the renderer gives any relief whose lowest to highest is 1/8". Likely, in some m
 - a deepest relief over 1/8" (Fit depth's 2.85 mm spread means about 5.7 mm lowest to highest), or
   a sun lower than the 10.3° read from the lintel's shadow (11.9-13.6°, if the block sits lower,
   would widen the gap).
-Its depth from the artist is the one to use; Fit depth on a sun photo reads deep.
+Its depth from the artist is the one to use; Fit depth on a sun photo reads deep. (Later the same day: the artist's range is 1/4", and the two agree; below.)
+
+### 10-24, later: the artist's range is 1/4", not 1/8"
+
+The user, asked whether "about 1/8"" was the plaster's lowest to highest: 1/8" is about the
+deepest it goes into the recessed areas, and elsewhere it stands about 1/8" above the average
+thickness. So lowest to highest is about 1/4" (6.35 mm), close to the ~5.7 mm the sun's contrast
+implied. The app's field is now "Relief, lowest to highest", with that example in its note (and
+the CLI / MCP wording); manifest.json `deepest_relief_in` 0.25.
+
+The lintel rescored at 6.35 mm (same code as 10-24; `sun_score.cjs ... 52.07 6.35`, score.py):
+
+| lintel | Texture depth | light-and-shade r (mid / broad / forms) | its size / the real sun's |
+|---|---|---|---|
+| deepest 1/8" (as read before) | 1.58 mm | 0.68 / 0.80 / 0.82 | 0.36 / 0.41 / 0.35 |
+| **lowest to highest 1/4"** | **3.17 mm** | 0.57 / 0.69 / 0.71 | **1.02 / 1.35 / 1.14** |
+| Fit depth | 2.85 mm | 0.58 / 0.70 / 0.72 | 0.87 / 1.12 / 0.93 |
+
+The 1.8× gap is gone: Fit depth / the artist's depth 0.90 (stand-in 0.68), and at the artist's
+depth the mid-scale light and shade is the real sun's size. No rough-surface term or phone
+processing is needed to explain the contrast. What is left: light-and-shade r falls as the
+depth grows (mid 0.68 at 1.58 mm, 0.57 at 3.17 mm), and the broad band comes out 1.35× the real
+one. Either the renderer is not linear in depth at a 10° sun (cast shadows and clipped facets
+at the measured relief's errors), or one sun photo overstates the broad relief, which then
+dominates when deepened. The render's highlights also stay dimmer than the photo's (p95 182
+against 242). tests/sunflat.cjs's stand-in, where the truth is known, can tell these apart.
 
 ### 10-24: lining up in the app
 

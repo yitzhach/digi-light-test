@@ -14,8 +14,8 @@
    "sun": "lintel-sun.jpg", "sunLined": "lintel-sun-lined.jpg",
    "sunToFlat": [[0.954884132, -0.0245895717, -78.0019606], [0.0337252867, 0.95189138, -98.8112301], [8.48206934e-06, 2.88642079e-06, 1]],
    "sun_direction": "upper right, about 40 deg (lintel shadow)",
-   "sun_elevation_deg": 10.3, "width_in": 20.5, "lintel_protrusion_in": 0.75, "deepest_relief_in": 0.125,
-   "notes": "Elevation from the lintel's shadow (264 px = 0.205 of the panel width); 11.9-13.6 deg if the block sits 1/8-1/4 in lower. The lintel stands off the plaster: its cast shadow is not measurable from shading."
+   "sun_elevation_deg": 10.3, "width_in": 20.5, "lintel_protrusion_in": 0.75, "deepest_relief_in": 0.25,
+   "notes": "Elevation from the lintel's shadow (264 px = 0.205 of the panel width); 11.9-13.6 deg if the block sits 1/8-1/4 in lower. The lintel stands off the plaster: its cast shadow is not measurable from shading. deepest_relief_in is lowest to highest: the user (10-24, later) says the plaster goes about 1/8 in below the average surface in the recesses and about 1/8 in above it elsewhere (first read as 1/8 in in all)."
   },
   "band": { "flat": "band-outdoor-crop.jpg", "flatOriginal": "band-outdoor.jpg", "cropBox": [236, 45, 1132, 1945], "notes": "Outdoors, even daylight; colour (orange band) and a near-black band." },
   "closeup": { "flat": "closeup-flat.jpg", "notes": "Already cropped; near-black band: room light alone cannot keep it from crushing (guard)." }

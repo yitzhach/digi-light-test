@@ -7,6 +7,18 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-24 later ("Now" bullets moved out when the user's 1/4" answer came in)
+- **10-24, sun slope flattening mostly fixed** (src/lampphotos.js, sun shots only): shadows are
+  read as falling away at the sun's angle, bright facets up to 1.2/sin(elevation) are read, sun
+  drift cut 0.06. Known-truth test tests/sunflat.cjs: depth from the artist's range 0.32 → 1.06 of
+  the truth. Lintel at the artist's 1/8": light and shade with the real sun 0.68 / 0.80 / 0.82
+  (mid / broad / forms; was 0.57 / 0.64 / 0.62). **Open:** Fit depth and the artist's depth still
+  differ 1.8× on the lintel (1.58 vs 2.85 mm). (Closed later that day: the artist's range is 1/4".)
+- **10-24, handheld photos lined up in the app** (src/lineup.js): automatic for a photo shaped
+  unlike the painting photo, or `lineUp` / CLI `--line-up` / MCP `line_up` / the row's Handheld box.
+  Raw door / lintel sun photos within 0.36 / 0.79 px (median) of tools/realref/register.py
+  (tests/lineup.cjs).
+
 ## HANDOFF, 10-24 (cut down 10-24; "Now" and "Waiting on the user" as they were)
 ### Now (10-24)
 All work so far is on `main` (10-24; branch `claude/quirky-allen-tna7jh`).

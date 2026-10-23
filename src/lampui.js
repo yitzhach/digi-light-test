@@ -6,7 +6,7 @@
 // the single-photo estimate with relief measured from them (lampphotos.js). The
 // measurement is saved in projects (reliefsave.js); the photos are not.
 // A photo can be taken in sun instead (10-22): its row says where the sun was (from, and
-// its angle to the painting's face), and Deepest relief (the artist's number) sets the depth,
+// its angle to the painting's face), and Relief, lowest to highest (the artist's number) sets the depth,
 // which one sun angle cannot. A sunlit photo is handheld, from another spot (10-24): a photo not
 // cropped like the painting photo, or one whose row says Handheld, is lined up on it first
 // (lineup.js: features and one homography), then measured as the others.
@@ -27,8 +27,8 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   box.innerHTML = `<summary>Measure relief · lamp photos</summary><div class="grp">
     <p class="note">An evenly lit photo hides most of the relief. To measure it, take two or three more photos from the same tripod, with the room light as it was, each with one lamp close to the wall, moved between shots so it lights the painting from different sides: say above the top-left corner, above the top-right, and one from below or level with the middle. With every lamp above, faces turned down stay dark in all of them and the relief reads shallower than it is. Crop them exactly like your painting photo, which should be the evenly lit one. Measure each lamp from the painting's top and left edges and out from its painted face (not the wall). Painting width and units are Calibrate's. Saved projects keep the measured relief, not the photos. Glare from varnish reads as steep slopes: glints are found and left out, and a polarising filter on the lamp with a crossed one on the lens removes most of it before it happens.</p>
     <div id="lampRows"></div>
-    <label class="lampDeep">Deepest relief (optional) <input type="number" id="lampDeep" step="0.01" min="0" placeholder="—"> <span id="lampDeepUnit"></span></label>
-    <p class="note">In sun: set a photo's row to Sun, with where the sun came from (0° right, 90° above, 180° left) and its angle to the painting's face. One sun angle cannot tell a shallow relief under a high sun from a deep one under a low sun, so give the deepest relief (from the painted face's lowest point to its highest), and the measurement is scaled to it. A photo taken by hand from another spot needs no cropping: one shaped unlike the painting photo, or marked Handheld, is lined up on it (the painting must fill a good part of it).</p>
+    <label class="lampDeep">Relief, lowest to highest (optional) <input type="number" id="lampDeep" step="0.01" min="0" placeholder="—"> <span id="lampDeepUnit"></span></label>
+    <p class="note">In sun: set a photo's row to Sun, with where the sun came from (0° right, 90° above, 180° left) and its angle to the painting's face. One sun angle cannot tell a shallow relief under a high sun from a deep one under a low sun, so give the relief from the painted face's lowest point to its highest (plaster 1/8" down into the recesses and 1/8" up elsewhere is 1/4"), and the measurement is scaled to it. A photo taken by hand from another spot needs no cropping: one shaped unlike the painting photo, or marked Handheld, is lined up on it (the painting must fill a good part of it).</p>
     <div class="calScore"><button id="lampAdd">Add lamp photos…</button><input type="file" id="lampFile" accept="image/*" multiple hidden><button id="lampSample" hidden>Add the sample's lamp photos</button></div>
     <div class="calScore"><button id="lampMeasure" disabled>Measure relief</button><output id="lampStatus"></output></div>
     <label class="lampUse"><input type="checkbox" id="lampUse" disabled> Use measured relief</label>

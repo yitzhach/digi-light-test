@@ -24,7 +24,7 @@
 //              on it, --line-up lines up every one): --sun FILE:FROM:ANGLE (where the sun came from, degrees,
 //              0 right, 90 above, 180 left; its angle to the painting's face) and/or --lamp
 //              FILE:LEFT:ABOVE:OUT (cm from the painting's left and top edges, out from its face),
-//              each repeatable; --width-cm the painting's width; --deepest MM the deepest relief
+//              each repeatable; --width-cm the painting's width; --deepest MM the relief
 //              (lowest point to highest; sets the depth, which one sun angle cannot). Prints what
 //              was measured; with --out also renders it (as render), --save-project keeps it
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of

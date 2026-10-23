@@ -303,7 +303,7 @@ server.registerTool('export_image', {
 
 server.registerTool('measure_relief', {
   title: 'Measure the relief from lamp or sun photos',
-  description: 'Replaces the relief estimated from the open (evenly lit) photo with relief measured from more photos of the painting: each with one lamp close to the wall (lamp: where it was, in cm from the painting\'s left and top edges and out from its face; same tripod), or in sunlight (sun: where it came from, degrees anticlockwise from the right: 0 right, 90 above, 180 left, and its angle to the painting\'s face). Every photo must be cropped exactly like the open one, or be handheld: a photo shaped unlike the open one (or with line_up) is lined up on it first, by matching features (the painting must fill a good part of it). One sun angle cannot tell the depth, so give deepest_mm (the artist\'s deepest relief, lowest point to highest) when you have it. Slow without a GPU (a minute or more). Returns the depth measured, how well each photo lined up (with lineUp for one lined up from a handheld shot), and (with 3+ photos) how well each is predicted by the others.',
+  description: 'Replaces the relief estimated from the open (evenly lit) photo with relief measured from more photos of the painting: each with one lamp close to the wall (lamp: where it was, in cm from the painting\'s left and top edges and out from its face; same tripod), or in sunlight (sun: where it came from, degrees anticlockwise from the right: 0 right, 90 above, 180 left, and its angle to the painting\'s face). Every photo must be cropped exactly like the open one, or be handheld: a photo shaped unlike the open one (or with line_up) is lined up on it first, by matching features (the painting must fill a good part of it). One sun angle cannot tell the depth, so give deepest_mm (the artist\'s relief from the lowest point to the highest: 1/8 in below the average surface plus 1/8 in above it is 1/4 in, 6.35 mm) when you have it. Slow without a GPU (a minute or more). Returns the depth measured, how well each photo lined up (with lineUp for one lined up from a handheld shot), and (with 3+ photos) how well each is predicted by the others.',
   inputSchema: {
     photos: z.array(z.object({
       path: z.string().describe('Absolute path to the photo (.jpg/.png/.webp)'),
@@ -312,7 +312,7 @@ server.registerTool('measure_relief', {
       line_up: z.boolean().optional().describe('Line it up on the open photo first (a handheld photo from another spot); by default only a photo shaped unlike the open one is'),
     })).min(1),
     painting_width_cm: z.number().positive().optional().describe('The painting\'s width (else as set)'),
-    deepest_mm: z.number().positive().optional().describe('The deepest relief, lowest point to highest, in mm (sets the depth)'),
+    deepest_mm: z.number().positive().optional().describe('The relief from the lowest point to the highest (not from the average surface), in mm (sets the depth)'),
   },
 }, changing(async ({ call }, { photos, painting_width_cm, deepest_mm }) => {
   await needOpen(call);

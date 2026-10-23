@@ -10,7 +10,7 @@
 // top: what score.py compares against), fit.png (Texture depth fitted to the photo's contrast) and,
 // with DEEPEST_MM, artist.png (Texture depth from the artist's deepest relief), each under the
 // sun with Light like this (the sky's share as room light, graze unsmoothed). The lintel:
-//   node tools/realref/sun_score.cjs testdata/photos/lintel-flat-crop.jpg testdata/photos/lintel-sun-lined.jpg out 40 10.3 52.07 3.175
+//   node tools/realref/sun_score.cjs testdata/photos/lintel-flat-crop.jpg testdata/photos/lintel-sun-lined.jpg out 40 10.3 52.07 6.35
 const fs = require('fs');
 const path = require('path');
 const { launch, dataURL, fromDataURL } = require(path.join(__dirname, '..', 'digilight-headless.cjs'));
