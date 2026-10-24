@@ -295,6 +295,47 @@ at the measured relief's errors), or one sun photo overstates the broad relief, 
 dominates when deepened. The render's highlights also stay dimmer than the photo's (p95 182
 against 242). tests/sunflat.cjs's stand-in, where the truth is known, can tell these apart.
 
+#### Why light-and-shade r falls with depth (stand-in, truth known)
+
+tools/realref/sunflat_depth.cjs: tests/sunflat.cjs's stand-in at 3 mm (lowest to highest 6.3
+mm, near the lintel's) rendered under the lintel's sun as the "photo", measured back with the
+truth's range (Texture depth 3.37 mm), each rendered at several depths and scored by score.py
+against the "photo" (light and shade, mid / broad / forms):
+
+| render | depth | r | size / the photo's |
+|---|---|---|---|
+| truth, half its depth | 1.5 mm | 0.61 / 0.90 / 0.87 | 0.67 / 0.60 / 0.63 |
+| truth, twice its depth | 6 mm | 0.63 / 0.87 / 0.86 | 1.09 / 1.10 / 1.24 |
+| measured, half | 1.69 mm | **0.76** / 0.84 / 0.68 | 0.64 / 0.70 / 0.87 |
+| measured, at the artist's depth | 3.37 mm | 0.59 / 0.84 / 0.82 | **0.95 / 1.13 / 1.30** |
+| measured, twice | 6.74 mm | 0.40 / 0.64 / 0.71 | 0.97 / 1.03 / 1.22 |
+| measured at x1, broadest relief (60 px) taken out | 3.37 mm | 0.59 / 0.84 / 0.82 | 0.96 / 1.13 / 1.30 |
+
+Here the depth is right by construction, and the lintel's pattern comes back: mid r higher at
+half the depth (0.76 against 0.59; lintel 0.68 against 0.57), the size right at the true depth,
+broad and forms a little over (lintel 1.35 / 1.14). Even the truth itself scores only ~0.6 at
+mid when its depth is off by 2×: at a 10° sun the picture is mostly shadow and lit edge (the
+"photo"'s median luma 72), so light and shade is far from linear in depth. A shallower render
+is more linear, and so follows a relief measured from the photo's own shading more closely.
+Mid r peaking below the true depth is how a low sun behaves, not a sign of a wrong depth or of
+overstated broad relief (taking the broadest relief out changes nothing; score.py's bands stop
+at 80 px). Depth is judged by the size column, which is right at the artist's 1/4".
+The measured relief follows the truth at r 0.63 / 0.77 / 0.73 / 0.48 (score.py's fine / mid /
+broad / forms bands): what keeps r at the true depth near 0.6 is that error, worst at
+forms scale (one sun direction measures no slopes across it). A second sun photo from another
+side is the known cure.
+
+What still looks different on the lintel at 1/4" (real sun photo against the render, by the
+flat photo's brightness: white plaster / mid / dark):
+- **Colour**: the render's whites are warm (mean RGB 165 / 150 / 131) where the photo's are
+  neutral (172 / 171 / 171; b* 12 against 0): the phone white-balanced the sun, the render keeps
+  the graze light's 5000 K.
+- **Highlights and spread**: in white plaster the photo spans luma 122-251 (p25-p95), the render
+  138-190; the sunlit faces are blown in the photo and reach 190 in the render. Part is the
+  largest-scale light (one photo measures no broad forms), part highlight rolloff and the
+  phone's tone curve.
+- **Fine texture**: the render is softer (fine-band contrast 1.09 against 3.51 of the flat's).
+
 ### 10-24: lining up in the app
 
 The app now lines a handheld sunlit photo up itself (src/lineup.js; `lineUp`, automatic for a
