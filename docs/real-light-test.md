@@ -270,6 +270,80 @@ the renderer gives any relief whose lowest to highest is 1/8". Likely, in some m
   would widen the gap).
 Its depth from the artist is the one to use; Fit depth on a sun photo reads deep. (Later the same day: the artist's range is 1/4", and the two agree; below.)
 
+### 10-28, later: the highlights gap, and three fine-detail losses found on the way
+
+The lintel at the artist's 1/4" under its sun (Light like this, Camera white), luma by the flat
+photo's brightness (p05 / p25 / p50 / p75 / p95; white plaster 37% of the panel, mid 39%, dark 24%):
+
+| | white | mid | dark |
+|---|---|---|---|
+| real sun photo | 90 / 122 / 178 / 216 / 251 | 35 / 61 / 108 / 168 / 236 | 8 / 19 / 44 / 94 / 163 |
+| render (10-28) | 89 / 139 / 160 / 174 / 190 | 16 / 69 / 101 / 130 / 167 | 2 / 27 / 42 / 59 / 88 |
+
+The gap is not only at the top: the photo is wider in every class, and dark paint reaches 163 at
+p95 against 88. In linear light, the sunlit photo over the flat one (p50 / p90 / p95 / p99;
+tools/realref/tones.py, which prints all of this): white 0.60 / 1.23 / 1.37 / 1.56 (clipped above),
+mid 0.50 / 2.09 / 2.75 / 4.22, dark 0.43 / 4.89 / 7.43 / 14.8; the render 0.47 / 0.67 / 0.72 / 0.84,
+0.45 / 0.95 / 1.15 / 1.62, 0.42 / 1.21 / 1.62 / 2.60. Shadows match (p10 0.16 / 0.10 / 0.07 against
+0.22 / 0.09 / 0.06); the sunlit facets are 2-5 times too dim. That is why score.py's light-and-shade
+size read about 1: it is taken on the log, which shadows dominate. On linear ratios the render's
+light and shade is 0.08 / 0.21 / 0.30 / 0.31 of the photo's (fine / mid / broad / forms).
+
+What it is not:
+- **Exposure or highlight rolloff.** Exposure +0.5 moves the whole of white plaster up (p25 162,
+  p95 210) without widening it; rolloff 0 (a straight clip) narrows it (p95 173).
+- **Graze shadow lift** (Light like this leaves 0.13): lifts darks only (dark p25 27 against 19 at 0).
+- **Highlight strength (specular).** At 4 (from 1) dark paint's sunlit tail comes near the photo's
+  (p99 10 against 15) but every dark pixel doubles (p50 0.81 against 0.43), and white plaster does
+  not move; roughness 0.75-0.9 changes little. Yet the photo's brightest pixels do lose their
+  colour: on coloured paint, saturation sun / flat falls from 0.67 (ratio 0.5-1) to 0.29 (8+) on
+  the lintel, 0.47 to 0.12 on the door, as a white sheen added to the paint's own colour would (or
+  a phone's highlight shoulder).
+
+Most likely: **sub-pixel roughness at a low sun**. Plaster grain has facets far steeper than a
+pixel's mean slope; at 10° the ones facing the sun are lit several times flat paint and their
+backs go black, while the pixel-averaged normal the renderer shades gives about flat paint's light.
+The crops (white plaster and dark paint, 3x) show it: the photo's sunlit grain is crisp, bright
+tips and black gaps; the render's relief is right at stroke scale but smooth. Next: a rough-surface
+term for the graze light (each pixel's shading as the mean over a spread of facet slopes around its
+normal, the spread fitted to the sun photo), then the specular strength refitted with it.
+
+On the way, three losses of fine relief, fixed:
+1. **align moved lined-up sun photos.** measureRelief aligned every shot to the flat photo on
+   colour; under sun, sky-blue shadows against warm sunlit faces read as colour edges, and it
+   moved both lined-up sun photos almost a pixel (lintel 0.45, -0.75; door 0.21, 0.79). Sun shots
+   now skip it (they are lined up by lineup.js or before they come in). Height's predicted
+   shading against the photo's, fine / mid r: lintel 0.42 / 0.73 → 0.62 / 0.77, door 0.50 / 0.75
+   → 0.64 / 0.80.
+2. **Integration and central differences halved the grain.** integrate matches each step to the
+   mean of two slopes and the renderer's central difference averages two steps again: a slope
+   comes back as cos²(k/2) of itself (half at a 4 px period). lampphotos.js `sharpen`: one round
+   of integrating what the renderer's slopes still miss. Fine light and shade of the height's
+   predicted shading 0.62 → 0.96 of the photo's (door 0.61 → 0.88), r the same; on the stand-in
+   of known relief the height's fine band 0.83 → 0.92 of the truth's, every r the same or better;
+   on DSC_8382's lamp photos r within 0.02 and every size nearer the photos'.
+3. **Exports upsampled the measured map bilinearly.** At full size (1288 px against the preview's
+   1080) scaled back down, the export kept 0.78 of the preview's fine light and shade; with a
+   Catmull-Rom lookup 0.96 (gbuffer.js MEASURED_FS; the preview's own pixels are unchanged).
+
+The lintel at full size, score.py (light and shade r / size, fine / mid / broad / forms):
+
+| | r | size |
+|---|---|---|
+| before (10-28) | 0.17 / 0.57 / 0.69 / 0.71 | 0.36 / 1.02 / 1.35 / 1.14 |
+| all three | 0.34 / 0.63 / 0.63 / 0.61 | 0.85 / 1.38 / 1.37 / 1.12 |
+| the same on linear ratios (tones.py), before → after | 0.31 / 0.55 / 0.74 / 0.75 → 0.43 / 0.59 / 0.74 / 0.75 | 0.08 / 0.21 / 0.30 / 0.31 → 0.14 / 0.23 / 0.28 / 0.28 |
+
+Tests: the in-app line-up now lands nearer register.py (median 0.30 / 0.69 px, was 0.36 / 0.79),
+align no longer moving it after; tests/sunflat.cjs artist's depth x1.09 of the truth, Fit depth
+x0.74 (were 1.06 / 0.72); tests/sun.cjs's synthetic sun photo made at 1 mm fits at 0.86 mm (was
+0.95: the sharper relief has more contrast per mm, so the contrast fit settles shallower).
+
+Broad and forms r fall on the log only: crisper grain puts more pixels in near-black shadow, whose
+log drags the broad bands; on linear ratios they hold. Mid size now reads over (1.38) at the
+artist's 1/4"; with the sunlit facets 2-5 times too dim and shadows right, the log size is not a
+safe guide to depth until the rough-surface term is in.
+
 ### 10-28: Camera white (the sun's colour as the phone balanced it)
 
 Light like this with a sun photo now balances the render's camera to that sun and its sky

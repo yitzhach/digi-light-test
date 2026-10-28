@@ -201,12 +201,25 @@ void main() {
 
 // Measured relief (lamp photos, lampphotos.js) in place of the estimate: the part
 // of the measured height map this target covers (the whole of it in the preview, a
-// tile's window in an export), bilinearly resampled into both estimate channels.
+// tile's window in an export), resampled into both estimate channels. Catmull-Rom, not
+// bilinear: an export is larger than the preview-sized map, and bilinear between its
+// pixels flattened its finest relief (the lintel's sun render at full size, scaled back
+// down, kept 0.78 of the preview's fine light and shade). At the map's own pixels it
+// gives each pixel's value exactly, so the preview is as it was.
 const MEASURED_FS = `${HEAD}
 uniform sampler2D uSrc;
 uniform vec4 uRect;   // u0, v0, u1, v1 of the measured map this target covers
 void main() {
-  float h = texture(uSrc, mix(uRect.xy, uRect.zw, vUV)).r;
+  vec2 size = vec2(textureSize(uSrc, 0));
+  vec2 p = mix(uRect.xy, uRect.zw, vUV) * size - 0.5, i = floor(p), t = p - i;
+  vec2 w0 = t * (-0.5 + t * (1.0 - 0.5 * t)), w1 = 1.0 + t * t * (-2.5 + 1.5 * t);
+  vec2 w2 = t * (0.5 + t * (2.0 - 1.5 * t)), w3 = t * t * (-0.5 + 0.5 * t);
+  float h = 0.0;
+  for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) {
+    vec2 w = vec2(x == 0 ? w0.x : x == 1 ? w1.x : x == 2 ? w2.x : w3.x, y == 0 ? w0.y : y == 1 ? w1.y : y == 2 ? w2.y : w3.y);
+    ivec2 q = clamp(ivec2(i) + ivec2(x - 1, y - 1), ivec2(0), ivec2(size) - 1);
+    h += w.x * w.y * texelFetch(uSrc, q, 0).r;
+  }
   outColor = vec4(h, h, 0.0, 1.0);
 }`;
 

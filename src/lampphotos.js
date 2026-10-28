@@ -29,7 +29,8 @@
 // Shots must come from one tripod position, but a tripod still creeps: on the
 // user's shots the camera moved up to 2 px and one shot was zoomed by 0.3%, which
 // is enough to wipe out the finest relief. Each shot is aligned to the even one
-// first, on colour alone (r/sum and b/sum), which lighting barely changes.
+// first, on colour alone (r/sum and b/sum), which lighting barely changes (lamp shots: a
+// sun shot is lined up already, and sky-lit shadows move its colour; see measureRelief).
 
 //
 // The sun is a lamp too (10-22): so far away that its light comes from one direction
@@ -399,6 +400,31 @@ export function integrate(hx, hy, w, h, cycles = 3) {
   for (let c = 0; c < cycles; c++) { wcycle(levels, 0); removeMean(levels[0].u); }
   return levels[0].u;
 }
+/**
+ * The height's slopes as the renderer reads them (gbuffer.js NORMAL_FS: central differences)
+ * brought back to the measured ones. integrate matches each step between neighbours to the mean
+ * of their two slopes, and a central difference averages two such steps again, so a slope
+ * comes back as about cos²(k / 2) of itself at k radians per pixel: half at a 4 px period, a
+ * quarter at 3 px, the size of plaster grain. Integrating what is still missing and adding it
+ * (a Van Cittert round) takes that to 1 - (1 - cos²)^(rounds + 1). One round: on the user's lintel
+ * under its sun, the height's predicted shading had 0.62 of the photo's fine light and shade
+ * (1-2 px bands, tools/realref/score.py), 0.96 after it (door 0.61, 0.88), at the same correlation;
+ * more rounds overshoot it (2: 1.15), the finest slopes being partly noise.
+ */
+export function sharpen(height, hx, hy, w, h, rounds = 1) {
+  const n = w * h;
+  for (let k = 0; k < rounds; k++) {
+    const rx = new Float32Array(n), ry = new Float32Array(n);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      rx[i] = x > 0 && x < w - 1 ? hx[i] - 0.5 * (height[i + 1] - height[i - 1]) : 0;
+      ry[i] = y > 0 && y < h - 1 ? hy[i] - 0.5 * (height[i + w] - height[i - w]) : 0;
+    }
+    const add = integrate(rx, ry, w, h);
+    for (let i = 0; i < n; i++) height[i] += add[i];
+  }
+  return height;
+}
 function removeMean(a) { let m = 0; for (const v of a) m += v; m /= a.length; for (let i = 0; i < a.length; i++) a[i] -= m; }
 function smooth(L, iters) {
   const { w, h, u, f } = L;
@@ -512,7 +538,13 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   const S = [];
   for (let k = 0; k < shots.length; k++) {
     onProgress(`Aligning lamp photo ${k + 1} of ${shots.length}…`); await tick();
-    const al = align(even, shots[k].rgba, w, h);
+    // A sun shot is lined up already (lineup.js, or before it came in): align would only move it.
+    // On colour alone it reads the sky-blue shadows against the sunlit faces as paint edges and
+    // moved both of the user's lined-up sun photos almost a pixel (lintel 0.45, -0.75; door 0.21,
+    // 0.79), which blurred their finest relief: stroke-scale agreement of the height's shading
+    // with the photo's, lintel fine / mid r 0.42 / 0.73 with it, 0.62 / 0.77 without (door 0.50
+    // / 0.75, 0.64 / 0.80).
+    const al = shots[k].lamp.sun ? { map: [0, 0, 0, 0, 0, 0], rms: 0, used: 0, of: 0 } : align(even, shots[k].rgba, w, h);
     const warped = warpShot(shots[k].rgba, w, h, al.map), px = shotPixels(shots[k].lamp, widthCm, w, h);
     const sh = shading(warped.lum, warped.bad, evenLum, evenOk, w, h, px, beamSigma ?? (px.sun ? SUN_BEAM_SIGMA : BEAM_SIGMA));
     S.push({ ...sh, align: al, px, warped, glint: 0, glintMask: null });
@@ -551,7 +583,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
     ({ hx, hy } = slopes(S, all, w, h));
   }
   onProgress('Building the height…'); await tick();
-  const raw = integrate(hx, hy, w, h);
+  const raw = sharpen(integrate(hx, hy, w, h), hx, hy, w, h);
   const drift = boxBlur(raw, w, h, (driftSigma ?? (shots.every((s) => s.lamp.sun) ? SUN_DRIFT_SIGMA : DRIFT_SIGMA)) * w);
   const height = new Float32Array(n);
   for (let i = 0; i < n; i++) height[i] = raw[i] - drift[i];
