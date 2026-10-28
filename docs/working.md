@@ -91,4 +91,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   code: a timing race to look into if it comes back.
 - tests/browser.cjs's phone slider block ("tap jumps", a 50 ms wait) failed once on 10-22 while three
   other headless pages ran beside it, and passed run alone: run browser.cjs on its own.
+  10-28: it failed 3 of 4 full runs in the cloud, run alone, on the 10-24 code too (v stays 0.5),
+  and passes as a block on its own; a guess: the tap's touchstart-to-touchend gap exceeds
+  touchsliders.js TAP_MS (350 ms) late in the suite. The suite stops there, so to run the later
+  blocks, make that one assert a warning in a scratch copy.
 - Whenever you push to `main`, update HANDOFF.md (CLAUDE.md).

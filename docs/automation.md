@@ -49,7 +49,9 @@ Paths are dotted names into `settings()`. The common ones:
 - Lights: `lights.N.x|y|z|power|kelvin|cone|softness|falloff|aimX|aimY|size|lift|enabled|useKelvin|hex` (N from 0; `x`, `y` in painting widths, 0,0 bottom left)
 - Shadow lights (lights with `kind` `shade` or `negative`): `lights.N.kind`, `lights.N.dark` (a shade's Darkness, 0–1), `lights.N.shape` (`pool`, `window`, `blinds`, `leaves`),
   `lights.N.patternSize` (0.25–4), `lights.N.patternRot` (0–360°), `lights.N.size` (shape blur); `kelvin` is the tint of the light left in the shadow
-- Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill|sun`;
+- Graze (raking) light: `graze.enabled|angle|elevation|opacity|detail|fine|reach|clean|soft|lift|fill|sun|wb`;
+  `graze.wb` (0–1, Camera white) balances the camera to the graze light and its room light, as a
+  phone balances a sunlit photo, so white paint stays white (0: the graze light's 5000 K shows);
   `graze.sun: true` makes it the sun: one direction everywhere, no falloff, even over the painting,
   `elevation` up to 60° (20° without; turn the sun off at 20° or less)
 - Colour tool: `adjust.on`, `adjust.opacity`, `adjust.<name>.<field>`, e.g. `adjust.relief.amount`, `adjust.relief.form` (Broad form), `adjust.relief.formSize` (Broad size, 0–400%), `adjust.exposure.exposure`, `adjust.hueSat.saturation`; `adjust.curves.rgb` is a list of `[x, y]` points (0–1)
@@ -241,7 +243,8 @@ node tools/digilight-cli.cjs measure flat.jpg --sun sun.jpg:40:10.3 --width-cm 5
 - One sun photo gives the slopes along the sun's light only; a second with the painting turned
   about 90° gives both (and a third lets the measurement check itself).
 - Light like this (a sun row; `digilight` after `measureRelief`: the panel's button) makes the
-  graze light that sun (`graze.sun`), its room light the sky's share read in the photo; without a
+  graze light that sun (`graze.sun`), its camera balanced to it (`graze.wb` 1, as the phone did),
+  its room light the sky's share read in the photo; without a
   deepest relief, Fit depth then fits Texture depth to the photo's stroke contrast under it.
   Since 10-24 a sun photo's shadows are read (the surface falls away at least as steeply as the
   sun's rays) and its broad forms dropped like a lamp's: on a stand-in of known relief made by the

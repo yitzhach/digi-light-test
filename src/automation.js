@@ -29,6 +29,7 @@ const LIGHT_FIELDS = [['x', 'Across (painting widths, 0 left … 1 right)'], ['y
 const GRAZE_FIELDS = [['enabled', 'Visible', 'grazeVis'], ['angle', 'Direction (0° from the right, 90° top)', null, 0, 359.9], ['elevation', 'Angle to wall', 'grazeElevation'],
   ['opacity', 'Opacity', 'grazeOpacity'], ['detail', 'Detail', 'grazeDetail'], ['fine', 'Fine', 'grazeFine'], ['reach', 'Shadow length', 'grazeReach'],
   ['clean', 'Clean shadows', 'grazeClean'], ['soft', 'Softness', 'grazeSoft'], ['lift', 'Shadow lift', 'grazeLift'], ['fill', 'Room light', null, 0, null], ['grey', 'Grey surface', null, 0, 1],
+  ['wb', 'Camera white: balanced to the graze light and its room light, as a phone balances a sunlit photo (0–1)', null, 0, 1],
   ['sun', 'Sun: one direction everywhere, even, Angle to wall up to 60° (true/false)']];
 
 /** Reads `path` ("exposure", "graze.opacity", "lights.0.power", "adjust.relief.form") in `obj`. */

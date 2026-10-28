@@ -90,7 +90,7 @@ export function initStudio(api) {
     <div class="row"><label for="grazeLift">Shadow lift</label><input id="grazeLift" type="range" min="-1" max="1" step="0.01"><output data-own></output></div>
     <div class="calScore"><button id="grazeBest" title="Light across the painting's main stroke direction, where it shows the strokes most">Best raking direction</button></div>
     <p class="note" id="grazeBestNote"></p>
-    <div class="views"><button id="grazeSun" title="The graze light as the sun: one direction everywhere, even over the whole painting, and up to ${GRAZE_SUN_EL_MAX}° to the wall (off: a lamp a painting's width away)">Sun</button><button id="grazeGrey" title="The graze light falls on an even grey instead of the paint's colour">Grey surface</button><button id="grazeReliefOnly" title="Graze light alone, at 100%, on grey">Relief only</button><button id="grazeColourOver" title="Relief only, with the photo's colour laid over it (an Overlay layer)">Colour over relief</button></div>
+    <div class="views"><button id="grazeSun" title="The graze light as the sun: one direction everywhere, even over the whole painting, and up to ${GRAZE_SUN_EL_MAX}° to the wall (off: a lamp a painting's width away)">Sun</button><button id="grazeGrey" title="The graze light falls on an even grey instead of the paint's colour">Grey surface</button><button id="grazeWb" title="The camera white-balanced to the graze light and its room light, as a phone balances a sunlit photo, so white paint stays white (off: the graze light's warm 5000 K shows)">Camera white</button><button id="grazeReliefOnly" title="Graze light alone, at 100%, on grey">Relief only</button><button id="grazeColourOver" title="Relief only, with the photo's colour laid over it (an Overlay layer)">Colour over relief</button></div>
     <p class="note">A hard light almost flat to the painting, faded over your lighting: at 100% you see the graze light alone, with full, crisp shadows.</p>
     <p class="note">Detail: only relief at least this wide throws graze shadows. Finer texture, where photo grain would turn to glitter at low angles, is shaded as a ${GRAZE_FINE_DEG}° light shows it, times Fine texture. 0 uses every pixel.</p>
     <p class="note">Shadow length: how far a ridge's shadow may reach, as a share of what its height and the angle to the wall allow (0 keeps them short). Clean shadows: a blocker must stand this tall before it throws a shadow, so grain bumps cast none and real ridges still do. Softness: a bigger lamp, from a bare bulb to a strip light; softer shadow edges and calmer grain. Shadow lift: right of centre brightens the dark paint and recesses the graze light falls on, left deepens them, less the farther a calibrated lamp is (each light has its own Shadow lift too).</p></div>`;
@@ -240,6 +240,7 @@ export function initStudio(api) {
     $('grazeReadout').textContent += g.lamp ? ' · calibrated lamp' : g.sun ? ' · sun' : '';
     $('grazeSun').classList.toggle('on', !!g.sun && !g.lamp);
     $('grazeGrey').classList.toggle('on', (g.grey ?? 0) > 0);
+    $('grazeWb').classList.toggle('on', (g.wb ?? 0) > 0);
     cal?.sync();
   }
   // Adjusting any graze control shows the effect, so the change is visible.
@@ -247,6 +248,7 @@ export function initStudio(api) {
   function setGraze(change) {
     Object.assign(state.graze, change, { enabled: true });
     if (state.graze.lamp == null) delete state.graze.lamp;
+    if (!state.graze.wb) delete state.graze.wb;
     if (!state.graze.sun) delete state.graze.sun;
     else if (state.graze.elevation > GRAZE_SUN_EL_MAX) state.graze.elevation = GRAZE_SUN_EL_MAX;
     // A lamp's angle stops at GRAZE_EL_MAX; the sun's may stand higher.
@@ -271,6 +273,7 @@ export function initStudio(api) {
   const isColourOver = L => L.mode === COLOUR_OVER.mode && L.source === COLOUR_OVER.source && !L.mask;
   $('grazeSun').onclick = () => { setGraze({ sun: !(state.graze.sun && !state.graze.lamp), lamp: null }); checkpoint(); };
   $('grazeGrey').onclick = () => { setGraze({ grey: (state.graze.grey ?? 0) > 0 ? 0 : 1 }); checkpoint(); };
+  $('grazeWb').onclick = () => { setGraze({ wb: (state.graze.wb ?? 0) > 0 ? 0 : 1 }); checkpoint(); };
   function reliefOnly(colour) {
     const layers = state.layers || (state.layers = []);
     for (let i = layers.length - 1; i >= 0; i--) if (isColourOver(layers[i])) layers.splice(i, 1);
@@ -722,6 +725,7 @@ export function initStudio(api) {
     settings.graze={enabled:!!g.enabled,angle:g.angle,elevation:g.elevation,opacity:g.opacity,detail,fine,reach,clean,soft};
     if(g.sun!=null){if(typeof g.sun!=='boolean')throw new Error('Invalid graze light.');if(g.sun&&g.lamp==null)settings.graze.sun=true;}
     if(g.grey!=null){if(!Number.isFinite(g.grey)||g.grey<0||g.grey>1)throw new Error('Invalid graze light.');settings.graze.grey=g.grey;}
+    if(g.wb!=null){if(!Number.isFinite(g.wb)||g.wb<0||g.wb>1)throw new Error('Invalid graze light.');if(g.wb>0)settings.graze.wb=g.wb;}
     // Calibrate: the measured lamp (cm from the painting's edges) and room light.
     if(g.lift!=null){if(!Number.isFinite(g.lift)||g.lift<-1||g.lift>1)throw new Error('Invalid graze light.');settings.graze.lift=g.lift;}
     if(g.fill!=null){if(!Number.isFinite(g.fill)||g.fill<0||g.fill>FILL_MAX)throw new Error('Invalid graze light.');settings.graze.fill=g.fill;}

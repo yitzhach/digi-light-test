@@ -7,6 +7,16 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-28 ("Now" bullets moved out when Camera white went in)
+- **The lintel's 1/4" stands** (the user: ~1/8" down into recesses, ~1/8" up elsewhere).
+  At 1/4" the artist's depth and Fit depth agree (3.17 / 2.85 mm, was 1.8× apart) and the light
+  and shade is the real sun's size. Its r is lower than at 1/8" (mid 0.57 vs 0.68), but the
+  known-truth stand-in (tools/realref/sunflat_depth.cjs) does the same with the depth right by
+  construction: at a 10° sun, r peaks below the true depth. No fix needed; judge depth by size.
+  The field is now "Relief, lowest to highest". Details: docs/real-light-test.md "10-24, later".
+- 10-24: sun slope flattening mostly fixed (src/lampphotos.js), handheld photos lined up in the
+  app (src/lineup.js).
+
 ## HANDOFF, 10-24 later ("Now" bullets moved out when the user's 1/4" answer came in)
 - **10-24, sun slope flattening mostly fixed** (src/lampphotos.js, sun shots only): shadows are
   read as falling away at the sun's angle, bright facets up to 1.2/sin(elevation) are read, sun

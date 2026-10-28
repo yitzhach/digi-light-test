@@ -270,6 +270,25 @@ the renderer gives any relief whose lowest to highest is 1/8". Likely, in some m
   would widen the gap).
 Its depth from the artist is the one to use; Fit depth on a sun photo reads deep. (Later the same day: the artist's range is 1/4", and the two agree; below.)
 
+### 10-28: Camera white (the sun's colour as the phone balanced it)
+
+Light like this with a sun photo now balances the render's camera to that sun and its sky
+(`graze.wb` 1, the graze panel's **Camera white**), as the phone balanced the photo; a lamp's
+keeps 5000 K as before (wb 0). The balance is Keep greys neutral's, applied to the graze light
+alone and at full strength whatever that slider says. The lintel (sun_score.cjs ... 52.07 6.35,
+score.py; b* of the brightest 40%):
+
+| picture | b* | light-and-shade r (mid / broad / forms) | size / the real sun's |
+|---|---|---|---|
+| real sun photo | 0.3 | | |
+| flat photo | 3.9 | | |
+| artist's 1/4", before | 12.4 | 0.57 / 0.69 / 0.71 | 1.02 / 1.35 / 1.14 |
+| **artist's 1/4", Camera white** | **2.7** | 0.57 / 0.69 / 0.71 | 1.02 / 1.35 / 1.14 |
+| Fit depth (2.85 mm), Camera white | 2.7 | 0.58 / 0.70 / 0.72 | 0.87 / 1.12 / 0.93 |
+
+The colour gap is closed (the render now sits near the flat photo's own white); light and shade
+are unchanged. Left from "10-24, later": highlights (p95 182 against 242) and fine texture.
+
 ### 10-24, later: the artist's range is 1/4", not 1/8"
 
 The user, asked whether "about 1/8"" was the plaster's lowest to highest: 1/8" is about the

@@ -781,7 +781,11 @@ export class Shader {
     const amb = room.map((v) => v * state.ambient);
     gl.uniform3fv(u.uWhiteBalance, balance(sceneWhite(lights, aspect, amb)));
     const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: wbPow, enabled: true, cone: 0, falloff: 2 };
-    gl.uniform3fv(u.uGrazeWhiteBalance, balance(sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)))));
+    // graze.wb (Light like this with a sun photo): the camera balanced to the graze light and its
+    // room light, as a phone balances a sunlit photo, whatever Keep greys neutral says.
+    const gWb = Math.max(wb, Math.min(1, Math.max(0, g?.wb ?? 0)));
+    const gWhite = sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)));
+    gl.uniform3fv(u.uGrazeWhiteBalance, new Float32Array(gWhite.map((v) => 1 + gWb * (v - 1))));
     setAdjustUniforms(gl, u, state, (curves) => this.curveLUT(curves), reliefView);
     setOverlayUniforms(gl, u, state, reliefView);
     // Stroke definition needs its smoothed relief (GBuffer buildStroke) and the

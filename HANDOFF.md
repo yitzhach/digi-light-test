@@ -6,19 +6,17 @@ waits on the user and what is next. Where things are, how to run and test, gotch
 **docs/roadmap.md**. Real-photo evidence for measured relief: **docs/real-light-test.md**.
 
 ## Now
-Everything is on `main` (10-24, later; work branch `claude/quirky-allen-tna7jh`).
-- **The lintel's 1/4" stands** (the user: ~1/8" down into recesses, ~1/8" up elsewhere).
-  At 1/4" the artist's depth and Fit depth agree (3.17 / 2.85 mm, was 1.8× apart) and the light
-  and shade is the real sun's size. Its r is lower than at 1/8" (mid 0.57 vs 0.68), but the
-  known-truth stand-in (tools/realref/sunflat_depth.cjs) does the same with the depth right by
-  construction: at a 10° sun, r peaks below the true depth. No fix needed; judge depth by size.
-  The field is now "Relief, lowest to highest". Details: docs/real-light-test.md "10-24, later".
-- 10-24: sun slope flattening mostly fixed (src/lampphotos.js), handheld photos lined up in the
-  app (src/lineup.js). Those and earlier work: docs/history.md.
+Everything is on `main` (10-28; work branch `claude/quirky-allen-tna7jh`).
+- **10-28, Camera white**: Light like this with a sun photo balances the render's camera to that
+  sun and sky (`graze.wb` 1; graze panel button **Camera white**, on by default for a sun, off
+  for a lamp), as the phone did. Lintel whites b* 12.4 → 2.7 (real photo 0.3, flat 3.9); light and
+  shade unchanged. Done as HANDOFF suggested (match the photo's white), since item 1 below had no
+  answer; one click turns it off. Details: docs/real-light-test.md "10-28".
+- Earlier (lintel's 1/4", sun slope fix, handheld line-up): docs/history.md "HANDOFF, 10-28".
 
 ## Waiting on the user
-1. Light like this with a sun photo: match the photo's neutral whites (as the phone balanced
-   them), or keep the sun's warmth? (Separate from item 4's favourites.)
+1. Camera white on by default for Light like this with a sun photo (whites neutral as the phone
+   balanced them): keep it, or keep the sun's warmth (turn it off)? (Separate from item 4.)
 2. Welcome, not needed: a second lintel sun photo with the board turned ~90°, same sun; the door's
    sun elevation, width and relief lowest to highest (is it also ~1/4"?).
 3. Guard when room light 1.0 is not enough (near-black bands stay crushed): lift the black point
@@ -29,14 +27,15 @@ Everything is on `main` (10-24, later; work branch `claude/quirky-allen-tna7jh`)
 6. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
 
 ## Next up
-1. Light like this on a sun photo, the visible gaps left (docs/real-light-test.md "10-24, later"):
-   whites warm (5000 K) where the phone's are neutral (b* 12 vs 0); sunlit faces reach 190 where
-   the photo's blow out; fine texture softer. Colour first (waiting on the user, 1): match the
-   photo's white. Check: `node tools/realref/sun_score.cjs testdata/photos/lintel-flat-crop.jpg
-   testdata/photos/lintel-sun-lined.jpg OUT 40 10.3 52.07 6.35`, then
-   `python3 tools/realref/score.py OUT/orig.png testdata/photos/lintel-sun-lined.jpg OUT/artist.png`.
-2. The sun's direction read from cast shadows (so the user needn't give it).
-3. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
+1. Light like this on a sun photo, the gaps left (docs/real-light-test.md "10-28"): sunlit faces
+   reach 190 (p95 182) where the photo's blow out (242); fine texture softer (fine-band 1.09
+   against 3.51 of the flat's). Check: `node tools/realref/sun_score.cjs
+   testdata/photos/lintel-flat-crop.jpg testdata/photos/lintel-sun-lined.jpg OUT 40 10.3 52.07 6.35`,
+   then `python3 tools/realref/score.py OUT/orig.png testdata/photos/lintel-sun-lined.jpg OUT/artist.png`.
+2. tests/browser.cjs "tap jumps" failed 3 of 4 full runs on 10-28, old code too (docs/working.md
+   Gotchas): find the cause (TAP_MS timing?) and make it robust without weakening the check.
+3. The sun's direction read from cast shadows (so the user needn't give it).
+4. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
 ## Quick test set (details: docs/working.md)

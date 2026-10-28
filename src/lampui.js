@@ -245,15 +245,17 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // A sun photo's sun: the graze light as the sun (graze.sun), its room light the sky's share the
   // measurement read in that photo (rows[i].room: the share of a sunlit flat patch's brightness
   // that is sky; graze fill f against the sun's 0.35 on flat paint gives f / (f + 0.35)), else
-  // a tenth (the user's sunlit photos read 7-11%).
+  // a tenth (the user's sunlit photos read 7-11%). Its camera is white-balanced to that sun and
+  // sky (graze.wb), as the phone balanced the photo: the lintel's whites came out neutral in the
+  // photo (b* 0) and warm under the graze light's 5000 K (b* 12). A lamp keeps 5000 K as it was.
   function lightLike(i, keepFill = false) {
     const raw = api.measured.get()?.on ? { detail: 0, clean: 0, fine: 1, soft: 0 } : {};
     if (rows[i].lamp.sun) {
       const a = Math.min(0.5, Math.max(0, rows[i].room ?? 0.1));
-      cal.useSun(rows[i].lamp.sun, keepFill ? raw : { ...raw, fill: Math.min(FILL_MAX, +(0.35 * a / (1 - a)).toFixed(3)) });
+      cal.useSun(rows[i].lamp.sun, { ...raw, wb: 1, ...(keepFill ? {} : { fill: Math.min(FILL_MAX, +(0.35 * a / (1 - a)).toFixed(3)) }) });
       return;
     }
-    cal.useLamp(rows[i].lamp, keepFill ? raw : { ...raw, fill: LAMP_ROOM });
+    cal.useLamp(rows[i].lamp, { ...raw, wb: 0, ...(keepFill ? {} : { fill: LAMP_ROOM }) });
   }
 
   // The lamp photo at the preview's size, lined up as the measurement found it.

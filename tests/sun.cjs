@@ -48,7 +48,7 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
     const fitted = await call('measureRelief', { photos: [{ src: photo, sun: { azimuthDeg: 135, elevationDeg: 15 } }] });
     assert.ok(fitted.measuredRelief && fitted.sun && fitted.fit && fitted.fit.depth > 0, 'Fit depth with a sun ' + JSON.stringify(fitted.fit));
     const light = await page.evaluate(() => { __studio.lamp.lightLike(0); return __bench.state.graze; });
-    assert.ok(light.sun === true && light.angle === 135 && light.elevation === 15 && light.detail === 0 && light.fine === 1 && Math.abs(light.fill - +(0.35 * fitted.shots[0].room / (1 - fitted.shots[0].room)).toFixed(3)) < 1e-9, 'Light like this, a sun ' + JSON.stringify(light));
+    assert.ok(light.sun === true && light.wb === 1 && light.angle === 135 && light.elevation === 15 && light.detail === 0 && light.fine === 1 && Math.abs(light.fill - +(0.35 * fitted.shots[0].room / (1 - fitted.shots[0].room)).toFixed(3)) < 1e-9, 'Light like this, a sun ' + JSON.stringify(light));
     const kept = await call('measureRelief', { photos: [{ src: photo, sun: { azimuthDeg: 135, elevationDeg: 15 } }], deepestMm: 2 });
     assert.ok(kept.fit === null && Math.abs(kept.textureDepthMm - +(kept.depthMm * 2 / kept.rangeMm).toFixed(2)) < 0.011, 'deepest relief kept ' + JSON.stringify(kept));
     console.log('PASS sun photo: Light like this is that sun, Fit depth', JSON.stringify(fitted.fit), 'for a photo made at', depth, 'mm;', 'deepest relief', kept.textureDepthMm, 'mm');
