@@ -35,8 +35,9 @@ Everything is on `main` (10-28, rough surface; work branch `claude/quirky-allen-
 5. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
 
 ## Next up
-1. tests/browser.cjs "tap jumps" failed 3 of 5 full runs on 10-28, old code too (docs/working.md
-   Gotchas): find the cause (TAP_MS timing?) and make it robust without weakening the check.
+1. tests/browser.cjs: "tap jumps" failed 3 of 5 full runs on 10-28 (TAP_MS timing?), and the tool
+   search block's second pick failed twice after a container restart; both fail on the old code
+   too (docs/working.md Gotchas). Find the causes and make them robust without weakening the checks.
 2. The sun's direction read from cast shadows (so the user needn't give it); with it, the sun's
    elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
 3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:

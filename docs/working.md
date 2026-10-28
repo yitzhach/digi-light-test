@@ -95,4 +95,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   and passes as a block on its own; a guess: the tap's touchstart-to-touchend gap exceeds
   touchsliders.js TAP_MS (350 ms) late in the suite. The suite stops there, so to run the later
   blocks, make that one assert a warning in a scratch copy.
+- tests/browser.cjs's tool search block (second pick, "graze opac": `#toolSearchInput` not
+  visible after adding `searchOpen` by hand) failed twice in a row on 10-28 after a container
+  restart, on the old code too, and passed before the restart. With that step made a warning in a
+  scratch copy the other 64 checks passed.
 - Whenever you push to `main`, update HANDOFF.md (CLAUDE.md).
