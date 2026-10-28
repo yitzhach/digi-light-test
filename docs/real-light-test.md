@@ -270,6 +270,91 @@ the renderer gives any relief whose lowest to highest is 1/8". Likely, in some m
   would widen the gap).
 Its depth from the artist is the one to use; Fit depth on a sun photo reads deep. (Later the same day: the artist's range is 1/4", and the two agree; below.)
 
+### 10-28, rough surface: the sunlit facets were a measurement loss and a sheen
+
+"Next up" was a rough-surface term for the graze light (each pixel shaded as a spread of facet
+slopes). It was not built, because it cannot do what was asked of it. With the camera looking along the face's
+normal, a matte pixel sends back the light its patch intercepts per unit of projected area: the
+sun times N·L of the pixel's mean normal, whatever facets lie inside it (no interreflection). A
+spread of facet slopes moves light about inside a pixel and leaves the pixel's mean where it was.
+And a matte facet under a 10.3° sun is at most 1/sin(10.3°) = 5.6 times as bright as flat paint,
+yet the photo's dark paint at p90 is 10.7 times its class median. Two other causes, measured
+instead:
+
+**1. One sun shot lost the slope it measured.** One shot measures the slope along its light only.
+The slope across it is unknown, but `integrate` took it as 0, and least squares then kept a relief
+detail's slope along the sun only as cos² of the angle between the sun and the detail's own
+slope. lampphotos.js `slopes` now also returns, per pixel, the direction its shots measured where
+they measured one only (`seen`: all shots from one side, fading out by 30° apart), and `sharpen`
+adds ONE_DIRECTION_ROUNDS (12) more rounds that put back only what is missing along it. The
+lintel, Node, the height's slope along the sun against the measured one (fine / mid / broad /
+forms):
+
+| rounds along the sun | gain | r | full range at 10.3° |
+|---|---|---|---|
+| 0 (before) | 0.31 / 0.56 / 0.59 / 0.58 | 0.72 / 0.84 / 0.86 / 0.86 | 3.27 mm |
+| 12 | 0.68 / 0.95 / 1.00 / 0.94 | 0.86 / 0.94 / 0.96 / 0.95 | 6.83 mm (in the app 7.52) |
+| 20 | 0.72 / 0.98 / 1.03 / 0.98 | 0.88 / 0.95 / 0.97 / 0.95 | 7.40 mm |
+
+The sun photo alone, at the angle read from the lintel's shadow, now gives about the artist's 1/4"
+(6.35 mm) lowest to highest, where it gave 3.65 mm and was stretched 1.74 times. Past 12 rounds the
+range keeps growing through directions the sun barely saw, while the slopes along it have
+settled. On the stand-in of known relief (tests/sunrelief.mjs, one sun) slopes along the sun r
+0.935 → 0.967, height r 0.674 → 0.776, range 3.18 → 4.61 mm against 5.73. With two suns turned
+90°, or the DSC_8382 lamps, it changes nothing or next to nothing (gated by `seen`): the
+height's predicted shading against each lamp photo, fine / mid / broad r within 0.01, sizes
+nearer the photos'. The same check on the door (one sun, 30° assumed): r 0.67 / 0.75 / 0.81 →
+0.80 / 0.83 / 0.86, size 0.35 / 0.50 / 0.51 → 0.64 / 0.71 / 0.75.
+
+**2. A sheen that does not take the paint's colour.** Normalised by each picture's own local mean
+(the beam window), the render's sunlit shape was already near the photo's. The gap was in the
+level. Over the flat photo, the sunlit photo's local mean is 0.74 on white plaster, 0.86 on mid
+and 1.62 on dark paint (mid / white 1.16, dark / white 2.19). The render gave 0.49 on all three.
+That fits sun × (paint + about 5% of a white, whatever the paint), absent in the shadows (their
+p10 matches), and the brightest pixels losing their colour fits it too. The door has more of it
+(1.36 / 2.40). Highlight strength (specular) at the default roughness 0.72: 1 → 1.02 / 1.10,
+2 → 1.05 / 1.33, 4 → 1.17 / 2.23 on the lintel. Roughness 0.65-0.8 alike, 0.45 short (1.09 /
+1.63). The door at 4 (the slider's top): 1.07 / 1.54. **Light like this with a sun photo now sets
+Highlight strength 4** (lampui.js SUN_HIGHLIGHT). A lamp's photo leaves it as set.
+
+The lintel, all of it (sun_score.cjs ... 52.07 6.35; at the artist's 1/4", Texture depth 3.0 →
+2.77 mm, and at Fit depth, 2.66 → 3.68 mm):
+
+| | sunlit over flat, p90 / p99 (white, mid, dark) | light and shade, linear (tones.py) r / size | log (score.py) r / size |
+|---|---|---|---|
+| real photo | 1.23 / 1.56, 2.09 / 4.22, 4.89 / 14.8 | | |
+| artist, before | 0.71 / 0.91, 1.02 / 1.80, 1.29 / 2.88 | 0.43 / 0.59 / 0.74 / 0.75, 0.14 / 0.23 / 0.28 / 0.28 | 0.34 / 0.63 / 0.63 / 0.61, 0.85 / 1.38 / 1.37 / 1.12 |
+| artist, now | 0.67 / 0.84, 1.10 / 2.15, 2.82 / 8.74 | 0.52 / 0.69 / 0.85 / 0.84, 0.41 / 0.52 / 0.57 / 0.57 | 0.41 / 0.78 / 0.85 / 0.75, 0.70 / 0.75 / 0.64 / 0.58 |
+| Fit depth, before | 0.69 / 0.87, 0.97 / 1.70, 1.21 / 2.68 | 0.44 / 0.60 / 0.74 / 0.75, 0.12 / 0.21 / 0.25 / 0.25 | 0.35 / 0.63 / 0.63 / 0.62, 0.71 / 1.17 / 1.11 / 0.89 |
+| Fit depth, now | 0.72 / 0.92, 1.24 / 2.50, 3.33 / 10.7 | 0.51 / 0.69 / 0.85 / 0.85, 0.53 / 0.65 / 0.71 / 0.69 | 0.40 / 0.77 / 0.83 / 0.75, 1.15 / 1.29 / 1.13 / 0.96 |
+
+The measurement alone (Highlight strength as before) gave log r 0.43 / 0.81 / 0.90 / 0.86 at the
+artist's depth. The sheen costs 0.01-0.11 of it on the log, which shadows dominate, and wins on
+linear, where the sunlit facets count. The door at Fit depth (score.py, measurement alone): r
+0.40 / 0.73 / 0.79 / 0.53 → 0.46 / 0.84 / 0.91 / 0.77, size 0.46 / 0.99 / 0.98 / 0.38 → 0.61 /
+0.99 / 0.96 / 0.48; with Highlight strength 4, r 0.47 / 0.80 / 0.87 / 0.75, size 0.74 / 1.14 /
+1.02 / 0.49.
+
+Still open:
+- **White plaster's level**: 0.45 of the flat photo at p50 against 0.60. That is the sun's
+  brightness against the flat photo's, so the two photos' exposures, which no render setting
+  stands for (Exposure lifts it).
+- **The shape on white and mid**, normalised by the local mean, p90: 1.43 / 2.06 against 1.66 /
+  2.29 (Fit depth). The finest band's slopes come back at 0.68 of the measured ones.
+- **Depth**: the artist's 1/4" is now 0.84 of what the sun photo gives at 10.3°, and Fit depth
+  1.33 times the artist's. A sun of 11.9-13.6° (if the lintel's block sits lower) would deepen
+  the measurement further.
+- **Door**: it wants more sheen than the slider's top.
+- The real door photo's sun angle and the door's depth are still unknown.
+
+Tests: tests/sunrelief.mjs as above. tests/sunflat.cjs: the artist's range ×0.96 of the truth
+(was 1.09), Fit depth ×0.80 (0.74), the measurement at the true sun angle ×0.79 (range 2.58 mm
+against 3.15). tests/lineup.cjs: door depth 6.18 against 6.02 mm, lintel 3.32 against 3.28, relief
+r 0.945 / 0.992. tests/sun.cjs: its synthetic sun photo, made at 1 mm, fits at 1.15 mm with the
+measurement alone (was 0.86). With Highlight strength 4 it fits at 1.54 mm: that photo is rendered
+without a sheen, and a sheen-lit render has less stroke contrast to fit against it. On the real
+photos the sheen is in the photo too.
+
 ### 10-28, later: the highlights gap, and three fine-detail losses found on the way
 
 The lintel at the artist's 1/4" under its sun (Light like this, Camera white), luma by the flat

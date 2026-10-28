@@ -20,6 +20,7 @@ import { FILL_MAX } from './presets.js';
 
 const CM = { in: 2.54, cm: 1 };
 const LAMP_ROOM = 0.25;   // graze room light for Light like this (see lightLike)
+const SUN_HIGHLIGHT = 4;  // Highlight strength for Light like this with a sun photo (see lightLike)
 
 export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, snapshot, restore, setBatching }) {
   const $ = (id) => document.getElementById(id);
@@ -248,9 +249,18 @@ export function initLampPhotos({ state, api, after, cal, checkpoint, syncQuick, 
   // a tenth (the user's sunlit photos read 7-11%). Its camera is white-balanced to that sun and
   // sky (graze.wb), as the phone balanced the photo: the lintel's whites came out neutral in the
   // photo (b* 0) and warm under the graze light's 5000 K (b* 12). A lamp keeps 5000 K as it was.
+  // Highlight strength SUN_HIGHLIGHT with a sun: in both of the user's sun photos the sunlit paint
+  // carries a sheen that is not the paint's colour (over the flat photo, by the local mean: lintel
+  // mid / white 1.16, dark / white 2.19; door 1.36, 2.40; a render without it 1.0 / 1.0), while
+  // shadows do not, and the brightest pixels lose their colour. On the lintel 4 matches it (1.19,
+  // 2.37 at Fit depth), the door wants more (1.07, 1.54 at 4, the slider's top); docs/real-light-test.md
+  // "10-28, rough surface". A lamp's photo leaves it as set.
   function lightLike(i, keepFill = false) {
     const raw = api.measured.get()?.on ? { detail: 0, clean: 0, fine: 1, soft: 0 } : {};
     if (rows[i].lamp.sun) {
+      state.specular = SUN_HIGHLIGHT;
+      const sl = $('specular');
+      if (sl) { sl.value = SUN_HIGHLIGHT; const o = sl.closest('.row')?.querySelector('output'); if (o) o.textContent = SUN_HIGHLIGHT.toFixed(2); }
       const a = Math.min(0.5, Math.max(0, rows[i].room ?? 0.1));
       cal.useSun(rows[i].lamp.sun, { ...raw, wb: 1, ...(keepFill ? {} : { fill: Math.min(FILL_MAX, +(0.35 * a / (1 - a)).toFixed(3)) }) });
       return;

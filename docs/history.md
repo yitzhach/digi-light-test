@@ -7,6 +7,18 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-28 later ("Now" bullets moved out when the rough-surface work went in)
+- **10-28, later, the highlights gap diagnosed** (docs/real-light-test.md "10-28, later"): in the
+  lintel's sun photo the sunlit facets are 2-5x brighter (linear, over the flat photo) than in the
+  render, in every paint class; shadows match. Not exposure, rolloff, shadow lift or specular.
+  Most likely sub-pixel roughness at a low sun (grain facets far steeper than a pixel's slope).
+- **Three fine-relief losses fixed**: sun shots skip `align` (it moved lined-up sun photos ~1 px),
+  `sharpen` after integration (lampphotos.js; central differences had halved the grain), exports
+  sample measured relief Catmull-Rom (gbuffer.js). Lintel full size, light and shade fine r 0.17 →
+  0.34, size 0.36 → 0.85; mid r 0.57 → 0.63.
+- 10-28: Camera white (Light like this with a sun balances the camera to it; the user: keep it).
+  Earlier: docs/history.md "HANDOFF, 10-28".
+
 ## HANDOFF, 10-28 ("Now" bullets moved out when Camera white went in)
 - **The lintel's 1/4" stands** (the user: ~1/8" down into recesses, ~1/8" up elsewhere).
   At 1/4" the artist's depth and Fit depth agree (3.17 / 2.85 mm, was 1.8× apart) and the light

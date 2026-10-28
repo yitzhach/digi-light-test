@@ -66,6 +66,7 @@ export const ALIGN_SEARCH = 0.01;     // how far a shot may have moved
 const SHADOW_S = 0.1;                 // shading below this is shadow: no slope to read (lamps)
 const BRIGHT_S = 3;                   // ... above this, a glint more likely than a facet (lamps)
 const REFINE = 2;                     // rounds of taking the relief out of the beam
+export const ONE_DIRECTION_ROUNDS = 12; // sharpen rounds along the light where it came from one side only
 const CHECK_BAND = [0.0022, 0.009];   // stroke-scale band the check scores
 // Glints (varnish, wet-looking impasto) under a spot lamp read as steep slopes. A pixel
 // is taken as a glint if it is well above what a facet turned straight at the lamp could
@@ -359,9 +360,13 @@ function fitRoom(sh, pred, w, h) {
 
 // Slopes from the shots listed in `use`: per pixel, least squares over the usable
 // samples, with a little damping so one shot (or two from the same side) still
-// gives the slope along its light and nothing across it.
+// gives the slope along its light and nothing across it. seen: per pixel, the direction
+// whose slope the shots measured (ex, ey) where they measured one direction only, with
+// that share (1 when every shot lit it from one side, 0 when two lit it from 30° or more
+// apart); see sharpen.
 function slopes(shots, use, w, h) {
   const n = w * h, hx = new Float32Array(n), hy = new Float32Array(n);
+  const ex = new Float32Array(n), ey = new Float32Array(n), one = new Float32Array(n);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     let m11 = 0, m12 = 0, m22 = 0, b1 = 0, b2 = 0;
@@ -372,8 +377,16 @@ function slopes(shots, use, w, h) {
     }
     const lam = 0.01 * (m11 + m22) + 1e-9, a = m11 + lam, d = m22 + lam, det = a * d - m12 * m12;
     if (det > 1e-12) { hx[i] = (d * b1 - m12 * b2) / det; hy[i] = (a * b2 - m12 * b1) / det; }
+    // The information matrix's eigenvalues: the smaller over the larger is tan² of half the
+    // angle between two lights of equal weight (0.072 at 30°).
+    const tr = m11 + m22, gap = Math.sqrt((m11 - m22) ** 2 + 4 * m12 * m12), l1 = 0.5 * (tr + gap), l2 = 0.5 * (tr - gap);
+    if (l1 > 1e-9) {
+      one[i] = Math.max(0, 1 - l2 / l1 / 0.072);
+      const vx = Math.abs(m12) > 1e-12 ? l1 - m22 : (m11 >= m22 ? 1 : 0), vy = Math.abs(m12) > 1e-12 ? m12 : (m11 >= m22 ? 0 : 1), vn = Math.hypot(vx, vy);
+      ex[i] = vx / vn; ey[i] = vy / vn;
+    }
   }
-  return { hx, hy };
+  return { hx, hy, seen: { ex, ey, one } };
 }
 
 /**
@@ -410,15 +423,30 @@ export function integrate(hx, hy, w, h, cycles = 3) {
  * under its sun, the height's predicted shading had 0.62 of the photo's fine light and shade
  * (1-2 px bands, tools/realref/score.py), 0.96 after it (door 0.61, 0.88), at the same correlation;
  * more rounds overshoot it (2: 1.15), the finest slopes being partly noise.
+ *
+ * Where the shots lit a pixel from one direction only (one sun shot, `seen`), only the slope
+ * along it was measured; the one across is unknown, not 0, but integrate takes it as 0, and
+ * least squares then gives up a relief detail's slope along the light as cos² of the angle
+ * between the light and the detail's own slope: about 0.6 of it in all on plaster grain. So
+ * `oneRounds` more rounds add back only what is missing along the measured direction, leaving the
+ * slope across free. On the user's lintel (one sun at 10.3°) the height's slope along the sun
+ * against the measured one, fine / mid / broad / forms: 0.31 / 0.56 / 0.59 / 0.58 after the
+ * first round, 0.68 / 0.95 / 1.00 / 0.94 after 12 more (20: 0.72 / 0.98 / 1.03 / 0.98, the
+ * range still growing through directions the sun barely saw); and the measured full range at
+ * the sun angle given came to 6.8-7.5 mm against the artist's 1/4" (6.35), from 3.65 before
+ * (docs/real-light-test.md "10-28, rough surface").
  */
-export function sharpen(height, hx, hy, w, h, rounds = 1) {
+export function sharpen(height, hx, hy, w, h, rounds = 1, seen = null, oneRounds = ONE_DIRECTION_ROUNDS) {
   const n = w * h;
-  for (let k = 0; k < rounds; k++) {
+  const total = rounds + (seen && seen.one.some((v) => v > 0) ? oneRounds : 0);
+  for (let k = 0; k < total; k++) {
+    const along = k >= rounds;
     const rx = new Float32Array(n), ry = new Float32Array(n);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = y * w + x;
       rx[i] = x > 0 && x < w - 1 ? hx[i] - 0.5 * (height[i + 1] - height[i - 1]) : 0;
       ry[i] = y > 0 && y < h - 1 ? hy[i] - 0.5 * (height[i + w] - height[i - w]) : 0;
+      if (along) { const t = seen.one[i] * (rx[i] * seen.ex[i] + ry[i] * seen.ey[i]); rx[i] = t * seen.ex[i]; ry[i] = t * seen.ey[i]; }
     }
     const add = integrate(rx, ry, w, h);
     for (let i = 0; i < n; i++) height[i] += add[i];
@@ -551,7 +579,7 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
   }
   onProgress('Reading the slopes…'); await tick();
   const all = S.map((_, k) => k);
-  let { hx, hy } = slopes(S, all, w, h);
+  let { hx, hy, seen } = slopes(S, all, w, h);
   // The beam was taken as the local mean of each shot, which also holds whatever
   // relief is broader than BEAM_SIGMA, so that relief came out too flat. With the
   // slopes in hand, the beam is the shot's local mean over the shading they
@@ -580,10 +608,10 @@ export async function measureRelief({ even, shots, w, h, widthCm, onProgress = (
         sh.glint = k / n;
       }
     }
-    ({ hx, hy } = slopes(S, all, w, h));
+    ({ hx, hy, seen } = slopes(S, all, w, h));
   }
   onProgress('Building the height…'); await tick();
-  const raw = sharpen(integrate(hx, hy, w, h), hx, hy, w, h);
+  const raw = sharpen(integrate(hx, hy, w, h), hx, hy, w, h, 1, seen);
   const drift = boxBlur(raw, w, h, (driftSigma ?? (shots.every((s) => s.lamp.sun) ? SUN_DRIFT_SIGMA : DRIFT_SIGMA)) * w);
   const height = new Float32Array(n);
   for (let i = 0; i < n; i++) height[i] = raw[i] - drift[i];

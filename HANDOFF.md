@@ -6,17 +6,23 @@ waits on the user and what is next. Where things are, how to run and test, gotch
 **docs/roadmap.md**. Real-photo evidence for measured relief: **docs/real-light-test.md**.
 
 ## Now
-Everything is on `main` (10-28, later; work branch `claude/quirky-allen-tna7jh`).
-- **10-28, later, the highlights gap diagnosed** (docs/real-light-test.md "10-28, later"): in the
-  lintel's sun photo the sunlit facets are 2-5x brighter (linear, over the flat photo) than in the
-  render, in every paint class; shadows match. Not exposure, rolloff, shadow lift or specular.
-  Most likely sub-pixel roughness at a low sun (grain facets far steeper than a pixel's slope).
-- **Three fine-relief losses fixed**: sun shots skip `align` (it moved lined-up sun photos ~1 px),
-  `sharpen` after integration (lampphotos.js; central differences had halved the grain), exports
-  sample measured relief Catmull-Rom (gbuffer.js). Lintel full size, light and shade fine r 0.17 →
-  0.34, size 0.36 → 0.85; mid r 0.57 → 0.63.
-- 10-28: Camera white (Light like this with a sun balances the camera to it; the user: keep it).
-  Earlier: docs/history.md "HANDOFF, 10-28".
+Everything is on `main` (10-28, rough surface; work branch `claude/quirky-allen-tna7jh`).
+- **The sunlit-facets gap, found and mostly closed** (docs/real-light-test.md "10-28, rough
+  surface"). There's no rough-surface term: a matte pixel seen face-on gets N·L of its mean normal
+  whatever facets it holds, so no such term can brighten it. The gap was two other things:
+  - **One sun shot lost the slope it measured**: integration took the unknown slope across the sun
+    as 0 and kept 0.3-0.6 of the slope along it. lampphotos.js `sharpen` now adds 12 rounds along
+    the measured direction where the shots lit a pixel from one side only. The lintel's sun photo
+    now gives about the artist's 1/4" by itself (6.8-7.5 mm, was 3.65 stretched 1.74×). Lintel
+    log r at the artist's depth 0.34 / 0.63 / 0.63 / 0.61 → 0.43 / 0.81 / 0.90 / 0.86, door
+    also up, DSC_8382 lamps unchanged.
+  - **A sheen the paint's colour doesn't tint** (dark paint's sunlit light 2.2× white's,
+    relative to the flat photo): Light like this with a sun photo now sets **Highlight strength 4**
+    (it matches the lintel; the door wants more). On linear ratios the lintel's light and shade
+    size is 0.14-0.28 → 0.53-0.71 at Fit depth. Dark sunlit p99 2.9 → 10.7 (photo 14.8).
+- Still open there: white plaster's sunlit level (the two photos' exposures), the finest band at
+  0.68 of the measured slopes, the artist's 1/4" now 0.84 of the measured depth.
+- Earlier: docs/history.md "HANDOFF, 10-28 later".
 
 ## Waiting on the user
 1. Welcome, not needed: a second lintel sun photo with the board turned ~90°, same sun; the door's
@@ -29,15 +35,12 @@ Everything is on `main` (10-28, later; work branch `claude/quirky-allen-tna7jh`)
 5. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
 
 ## Next up
-1. A rough-surface term for the graze light (each pixel shaded as a spread of facet slopes around
-   its normal, the spread fitted to the sun photo), then Highlight strength refitted with it.
-   Check (docs/real-light-test.md "10-28, later"): `node tools/realref/sun_score.cjs
-   testdata/photos/lintel-flat-crop.jpg testdata/photos/lintel-sun-lined.jpg OUT 40 10.3 52.07 6.35`,
-   then `python3 tools/realref/tones.py OUT/orig.png testdata/photos/lintel-sun-lined.jpg
-   OUT/artist.png` (sunlit facets over flat, by paint class) and score.py the same way.
-2. tests/browser.cjs "tap jumps" failed 3 of 5 full runs on 10-28, old code too (docs/working.md
+1. tests/browser.cjs "tap jumps" failed 3 of 5 full runs on 10-28, old code too (docs/working.md
    Gotchas): find the cause (TAP_MS timing?) and make it robust without weakening the check.
-3. The sun's direction read from cast shadows (so the user needn't give it).
+2. The sun's direction read from cast shadows (so the user needn't give it); with it, the sun's
+   elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
+3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:
+   the finest band's slopes, more sheen than the slider's top for the door.
 4. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
