@@ -441,11 +441,11 @@ function relaxDome(m, W, H, phi, iters, omega = 1.9) {
 // ------------------------------------------------------------------ sky and layout
 
 /**
- * Sky: smooth pixels clearly brighter than the picture's middle tone, blue, or near white and
- * very bright (overcast), reached from the top edge through more of the same, in the upper
- * three quarters. A grey studio backdrop or a cream wall is neither, so it stays. Returns {soft,
- * hard, share, horizon} (horizon: the lowest row, as a fraction of the height, where most of
- * the width is still sky; null without sky).
+ * Sky: smooth pixels clearly brighter than the picture's middle tone, blue, or near white, very
+ * bright and smoother still (overcast), reached from the top edge through more of the same, in
+ * the upper three quarters. A grey studio backdrop, a cream wall or white plaster is neither, so
+ * it stays. Returns {soft, hard, share, horizon} (horizon: the lowest row, as a fraction of the
+ * height, where most of the width is still sky; null without sky).
  */
 export function findSky(img) {
   const { w, h, L, A, B } = img, n = w * h;
@@ -457,8 +457,10 @@ export function findSky(img) {
   const smooth = blur(grad, w, h, 1.2), mid = percentile(L, 0.5), ok = new Uint8Array(n);
   for (let y = 0; y < Math.round(h * 0.78); y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
-    const blue = B[i] < -8 && A[i] < 10 && L[i] > 45, overcast = Math.hypot(A[i], B[i]) < 9 && L[i] > 86;
-    ok[i] = L[i] > mid + 8 && smooth[i] < 6 && (blue || overcast) ? 1 : 0;
+    // A grey sky must be smoother than a blue one: white plaster or a painting's whites are as
+    // bright and as grey, but textured (on average 3.7 in the user's lintel crop; a grey sky 0.8).
+    const blue = B[i] < -8 && A[i] < 10 && L[i] > 45 && smooth[i] < 6, overcast = Math.hypot(A[i], B[i]) < 9 && L[i] > 86 && smooth[i] < 2.5;
+    ok[i] = L[i] > mid + 8 && (blue || overcast) ? 1 : 0;
   }
   const hard = new Uint8Array(n);
   for (let x = 0; x < w; x++) hard[x] = ok[x];

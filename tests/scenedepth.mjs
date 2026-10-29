@@ -63,10 +63,10 @@ for (const [name, make] of Object.entries(SCENES)) {
   read[name] = { s, scene, ms: performance.now() - t0 };
 }
 {
-  const want = { portrait: 'portrait', object: 'object', booth: 'room', landscape: 'photo', painting: 'artwork' };
+  const want = { portrait: 'portrait', object: 'object', booth: 'room', landscape: 'photo', overcast: 'photo', painting: 'artwork', plaster: 'artwork' };
   const got = Object.fromEntries(Object.keys(want).map((k) => [k, suggestType(read[k].scene).type]));
   assert.deepEqual(got, want);
-  console.log('PASS suggestions: portrait, object, room, photo and artwork told apart', JSON.stringify(got));
+  console.log('PASS suggestions: portrait, object, room, photo (blue or grey sky) and artwork (paint or plaster) told apart', JSON.stringify(got));
 }
 {
   const { s, scene } = read.portrait, m = composeScene(scene, 'portrait'), { w, h } = s, head = s.truth.head;
@@ -113,6 +113,14 @@ for (const [name, make] of Object.entries(SCENES)) {
   assert.ok(at(0.2, 0.1) === 0 && at(0.2, 0.98) > 0.8 * SCENE_SHAPE.photo.depth, `sky far, ground near ${r3(at(0.2, 0.98))}`);
   assert.ok(at(0.7, 0.42) > at(0.6, 0.42) + 0.05, `the tree stands out of what is behind it ${r3(at(0.7, 0.42))}`);
   console.log('PASS photo: sky found and far, horizon, ground comes forward, the tree stands on it', JSON.stringify({ sky: r3(sky), horizon: r3(m.horizon) }));
+}
+{
+  // A grey sky is found as well as a blue one; white plaster as bright and as grey is not a sky
+  // (the user's lintel crop was read as a photo with 8% sky until grey skies had to be smoother).
+  const grey = iou(composeScene(read.overcast.scene, 'photo').sky, read.overcast.s.truth.sky), plaster = read.plaster.scene.sky.share;
+  assert.ok(grey > 0.9, `grey sky IoU ${r3(grey)}`);
+  assert.equal(plaster, 0, `plaster read as sky ${r3(plaster)}`);
+  console.log('PASS grey sky found, white plaster is not sky', JSON.stringify({ grey: r3(grey), plaster }));
 }
 {
   // The same photo reads the same every time, and fast enough to run on open.

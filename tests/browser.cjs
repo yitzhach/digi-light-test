@@ -1050,6 +1050,9 @@ const api=await a.evaluate(async()=>{const d=digilight,t=await d.imageType('room
 assert.ok(api.type==='room'&&api.scene==='gallery'&&api.l.includes('candle')&&!api.l.includes('butterfly')&&api.c==='candle'&&api.p==='gallery'&&api.desc>=20&&api.s.type==='portrait',JSON.stringify(api));
 // The Scene tool's light scene tiles come (each rendered for this photo).
 await a.evaluate(()=>__studio.tools.show('scene'));await a.waitForFunction(()=>[...document.querySelectorAll('#sceneLooks .autoLook canvas')].filter(c=>c.width>10).length>=2,null,{timeout:240000});
-await ctx.close();console.log('PASS scene: portrait suggested, not switched; Relight as Portrait in one undo step; subject forward, its shadow away from the light; sun, subject-only light and relight; blur keeps the subject; tiled export; project; validated; API',JSON.stringify({left,right,ex}));}
+// The user's own pieces (testdata/photos) are suggested as artwork: the lintel's white plaster was once read as an overcast sky.
+const own=await a.evaluate(async()=>{const out={};for(const f of ['lintel-flat-crop','door-flat-crop','band-outdoor-crop']){await digilight.load('/testdata/photos/'+f+'.jpg');out[f]=(await digilight.suggestType()).type;}return out;});
+assert.deepEqual(own,{'lintel-flat-crop':'artwork','door-flat-crop':'artwork','band-outdoor-crop':'artwork'},'the user\'s pieces read as artwork');
+await ctx.close();console.log('PASS scene: portrait suggested, not switched; Relight as Portrait in one undo step; subject forward, its shadow away from the light; sun, subject-only light and relight; blur keeps the subject; tiled export; project; validated; API; the user\'s pieces read as artwork',JSON.stringify({left,right,ex}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

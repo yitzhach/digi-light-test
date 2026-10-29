@@ -1,7 +1,8 @@
 # DigiLight — Handoff
 
-Start a new chat with: "Read HANDOFF.md and continue." This file is only the current state, what
-waits on the user and what is next. Where things are, how to run and test, gotchas:
+Start a new chat with: "Read CLAUDE.md and HANDOFF.md in yitzhach/digi-light-test (branch main) and
+continue from Next up. Answers to Waiting on the user: (yours, or none yet)." This file is only the
+current state, what waits on the user and what is next. Where things are, how to run and test, gotchas:
 **docs/working.md** (read the parts you need). The past: **docs/history.md** (search it). The plan:
 **docs/roadmap.md**. Real-photo evidence for measured relief: **docs/real-light-test.md**.
 
@@ -23,7 +24,11 @@ Everything is on `main` (10-29, photos relit as spaces).
   still coasting when the tap lands (on the painting). TAP_MS was not it. Reproduced with CPU
   throttling (the old block failed 4 of 5 runs at 3-6×; fixed, 10 of 10 pass at 1-12×). Tool search:
   re-opened by hand without focus, so the first pick's deferred blur close shut it (reproduced by
-  timing); now opened with the icon. RESULTS
+  timing); now opened with the icon. The full suite, run alone, passes (65 checks, ~20 min), as do
+  mcp.cjs, exact.cjs (artwork bit for bit) and scenedepth.mjs.
+- The type suggestion read the lintel crop's white plaster as an overcast sky (Photo): a grey sky
+  must now be smoother than a blue one. All 11 test photos read as Artwork (browser.cjs checks 3;
+  tests/scenes.mjs has a plaster panel matched to the lintel's texture, and a grey sky).
 - Undo steps now hold the derived values of their own settings (studio.js `snapshot` derives
   first): a new photo's step held stale ones, and undoing to it lost Redo. So Fit depth's check
   now sets `heightScale` / `reliefStrength` aside with the depth (they follow it when calibrated).

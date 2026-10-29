@@ -99,6 +99,47 @@ function landscape(w = 720, h = 480) {
   return { rgba, w, h, truth: { sky, horizon } };
 }
 
+/** The same ground under a grey overcast sky. */
+function overcast(w = 720, h = 480) {
+  const { rgba, put, rnd } = canvas(w, h, 61), sky = new Uint8Array(w * h);
+  const hill = (u) => 0.46 - 0.05 * Math.max(0, Math.sin(u * 4 + 2));
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const u = x / w, t = y / h, i = y * w + x;
+    if (t < hill(u)) { put(x, y, [232 - 24 * t, 233 - 24 * t, 236 - 24 * t]); sky[i] = 1; }
+    else put(x, y, [88, 100, 64], 0.7 + 0.6 * rnd() * (0.4 + t));
+  }
+  return { rgba, w, h, truth: { sky } };
+}
+
+/** A plaster panel filling the frame, like the user's lintel (testdata/photos): lumpy white
+ *  impasto lit from the upper left with a cool cast toward the top, a wooden lintel over a
+ *  near-black doorway, grey streaks down the sides and along the foot, a few stains. Its whites
+ *  are as bright, grey and textured as the photo's (the sky finder's texture: a quarter under
+ *  3.6, half under 6.4; the photo 3.6, 5.3), so no sky. */
+function plaster(w = 480, h = 600) {
+  const { rgba, put, rnd } = canvas(w, h, 83);
+  const lumps = Array.from({ length: 1400 }, () => ({ x: rnd() * w, y: rnd() * h, r: (0.006 + 0.02 * rnd()) * w, a: 0.4 * (rnd() - 0.4) }));
+  const stains = Array.from({ length: 8 }, () => ({ x: rnd() * w, y: rnd() * 0.35 * h, r: (0.02 + 0.05 * rnd()) * w }));
+  // The relief: a sum of round lumps; its slope, lit from the upper left, shades the paint.
+  const z = new Float32Array(w * h);
+  for (const l of lumps) for (let y = Math.max(0, Math.floor(l.y - l.r)); y < Math.min(h, l.y + l.r); y++) for (let x = Math.max(0, Math.floor(l.x - l.r)); x < Math.min(w, l.x + l.r); x++) {
+    const d = Math.hypot(x - l.x, y - l.y) / l.r;
+    if (d < 1) z[y * w + x] += l.a * l.r * (1 - d * d);
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, u = x / w, t = y / h;
+    const gx = x > 0 && x < w - 1 ? (z[i + 1] - z[i - 1]) / 2 : 0, gy = y > 0 && y < h - 1 ? (z[i - w] - z[i + w]) / 2 : 0, n = Math.hypot(gx, gy, 1);
+    let col = [236 - 8 * (1 - t), 234 - 3 * (1 - t), 226 + 8 * (1 - t)];
+    const streak = (u < 0.14 || u > 0.8) && t > 0.3 + 0.1 * Math.sin(u * 40);
+    if (t > 0.9) col = [72, 72, 76];
+    else if (u > 0.32 && u < 0.72 && t > 0.33 && t < 0.4) col = [122, 98, 72];
+    else if (u > 0.36 && u < 0.66 && t >= 0.4) col = [58, 52, 48];
+    else if (streak || stains.some((s) => Math.hypot(x - s.x, y - s.y) < s.r)) col = [138, 140, 146];
+    put(x, y, col, Math.min(1.1, shade(-gx / n, -gy / n, 1 / n) * 1.25));
+  }
+  return { rgba, w, h, truth: {} };
+}
+
 /** A painting filling the frame: overlapping strokes of colour edge to edge. */
 function painting(w = 480, h = 600) {
   const { rgba, put, rnd } = canvas(w, h, 71);
@@ -134,4 +175,4 @@ function smooth(make) {
     return { rgba, w: W, h: H, truth };
   };
 }
-export const SCENES = Object.fromEntries(Object.entries({ portrait, object, booth, landscape, painting }).map(([k, f]) => [k, smooth(f)]));
+export const SCENES = Object.fromEntries(Object.entries({ portrait, object, booth, landscape, overcast, painting, plaster }).map(([k, f]) => [k, smooth(f)]));
