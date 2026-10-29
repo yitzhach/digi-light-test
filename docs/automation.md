@@ -26,8 +26,12 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `describe()` | `[{path, label, min, max, step, value}]` for every setting that can be set |
 | `addLight(kind, fields)` | adds a lamp (`'light'`) or a Shadow light (`'shade'`, `'negative'`), as + Light / + Shadow do, with any fields changed; returns `{index, light}` |
 | `removeLight(index)` | removes one (not the last) |
-| `presets()` | `{lighting: [...], graze: [...], looks: [...]}` names |
+| `presets()` | `{lighting: [...], graze: [...], looks: [...], scene: [...]}` names (`scene`: light scene ids) |
 | `applyPreset(kind, name)` | a lighting scene, a graze (raking) preset or a matched look. No Analyze needed |
+| `imageType(type)` | what the picture shows: `artwork` (a painting or flat piece, the default), or a photo read and relit as a space: `photo` (a place: ground, sky), `portrait` (people), `room` (a room or an art fair booth seen from its open side), `object` (a piece or product in front of a wall). A photo type opens on its usual light scene, exposure fitted and guarded, in one undo step. Returns `{type, scene, lightScene}`; no `type` returns the current one |
+| `suggestType()` | what the photo looks like it shows (a subject, skin tones, sky, room lines): `{type, sure (0–1), why}`. A guess: nothing changes |
+| `lightScenes(type)` | light scenes for that type (default the picture's; all for `artwork`): `[{id, name, note, types}]` |
+| `applyLightScene(id, {flip})` | relights a photo type with a light scene (`golden-hour`, `noon-sun`, `sunset`, `window`, `window-frame`, `blinds`, `leaves`, `overcast`, `gallery`, `rembrandt`, `loop`, `butterfly`, `split`, `rim`, `neon`, `candle`, `moonlight`, `stage`), placed round the subject the scene reading found, exposure fitted and guarded, one undo step; `flip: true` puts the key light on the right. Returns `{id, name, exposure, guard?}`. Also `applyPreset('scene', id)` |
 | `analyze()` | Analyze (Auto section): `{tone, light, strokes, rakeDeg, depthMm, depthWhy, looks}`. Slow in software GL (1–3 min); milliseconds per render on a real GPU |
 | `looks()` | the looks from the last Analyze: `[{index, name, kind, note, exposure}]` |
 | `applyLook(nameOrIndex, {strength})` | applies a look made for this photo (runs Analyze first if needed). `strength` 0–1 mixes from the settings before the look |
@@ -57,6 +61,17 @@ Paths are dotted names into `settings()`. The common ones:
 - Colour tool: `adjust.on`, `adjust.opacity`, `adjust.<name>.<field>`, e.g. `adjust.relief.amount`, `adjust.relief.form` (Broad form), `adjust.relief.formSize` (Broad size, 0–400%), `adjust.exposure.exposure`, `adjust.hueSat.saturation`; `adjust.curves.rgb` is a list of `[x, y]` points (0–1)
 - Overlays: `overlays.<grain|vignette|leak|window|pool>.on|opacity|...`
 - Layers: `layers` (a list of `{mode, source, opacity, enabled}`), `layersOn`, `originalTop`
+- A photo's scene (after `imageType`): `scene.type`, `scene.depth` (front to back, in picture
+  widths), `scene.roundness`, `scene.form` (shape from shading), `scene.gap` (subject forward),
+  `scene.delight` (Remove photo light), `scene.detail` (surface detail), `scene.keepSky`,
+  `scene.apply` (`all`, `subject`, `background`: what the lights relight), `scene.wall` (a room's
+  back wall `{x0, y0, x1, y1}`, fractions from the top left; `null`: from the photo's lines),
+  `scene.horizon` (fraction from the top; `null`: from the sky)
+- Lights in a scene: `lights.N.sun` (`true`: the sun, one direction from its aim point to its
+  dot, no falloff), `lights.N.target` (`all`, `subject` alone, `background` alone)
+- Effects: `fx.on` (all of them), `fx.haze.on|amount|glow|hex`, `fx.rays.on|amount|spacing|length|hex`,
+  `fx.glow.on|amount|size|from`, `fx.blur.on|amount|size` (sizes in picture widths). Haze and
+  background blur need a photo's scene; all are off until turned on
 
 `describe()` lists all of them with the panel's labels and ranges.
 
@@ -68,6 +83,16 @@ const a = await digilight.analyze();          // a.looks: the looks made for thi
 await digilight.applyLook('Matched + raking', { strength: 0.8 });
 await digilight.set({ 'adjust.relief.form': 1.5, 'adjust.relief.formSize': 0.6 });
 const png = await digilight.export({ format: 'png' });   // data URL, full size
+```
+
+A photo of a person, a booth or a place:
+
+```js
+await digilight.load('https://example.org/booth.jpg');
+await digilight.suggestType();                 // {type: 'room', sure: 0.8, why: 'long floor and wall lines, ...'}
+await digilight.imageType('room');             // reads its space, opens on its usual light scene
+await digilight.applyLightScene('window-frame', { flip: true });
+await digilight.set({ 'scene.delight': 0.8, 'fx.haze.on': 1, 'fx.haze.amount': 0.3 });
 ```
 
 
@@ -318,7 +343,9 @@ node tools/digilight-cli.cjs <command> <input> [options]
   `--width-cm`, `--deepest MM`, `--line-up`; see [Measured relief from sunlight](#measured-relief-from-sunlight)),
   `verify` (re-renders a record and checks it),
   `batch` (many renders from one Analyze, see below)
-- **options**, applied in this order: `--preset kind:name` (repeatable), `--look NAME|N
+- **options**, applied in this order: `--type artwork|photo|portrait|room|object` (what the
+  picture shows; a photo type opens on its usual light scene), `--scene ID` (a light scene,
+  `--flip` for the key light on the right), `--preset kind:name` (repeatable), `--look NAME|N
   --strength 0..1`, then `--set "a=1;b.c=2"` or JSON (repeatable; after the look, so it wins); output: `--out FILE.png|.jpg|.webp`,
   `--width N` (else full size), `--crop x,y,w,h` (only that part, at full detail: pixels, or
   fractions of 1; a true 100% loupe for a fraction of a full export's time), `--preview` (the
@@ -331,6 +358,7 @@ node tools/digilight-cli.cjs <command> <input> [options]
 node tools/digilight-cli.cjs analyze photo.jpg
 node tools/digilight-cli.cjs render photo.jpg --look "Matched + raking" --strength 0.8 --set "adjust.relief.form=1.5" --out relit.png
 node tools/digilight-cli.cjs render project.digilight.json --preset "graze:Classic raking" --width 2000 --out raking.jpg
+node tools/digilight-cli.cjs render portrait.jpg --type portrait --scene rembrandt --set "fx.glow.on=1" --out rembrandt.jpg
 ```
 
 Prints JSON on stdout; on an error prints it on stderr and exits 1. Analyze is slow in
@@ -350,7 +378,7 @@ the CPUs and are slower in total.
 node tools/digilight-cli.cjs batch photo.jpg --jobs jobs.json
 ```
 `jobs.json`: `[{"out": "01.jpg", "look": 0}, {"out": "05b.jpg", "look": 4, "set": "adjust.relief.smooth=0.4", "quality": 0.9}]`
-(each job: `out`, and any of `look`, `strength`, `preset` (`kind:name` or a list), `set`
+(each job: `out`, and any of `type`, `scene`, `flip`, `look`, `strength`, `preset` (`kind:name` or a list), `set`
 (string, object or a list), `exposureAdd` (stops added to the exposure the look fitted, so
 "+0.3" means the same on every photo), `scale` (`{"textureDepthMm": 1.2}`: each setting times a
 factor, on the value the look set, so "20% deeper" means the same on every photo, kept inside the setting's range), `addLights` (a list of `{kind, fields}` as `addLight`),
@@ -453,7 +481,9 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `analyze` | Analyze: tone, light, strokes, depth, raking direction and the looks for this photo (1–3 min without a GPU). Runs in the background: if it is not done within 45 s it answers `stillAnalyzing`, and calling `analyze` (or `apply_look`) again keeps waiting on the same run, so assistants that give up on a tool after 60 s still get there |
 | `list_looks` / `apply_look` | the looks from Analyze; apply one by name or number, `strength` 0–1 |
 | `add_light` / `remove_light` | a lamp, or a Shadow light (`shade`: a soft shadow; `negative`: a lamp in reverse) |
-| `list_presets` / `apply_preset` | fixed lighting scenes, graze (raking) presets, matched looks |
+| `list_presets` / `apply_preset` | fixed lighting scenes, graze (raking) presets, matched looks, light scenes for photos (`scene`) |
+| `suggest_image_type` / `set_image_type` | what a photo looks like it shows; say what it shows (`artwork`, `photo`, `portrait`, `room`, `object`): a photo type reads its space and opens on its usual light scene |
+| `list_light_scenes` / `apply_light_scene` | light scenes for the picture's type (golden hour, window light, gallery spots, Rembrandt, neon...); apply one by id, `flip` for the key light on the right |
 | `describe_settings` | every setting with its range; `filter` narrows it (`graze`, `lights.0`, `relief`) |
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |

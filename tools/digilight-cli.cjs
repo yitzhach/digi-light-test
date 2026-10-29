@@ -28,10 +28,14 @@
 //              (lowest point to highest; sets the depth, which one sun angle cannot). Prints what
 //              was measured; with --out also renders it (as render), --save-project keeps it
 //   batch      many renders from one Analyze: --jobs FILE.json, a list of
-//              {"out": "a.jpg", "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
+//              {"out": "a.jpg", "type": "portrait", "scene": "rembrandt", "flip": false, "look": 4, "strength": 1, "preset": "kind:name", "set": "a=1;b=2",
 //               "exposureAdd": 0.3, "scale": {"textureDepthMm": 1.2}, "addLights": [{"kind": "light", "fields": {"x": 1.1}}],
 //               "width": 800, "crop": "x,y,w,h", "preview": false, "quality": 0.9}; each starts from the photo as opened
 // options (applied in this order):
+//   --type artwork|photo|portrait|room|object   what the picture shows: a photo type reads its
+//                    scene (depth, subject, sky) and opens on its usual light scene
+//   --scene ID [--flip]   a light scene for a photo (golden-hour, window-frame, rembrandt, neon,
+//                    ...; digilight.lightScenes() lists them); --flip puts the key light on the right
 //   --preset kind:name   lighting:"Gallery track", graze:"Classic raking", looks:"07 Brighter"
 //   --look NAME|N  [--strength 0..1]   Analyze, then apply that look
 //   --set "a=1;graze.opacity=0.5"   or JSON '{"exposure":0.3}' (repeatable; after the look, so it wins)
@@ -64,7 +68,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { o._.push(a); continue; }
-    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record', 'no-many', 'line-up'].includes(k);
+    const k = a.slice(2), flag = ['preview', 'help', 'fresh', 'no-metrics', 'no-guard', 'no-record', 'no-many', 'line-up', 'flip'].includes(k);
     const v = flag ? true : argv[++i];
     if (!flag && v === undefined) throw new Error(`--${k} needs a value`);
     if (['set', 'preset', 'sun', 'lamp'].includes(k)) (o[k] ||= []).push(v); else o[k] = v;
@@ -78,6 +82,8 @@ function parseArgs(argv) {
 // can, see digilight-headless.cjs) runs for `analyze`, or for a look when the page has none.
 async function dress(call, j, analyze, src = {}) {
   const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
+  if (j.type) await call('imageType', j.type);
+  if (j.scene) await call('applyLightScene', j.scene, { flip: !!j.flip });
   for (const p of list(j.preset)) { const i = p.indexOf(':'); if (i < 1) throw new Error('--preset is kind:name'); await call('applyPreset', p.slice(0, i), p.slice(i + 1)); }
   let analysis = null;
   if (analyze || (j.look != null && !(await call('looks')).length)) analysis = await analyzeCached(call, src.input, src);

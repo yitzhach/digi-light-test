@@ -7,6 +7,25 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-29 ("Now" bullets moved out when photo relighting went in)
+Everything is on `main` (10-28, rough surface; work branch `claude/quirky-allen-tna7jh`).
+- **The sunlit-facets gap, found and mostly closed** (docs/real-light-test.md "10-28, rough
+  surface"). There's no rough-surface term: a matte pixel seen face-on gets N·L of its mean normal
+  whatever facets it holds, so no such term can brighten it. The gap was two other things:
+  - **One sun shot lost the slope it measured**: integration took the unknown slope across the sun
+    as 0 and kept 0.3-0.6 of the slope along it. lampphotos.js `sharpen` now adds 12 rounds along
+    the measured direction where the shots lit a pixel from one side only. The lintel's sun photo
+    now gives about the artist's 1/4" by itself (6.8-7.5 mm, was 3.65 stretched 1.74×). Lintel
+    log r at the artist's depth 0.34 / 0.63 / 0.63 / 0.61 → 0.43 / 0.81 / 0.90 / 0.86, door
+    also up, DSC_8382 lamps unchanged.
+  - **A sheen the paint's colour doesn't tint** (dark paint's sunlit light 2.2× white's,
+    relative to the flat photo): Light like this with a sun photo now sets **Highlight strength 4**
+    (it matches the lintel; the door wants more). On linear ratios the lintel's light and shade
+    size is 0.14-0.28 → 0.53-0.71 at Fit depth. Dark sunlit p99 2.9 → 10.7 (photo 14.8).
+- Still open there: white plaster's sunlit level (the two photos' exposures), the finest band at
+  0.68 of the measured slopes, the artist's 1/4" now 0.84 of the measured depth.
+- Earlier: docs/history.md "HANDOFF, 10-28 later".
+
 ## HANDOFF, 10-28 later ("Now" bullets moved out when the rough-surface work went in)
 - **10-28, later, the highlights gap diagnosed** (docs/real-light-test.md "10-28, later"): in the
   lintel's sun photo the sunlit facets are 2-5x brighter (linear, over the flat photo) than in the

@@ -88,6 +88,12 @@ export function characterOf(l) {
 // light can stand back from the painting; zoom the view out to see its dot.
 export const LIGHT_MIN = -1.5, LIGHT_MAX = 2.5, LIGHT_Z_MIN = 0.01;
 export const POWER_MAX = 1024;
+/** A sun light's direction (x right, y up, z out; image widths, unit length): from where its
+ *  light is aimed to where its dot is, so dragging the dot swings the sun round (shade.js). */
+export function sunDirection(l, aspect) {
+  const x = l.x - (l.aimX ?? 0.5), y = (l.y - (l.aimY ?? 0.5)) * aspect, z = Math.max(l.z, 1e-3), n = Math.hypot(x, y, z);
+  return [x / n, y / n, z / n];
+}
 // light.kind: an ordinary light, or a Shadow light that takes light away where it falls:
 // 'shade' (a flag or a cloud between the lamps and the painting) or 'negative' (a lamp in reverse).
 export const LIGHT_KINDS = ['light', 'shade', 'negative'];

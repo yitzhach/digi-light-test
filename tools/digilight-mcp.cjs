@@ -115,8 +115,9 @@ const needOpen = async (call) => { if (!(await call('info')).photo) throw new Er
 
 const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
   instructions: [
-    'DigiLight relights a photo of a painting with virtual lamps over its estimated paint relief (impasto).',
+    'DigiLight relights a photo of a painting with virtual lamps over its estimated paint relief (impasto), and photos of people, rooms, art fair booths and objects as spaces.',
     'Typical flow: open_image → analyze (slow: 1–3 min) → apply_look → render_preview to see it → set_settings to adjust → render_preview again → export_image.',
+    'For a photo (not a painting): open_image → suggest_image_type → set_image_type (portrait, room, object, photo) → list_light_scenes → apply_light_scene (golden hour, window light, gallery spots, Rembrandt, neon...) → render_preview; effects (haze, light rays, glow, background blur) are set_settings fx.*.',
     'Fixed presets (apply_preset) need no analyze. describe_settings lists every setting with its range; set_settings checks values and changes nothing on an error.',
     'Until open_image, a synthetic test painting is open. Each change is one undo step (undo / redo). Use absolute file paths. Always look (render_preview) before telling the user how a change looks, and check the metrics it returns (warnings name blown whites, crushed darks or lost texture). Each change is guarded: if it would blow whites or crush darks, exposure (whites) or room light (darks) is moved to stop it, in the same undo step, and the answer says so ("Guard: exposure +0.80 → +0.55"). guard checks and fixes on request; set_guard turns it off when the user really wants the clipping.',
   ].join(' '),
@@ -181,6 +182,30 @@ server.registerTool('apply_look', {
   return call('applyLook', look, { strength: strength ?? 1 });
 }));
 
+server.registerTool('set_image_type', {
+  title: 'Say what the picture shows',
+  description: 'What the picture shows: "artwork" (a painting or flat piece, lit as a surface with paint relief: the default), or a photo whose space is read and relit as a space: "photo" (a place: ground, sky), "portrait" (people), "room" (a room or an art fair booth seen from its open side), "object" (a piece or product standing in front of a wall). A photo type opens on its usual light scene, exposure fitted. suggest_image_type says what the photo looks like. Returns the scene settings (set_settings changes them: scene.depth, scene.roundness, scene.delight, scene.apply, ...).',
+  inputSchema: { type: z.enum(['artwork', 'photo', 'portrait', 'room', 'object']) },
+}, changing(async ({ call }, { type }) => { await needOpen(call); return call('imageType', type); }));
+
+server.registerTool('suggest_image_type', {
+  title: 'What does the photo show?',
+  description: 'Reads the open photo for a subject, skin tones, sky and room lines and says what it most likely shows ({type, sure 0–1, why}). A guess: confirm with the user before set_image_type when it matters.',
+  inputSchema: {},
+}, tool(async ({ call }) => { await needOpen(call); return call('suggestType'); }));
+
+server.registerTool('list_light_scenes', {
+  title: 'List light scenes',
+  description: 'Light scenes for photos (after set_image_type): golden hour, midday sun, sunset, window light (plain, framed, through blinds or leaves), overcast, gallery spots, Rembrandt, soft key, butterfly, split, rim light, neon, candlelight, moonlight, stage spot. Each places real lights round the subject the scene reading found. Returns {id, name, note, types} for the picture\'s type.',
+  inputSchema: {},
+}, tool(async ({ call }) => call('lightScenes')));
+
+server.registerTool('apply_light_scene', {
+  title: 'Apply a light scene',
+  description: 'Relights a photo with a light scene by id (list_light_scenes), exposure fitted to the photo and guarded, in one undo step. flip puts the key light on the right. The picture must show a photo type (set_image_type). Every light stays adjustable with set_settings ("lights.N.field").',
+  inputSchema: { id: z.string(), flip: z.boolean().optional() },
+}, changing(async ({ call }, { id, flip }) => { await needOpen(call); return call('applyLightScene', id, { flip: !!flip }); }));
+
 server.registerTool('list_presets', {
   title: 'List presets',
   description: 'Fixed presets by kind: lighting (lamp scenes), graze (raking light presets), looks (matched looks). Applied with apply_preset; no analyze needed.',
@@ -189,8 +214,8 @@ server.registerTool('list_presets', {
 
 server.registerTool('apply_preset', {
   title: 'Apply a preset',
-  description: 'Applies a fixed preset: kind "lighting" (a lamp scene), "graze" (a raking light preset) or "looks" (a matched look). Names from list_presets.',
-  inputSchema: { kind: z.enum(['lighting', 'graze', 'looks']), name: z.string() },
+  description: 'Applies a fixed preset: kind "lighting" (a lamp scene), "graze" (a raking light preset), "looks" (a matched look) or "scene" (a light scene for a photo, as apply_light_scene). Names from list_presets.',
+  inputSchema: { kind: z.enum(['lighting', 'graze', 'looks', 'scene']), name: z.string() },
 }, changing(async ({ call }, { kind, name }) => { await needOpen(call); return call('applyPreset', kind, name); }));
 
 server.registerTool('describe_settings', {

@@ -226,30 +226,52 @@ void main() {
 // Normals by central difference on the height field. Sobel would be smoother but
 // central difference keeps single-bristle detail that Sobel averages away, and
 // bristle detail is the entire point of this exercise.
+//
+// A photo's scene (scene.js) adds its height, in image widths, to the relief's: the height behind
+// (the room, the backdrop) and the height in front (the subject), joined by the subject's matte.
+// Its slope is each field's own, joined the same way: the two sides of an outline are different
+// surfaces (a face and the wall a metre behind it), so the wall stays flat right up to the
+// outline and the face keeps its roundness, with no ridge of slope where the heights step.
 const NORMAL_FS = `${HEAD}
 uniform sampler2D uHeight;
+uniform sampler2D uScene;   // behind, front (image widths), subject matte, sky (scene.js)
 uniform vec2 uTexel;
 uniform float uStrength;
 uniform vec3 uMix;   // x: directional scale, y: even-light scale, z: even-light share
 uniform float uForm; // Broad form's scale (0 when off)
-float heightAt(vec2 uv) {
+uniform float uSceneOn;
+float reliefAt(vec2 uv) {
   vec3 e = texture(uHeight, uv).rgb;
   return mix(e.r * uMix.x, e.g * uMix.y, uMix.z) + e.b * uForm;
 }
 void main() {
-  float l = heightAt(vUV - vec2(uTexel.x, 0.0));
-  float r = heightAt(vUV + vec2(uTexel.x, 0.0));
-  float d = heightAt(vUV - vec2(0.0, uTexel.y));
-  float u = heightAt(vUV + vec2(0.0, uTexel.y));
-
+  vec2 dx = vec2(uTexel.x, 0.0), dy = vec2(0.0, uTexel.y);
+  float l = reliefAt(vUV - dx);
+  float r = reliefAt(vUV + dx);
+  float d = reliefAt(vUV - dy);
+  float u = reliefAt(vUV + dy);
+  float c = reliefAt(vUV);
+  if (uSceneOn > 0.5) {
+    vec4 s = texture(uScene, vUV);
+    vec2 sl = texture(uScene, vUV - dx).xy, sr = texture(uScene, vUV + dx).xy;
+    vec2 sd = texture(uScene, vUV - dy).xy, su = texture(uScene, vUV + dy).xy;
+    // Central differences of the relief plus the scene field this pixel is on (x behind, y front).
+    float gx = 0.5 * (r - l) + 0.5 * mix(sr.x - sl.x, sr.y - sl.y, s.z);
+    float gy = 0.5 * (u - d) + 0.5 * mix(su.x - sd.x, su.y - sd.y, s.z);
+    outColor = vec4(normalize(vec3(-2.0 * gx * uStrength, -2.0 * gy * uStrength, 1.0)) * 0.5 + 0.5, c + mix(s.x, s.y, s.z));
+    return;
+  }
   // dh/dx and dh/dy scaled into a slope. +Y is up because the source texture was
   // uploaded flipped, so the shading space and the light-handle space agree.
   vec3 n = normalize(vec3((l - r) * uStrength, (d - u) * uStrength, 1.0));
-  outColor = vec4(n * 0.5 + 0.5, heightAt(vUV));
+  outColor = vec4(n * 0.5 + 0.5, c);
 }`;
 
 // Albedo: divide the fine-scale shading back out, so the relight does not
-// double-count light that is already baked into the photograph.
+// double-count light that is already baked into the photograph. A photo's scene can take its
+// lighting out too (Remove photo light): the photo's light across each surface (scene.js, a
+// log-luminance) divided out, up to 4x either way, so a face lit from the left comes out even
+// before the new lights fall on it.
 const ALBEDO_FS = `${HEAD}
 uniform sampler2D uLin;
 uniform sampler2D uBlur;
@@ -257,6 +279,8 @@ uniform float uSuppress;
 uniform sampler2D uBroad;
 uniform float uNeutralize;
 uniform float uMeanLuma;
+uniform sampler2D uSceneLight;   // r: the photo's light (scene.js)
+uniform float uDelight;
 void main() {
   vec4 a = texture(uLin, vUV);
   vec4 b = texture(uBlur, vUV);
@@ -265,7 +289,9 @@ void main() {
   float ratio = clamp(Lb / L, 0.25, 4.0);
   float broad = max(texture(uBroad, vUV).a, 0.02);
   float neutral = mix(1.0, clamp(uMeanLuma / broad, 0.5, 2.0), uNeutralize);
-  outColor = vec4(a.rgb * mix(1.0, ratio, uSuppress) * neutral, 1.0);
+  vec3 alb = a.rgb * mix(1.0, ratio, uSuppress) * neutral;
+  if (uDelight > 0.0) alb *= exp(-clamp(uDelight * texture(uSceneLight, vUV).r, -1.386, 1.386));
+  outColor = vec4(alb, 1.0);
 }`;
 
 export class GBuffer {
@@ -357,6 +383,16 @@ export class GBuffer {
 
     run(this.progs.luma, T.lin, [['uSrc', srcTex]]);
 
+    // A photo's scene (scene.js): its maps carried up to this target along the photo's own edges,
+    // T.scene = (height behind, height in front, both in image widths; subject; sky) and
+    // T.sceneLight = (the photo's light).
+    const sm = opts.sceneMap;
+    if (sm) {
+      const mk = () => makeTarget(gl, w, h, { float: true, caps: this.glctx.caps });
+      T.scene ||= mk(); T.sceneLight ||= mk();
+      sm.run(T.scene, T.sceneLight, srcTex, sm.rect || [0, 0, 1, 1]);
+    }
+
     // Two-pass separable blur; sigma is the relief scale in pixels.
     run(this.progs.blur, T.tmp, [['uSrc', T.lin.tex]], (u) => {
       gl.uniform2f(u.uStep, 1 / w, 0);
@@ -431,14 +467,17 @@ export class GBuffer {
     const share = Math.min(1, Math.max(0, opts.photoDiffuse ?? 0));
     // Kept so the graze relief can be rebuilt alone with exactly these normals.
     // Broad form in units of the relief as set, from its own measured spread.
+    // With a scene, heights are in image widths: the relief's spread is opts.reliefDepth of them.
+    const rd = sm ? opts.reliefDepth ?? 0 : 1;
     const form = formOn && calibrated ? (bands.formScale || 0) / (stats.form || 1) : 0;
-    this.normalMix = { strength: reliefStrength, mix: [1 / stats.dir, 1 / stats.cav, share], form };
-    run(this.progs.normal, T.normal, [['uHeight', T.height.tex]], (u) => this.normalUniforms(u, w, h));
+    this.normalMix = { strength: reliefStrength, mix: [rd / stats.dir, rd / stats.cav, share], form: form * rd, scene: !!sm };
+    run(this.progs.normal, T.normal, this.normalTextures(T.height), (u) => this.normalUniforms(u, w, h));
 
-    run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex]], (u) => {
+    run(this.progs.albedo, T.albedo, [['uLin', T.lin.tex], ['uBlur', T.blur.tex], ['uBroad', T.broad.tex], ['uSceneLight', (sm ? T.sceneLight : T.lin).tex]], (u) => {
       gl.uniform1f(u.uSuppress, albedoSuppress);
       gl.uniform1f(u.uNeutralize, opts.neutralize ?? 0);
       gl.uniform1f(u.uMeanLuma, opts.meanLuma ?? 0.25);
+      gl.uniform1f(u.uDelight, sm ? Math.min(1, Math.max(0, opts.scene?.delight ?? 0)) : 0);
     });
 
     this.sigmas = {};
@@ -456,6 +495,11 @@ export class GBuffer {
     gl.uniform1f(u.uStrength, m.strength);
     gl.uniform3f(u.uMix, m.mix[0], m.mix[1], m.mix[2]);
     gl.uniform1f(u.uForm, m.form || 0);
+    gl.uniform1f(u.uSceneOn, m.scene ? 1 : 0);
+  }
+  normalTextures(height) {
+    const T = this.targets;
+    return [['uHeight', height.tex], ['uScene', (this.normalMix?.scene && T.scene ? T.scene : height).tex]];
   }
 
   /**
@@ -535,7 +579,7 @@ export class GBuffer {
       pass(gl, this.progs.blur, T[hk], [['uSrc', T.tmp.tex]], (u) => { gl.uniform2f(u.uStep, 0, 1 / h); gl.uniform1f(u.uSigma, s); });
       src = T[hk];
     }
-    pass(gl, this.progs.normal, T[nk], [['uHeight', T[hk].tex]], (u) => this.normalUniforms(u, w, h));
+    pass(gl, this.progs.normal, T[nk], this.normalTextures(T[hk]), (u) => this.normalUniforms(u, w, h));
     bindTarget(gl, null);
     T[key] = T[nk];
     return T;

@@ -141,6 +141,33 @@
    "exposure": -0.03,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -242,6 +269,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -399,6 +439,33 @@
    "exposure": -0.09,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -500,6 +567,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -657,6 +737,33 @@
    "exposure": 0.35,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -758,6 +865,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -915,6 +1035,33 @@
    "exposure": 0.1,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -1016,6 +1163,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -1173,6 +1333,33 @@
    "exposure": -0.23,
    "fineHidden": null,
    "fineRelief": 0.55,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -1274,6 +1461,19 @@
    "reliefStrength": 3.2375,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.75,
    "shadowDetail": 0.004,
@@ -1431,6 +1631,33 @@
    "exposure": -0.34,
    "fineHidden": null,
    "fineRelief": 0.55,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 170,
     "clean": 0.55,
@@ -1532,6 +1759,19 @@
    "reliefStrength": 3.2375,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.75,
    "shadowDetail": 0.004,
@@ -1689,6 +1929,33 @@
    "exposure": -0.72,
    "fineHidden": null,
    "fineRelief": 0.77,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 175,
     "clean": 0.55,
@@ -1790,6 +2057,19 @@
    "reliefStrength": 3.2375,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.75,
    "shadowDetail": 0.004,
@@ -1947,6 +2227,33 @@
    "exposure": 0.34,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.3,
@@ -2049,6 +2356,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -2206,6 +2526,33 @@
    "exposure": 0.89,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.3,
@@ -2308,6 +2655,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -2465,6 +2825,33 @@
    "exposure": 0.13,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -2566,6 +2953,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,
@@ -2723,6 +3123,33 @@
    "exposure": -0.2,
    "fineHidden": null,
    "fineRelief": 0.65,
+   "fx": {
+    "blur": {
+     "amount": 0.4,
+     "on": 0,
+     "size": 0.012
+    },
+    "glow": {
+     "amount": 0.3,
+     "from": 0.72,
+     "on": 0,
+     "size": 0.02
+    },
+    "haze": {
+     "amount": 0.25,
+     "glow": 0.5,
+     "hex": "#d4dce8",
+     "on": 0
+    },
+    "on": 1,
+    "rays": {
+     "amount": 0.25,
+     "hex": "#fff0d4",
+     "length": 0.6,
+     "on": 0,
+     "spacing": 0.4
+    }
+   },
    "graze": {
     "angle": 180,
     "clean": 0.55,
@@ -2824,6 +3251,19 @@
    "reliefStrength": 0.2,
    "roomKelvin": 6500,
    "roughness": 0.72,
+   "scene": {
+    "apply": "all",
+    "delight": 0.6,
+    "depth": 0.5,
+    "detail": 0.45,
+    "form": 0.3,
+    "gap": 0.4,
+    "horizon": null,
+    "keepSky": 1,
+    "roundness": 0.5,
+    "type": "artwork",
+    "wall": null
+   },
    "selected": 0,
    "shadow": 0.85,
    "shadowDetail": 0.004,

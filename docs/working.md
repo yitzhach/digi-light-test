@@ -30,6 +30,13 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   the same pixels every session
 - `gbuffer.js` — single-photo surface estimation; `shade.js` — shading pass (area lights,
   graze, overlays, adjustments); `export.js` — tiled export (several variants per relief build)
+- Photos as spaces (Scene tool; `state.scene`, `state.fx`; type `artwork` runs none of it):
+  `scenedepth.js` reads a 256 px copy (DOM-free, Node-tested: subject, sky, room lines, layout per
+  type, heights, the photo's own light, `suggestType`); `scene.js` carries its maps to the
+  preview and every tile along the photo's edges (`SceneMaps`, settings, validation);
+  `scenelights.js` the light scenes (pure data); `sceneui.js` the tool; `fx.js` haze and rays
+  (in the shading pass) and the effects' settings; `postfx.js` glow and background blur (after
+  it; export tiles get `fxMargin`, aligned to 8 px); `glsl.js` GLSL shared by both passes
 - `gl.js` (WebGL2, `caps.software` for SwiftShader), `kelvin.js`, `photocheck.js`, `probe.js`,
   `texscore.js`, `lampphotos.js` + `lampui.js` (measured relief), `lineup.js` (a handheld photo
   lined up: features + homography), `photometric.js`,
@@ -43,7 +50,8 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - `cd tools && npm install` once, then `node tests/mcp.cjs` (`--full` adds Analyze)
 - `node tests/measure.mjs` (measure.js against slow reference maths; no browser, <1 s)
 - `node tests/exact.cjs` (identity export bit for bit on random noise, repeatable exports; change map; ~1 min)
-- `node tests/changemap.mjs`, `node tests/sunrelief.mjs` (Node, no browser, seconds)
+- `node tests/changemap.mjs`, `node tests/sunrelief.mjs`, `node tests/scenedepth.mjs` (the scene
+  reading on synthetic photos with known answers, tests/scenes.mjs) (Node, no browser, seconds)
 - `node tests/sun.cjs` (graze.sun checks and evenness, a sun photo through Light like this and Fit
   depth; ~3 min); `node tests/sunflat.cjs` (one sun photo of a known relief: its depth comes back;
   ~4 min); `node tests/lineup.cjs` (the raw door / lintel sun photos lined up in the app against
@@ -89,14 +97,14 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 - tests/browser.cjs's zoom block ("zoom to 1000%") failed once on 10-21 on its last check, the undo
   history one step longer (22 vs 21) after the brush undo, and passed on the re-run of the same
   code: a timing race to look into if it comes back.
-- tests/browser.cjs's phone slider block ("tap jumps", a 50 ms wait) failed once on 10-22 while three
-  other headless pages ran beside it, and passed run alone: run browser.cjs on its own.
-  10-28: it failed 3 of 5 full runs in the cloud, run alone, on the 10-24 code too (v stays 0.5),
-  and passes as a block on its own; a guess: the tap's touchstart-to-touchend gap exceeds
-  touchsliders.js TAP_MS (350 ms) late in the suite. The suite stops there, so to run the later
-  blocks, make that one assert a warning in a scratch copy.
-- tests/browser.cjs's tool search block (second pick, "graze opac": `#toolSearchInput` not
-  visible after adding `searchOpen` by hand) failed twice in a row on 10-28 after a container
-  restart, on the old code too, and passed before the restart. With that step made a warning in a
-  scratch copy the other 64 checks passed.
+- Touch tests: a CDP touch drag flings what it scrolls, and on a slow machine (late in the suite;
+  `Emulation.setCPUThrottlingRate` 3-6 reproduces it) the moves arrive in a burst and the panel
+  coasts on for hundreds of px. Wait for the scroller to be still before aiming a tap (browser.cjs
+  `still`). That was the phone block's "tap jumps" failure (10-22, 10-28): the tap landed on the
+  painting; TAP_MS was not it (event times are stamped on dispatch, so a busy page keeps them close).
+- Open the tool search as a user does (`#searchBtn` or `/`, which focus it): opened by adding
+  `searchOpen` without focus, the last pick's deferred blur close (150 ms) can shut it again. That
+  was the tool search block's "#toolSearchInput not visible" (10-28).
+- Scene work: type `artwork` must stay bit for bit what it was (`node tests/exact.cjs`); a preset
+  carries a look, never `scene` (studio.js presetKeys); `smooth` is a GLSL keyword.
 - Whenever you push to `main`, update HANDOFF.md (CLAUDE.md).

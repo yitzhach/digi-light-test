@@ -1,11 +1,11 @@
 # DigiLight
-A static, local-in-browser painting relighter. No API keys, uploads to a server,
+A static, local-in-browser relighter for paintings and photographs. No API keys, uploads to a server,
 package installation or build step are required. Requires WebGL2 and floating-point
 render targets; graphics acceleration must be enabled.
 
 ## Use
 **Tools.** An icon strip picks what the panel shows: Setup (open a photo, Quick setup),
-Auto, Light, Graze, Layers, Colour, Detail (calibrate, lamp-photo relief, profile, brush
+Auto, Scene, Light, Graze, Layers, Colour, Detail (calibrate, lamp-photo relief, profile, brush
 corrections, fine-tune, views) and Save. On a phone it sits at the bottom of the screen
 and shows one tool at a time, like Lightroom mobile; on a desktop it is a rail beside
 the panel, where **All** shows every section at once. The app opens on **Setup**, which
@@ -14,6 +14,30 @@ its tool; it opens from the search icon beside the logo. Pressing the open tool'
 again minimizes the panel. Double-tap (or double-click) the painting for full screen. An **eye** button hides a tool's effect without losing its settings: the
 Colour tool and each adjustment, Layers, each overlay, the Graze light and Fine-tune
 (its sliders go back to their starting values while hidden).
+
+**Scene · photos, people, rooms.** Besides paintings, DigiLight relights photographs as
+spaces. Say what the picture shows (the chips at the top of Setup, or the Scene tool):
+**Artwork** (a painting or flat piece: the relief relighter below, unchanged), **Photo**
+(a place: ground and sky), **Portrait** (people), **Room · booth** (a room or an art fair
+booth seen from its open side) or **Object** (a piece or product standing in front of a
+wall). The app suggests one from the photo itself (a subject, skin tones, sky, room lines).
+A photo type reads the photo's space, with no AI model or upload (src/scenedepth.js, about
+0.1 s): how far each part is, the subject and its outline, the sky, the back wall or the
+horizon. Then it lights it as a space: a lamp by the subject is nearer the face than the
+wall, light falls off into the background, the subject throws its shadow across what
+stands behind it, and the photo's own light is taken out first (Remove photo light).
+**Light scenes** relight in one tap, every light still movable: golden hour, midday sun,
+sunset, window light (plain, framed, through blinds or dappled leaves), overcast, gallery
+spots, the studio's Rembrandt, soft key, butterfly, split and rim light, neon,
+candlelight, moonlight and a stage spot; **Light from the right** mirrors them (press and
+hold a scene to preview it). **Relight** everything, the subject only or the background
+only; each light can also be for the subject or the background alone, and any light can
+be the **Sun** (one direction everywhere, long shadows). **Shape of the scene** (Depth,
+Roundness, Form from shading, Subject forward, Surface detail, Keep the sky, the back
+wall, the horizon) corrects the reading. **Effects**: Haze (air between you and the far
+parts, glowing toward the light), Light rays, Glow (bright light blooming, as in a lens)
+and Background blur (a wide-open lens, sharp where the subject stands); exports match the
+preview, tile for tile.
 
 **Colour** has the image editor's adjustments (Brightness/Contrast, Levels, Curves,
 Exposure, Vibrance, Hue/Saturation, Color Balance, Black & White, Channel Mixer),
@@ -268,10 +292,11 @@ use more than four shots with varied elevation when fitting ambient.
 
 ## Automation
 Scripts and AI agents can drive the app: `window.digilight` in the page (load a photo,
-Analyze, apply a look, set any setting by name, render or export, project get/set),
+Analyze, apply a look, say what a photo shows and relight it with a light scene, set any
+setting by name, render or export, project get/set),
 URL parameters (`?image=`, `?set=`, `?look=`), a `postMessage` bridge (`?bridge`) and
 a headless command line, `tools/digilight-cli.cjs`, and an MCP server,
-`tools/digilight-mcp.cjs`, so an AI assistant can relight a painting while you chat.
+`tools/digilight-mcp.cjs`, so an AI assistant can relight a painting or a photo while you chat.
 See `docs/automation.md`.
 
 ## Automatic deploys

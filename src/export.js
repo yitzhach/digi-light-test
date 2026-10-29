@@ -14,13 +14,14 @@ import { makeTarget, bindTarget } from './gl.js';
 import { uploadShotArray } from './photometric.js';
 import { FORM_OUTER } from './gbuffer.js';
 import { drawResampled } from './resample.js';
+import { fxMargin, postWanted } from './postfx.js';
 
 /**
  * How far outside a tile the surface passes reach, in pixels. Getting this wrong
  * does not fail loudly — it seams, exactly where the relief is strongest.
  */
-export function requiredMargin(state) {
-  const shadow = Math.ceil(Math.max(state.shadowDistPx || 0, state.grazeReachPx || 0));
+export function requiredMargin(state, W = 0) {
+  const shadow = Math.ceil(Math.max(state.shadowDistPx || 0, state.grazeReachPx || 0)) + fxMargin(state, W);
   if (state.mode === 'photometric') {
     // Height comes from Jacobi relaxation, which moves information one texel per
     // sweep, so a pixel depends on everything within `iterations` texels. The
@@ -73,7 +74,10 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
   const kx = SW / W, ky = SH / H;
   const aspect = H / W;
 
-  const margin = Math.max(...states.map(requiredMargin));
+  // Glow and background blur work on grids a half to an eighth of the tile's size (postfx.js):
+  // tiles on multiples of 8 pixels put those grids where the whole picture's are.
+  const align = states.some(postWanted) ? 8 : 1;
+  const margin = Math.ceil(Math.max(...states.map((st) => requiredMargin(st, W))) / align) * align;
   // Keep the padded tile inside the driver's texture limit with room to spare;
   // several float targets of this size are alive at once.
   // Overridable so the seam behaviour can be exercised on small test images, and
@@ -84,7 +88,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
     ? Math.max(64, state.maxTile)
     : Math.min(caps.software ? 4096 : 2048, Math.max(256, (caps.maxTexture || 4096) / 2));
   if (2 * margin + 64 > caps.maxTexture) throw new Error('Surface reach exceeds GPU limits. Reduce texture size or export scale.');
-  const interior = Math.max(64, maxTile - 2 * margin);
+  const interior = Math.max(64, Math.floor((maxTile - 2 * margin) / align) * align);
 
   const cols = Math.ceil(rect.w / interior);
   const rows = Math.ceil(rect.h / interior);
@@ -151,9 +155,10 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-          // Measured relief: this tile's window of the preview-sized map (v up).
-          targets = gbuf.build(tex, pw, ph, state.measuredTex
-            ? { ...state, measured: { tex: state.measuredTex, rect: [px0 / W, (H - py1) / H, px1 / W, (H - py0) / H] } }
+          // Measured relief and a photo's scene: this tile's window of their preview-sized maps (v up).
+          const inMap = [px0 / W, (H - py1) / H, px1 / W, (H - py0) / H];
+          targets = gbuf.build(tex, pw, ph, state.measuredTex || state.sceneMap
+            ? { ...state, measured: state.measuredTex ? { tex: state.measuredTex, rect: inMap } : null, sceneMap: state.sceneMap ? { ...state.sceneMap, rect: inMap } : null }
             : state);
         }
 

@@ -6,7 +6,7 @@
 // depth, exposure set so the render sits at the photo's brightness). One Strength
 // slider mixes the picked look with the settings it replaced.
 import { textureScore, fitDepth } from './texscore.js';
-import { clipping, clippingOf, nearerSide } from './photocheck.js';
+import { clipping, clippingOf } from './photocheck.js';
 
 // Depth: the depth at which the relief adds RELIEF_GAIN to the render's stroke contrast,
 // over the same render with almost no relief (DEPTH_FLAT mm), under a plain gallery light.
@@ -41,10 +41,11 @@ export const LOOK_VERSION = { 'favourite-left': 5, 'favourite-side-lamp': 5 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
 const SURFACE = ['reliefScale', 'azimuthDeg', 'integrateTaps', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'fineRelief', 'mediumRelief', 'broadRelief',
-  'neutralize', 'photoDiffuse', 'textureDepthMm', 'paintingWidthCm', 'physical', 'heightScale', 'reliefAmount', 'shadowDetail', 'strokeDef', 'strokeSize', 'strokeDir'];
-// Belong to the photo, not to a look: a saved preset or project never changes them here.
-const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes'];
-const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden'];
+  'neutralize', 'photoDiffuse', 'textureDepthMm', 'paintingWidthCm', 'physical', 'heightScale', 'reliefAmount', 'shadowDetail', 'strokeDef', 'strokeSize', 'strokeDir', 'scene'];
+// Belong to the photo, not to a look: a saved preset or project never changes them here (the
+// scene: what the picture shows and the shape of its space, sceneui.js).
+const IMAGE_KEYS = ['paintingWidthCm', 'photoDiffuse', 'azimuthDeg', 'physical', 'strokes', 'scene'];
+const SWITCH = ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden', 'fx'];
 const LIGHT_NUM = ['x', 'y', 'z', 'power', 'kelvin', 'cone', 'softness', 'size', 'aimX', 'aimY', 'lift', 'falloff', 'dark', 'patternSize', 'patternRot'];
 const GRAZE_NUM = ['elevation', 'opacity', 'detail', 'fine', 'reach', 'clean', 'soft', 'lift', 'fill', 'grey', 'wb'];
 const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
@@ -420,7 +421,7 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
   function targetFor(i, from) {
     const it = A.items[i], target = clone(it.settings);
     for (const k of IMAGE_KEYS) if (k in from && k !== 'physical') target[k] = clone(from[k]);   // looks use calibrated depth
-    if (it.kind === 'built-in') { for (const k of ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden']) if (k in from) target[k] = clone(from[k]); target.originalTop = from.originalTop ?? 0; }
+    if (it.kind === 'built-in') { for (const k of ['layers', 'layersOn', 'adjust', 'overlays', 'fineHidden', 'fx']) if (k in from) target[k] = clone(from[k]); target.originalTop = from.originalTop ?? 0; }
     return target;
   }
   // Picking: the look is mixed with the settings it replaces. Tapping another look keeps

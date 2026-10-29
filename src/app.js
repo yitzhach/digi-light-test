@@ -12,10 +12,11 @@ import { Photometric, buildSolver, uploadShotArray, MAX_SHOTS } from './photomet
 import { chromaSignal } from './measure.js';
 import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './export.js';
 import { registerFrames, resample } from './register.js';
-import { estimateLight, spherePointFromLight } from './sphere.js';
+import { estimateLight } from './sphere.js';
 import { initStudio } from './studio.js';
-import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles, LOOK_NEUTRAL } from './presets.js';
+import { applyCharacter, characterOf, lightTypes, EVEN_SHARE, LIGHT_MIN, LIGHT_MAX, LIGHT_Z_MIN, POWER_MAX, lampAngles, LOOK_NEUTRAL, sunDirection } from './presets.js';
 import { smoothFactor, SMOOTH } from './adjust.js';
+import { SceneMaps, sceneActive, sceneSurfaceKey, DETAIL_WIDTHS } from './scene.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
@@ -24,6 +25,8 @@ const scroller = $('scroller');  // scrolls the painting once zoomed past fit
 const paper = $('paper');        // the painting's own box: canvas, beam guide, sphere ring
 
 let glctx, gbuf, shader, photo, srcTex = null, targets = null;
+// The scene a photo shows (scene.js): read when an image type other than artwork is chosen.
+let scenes = null;
 // Photometric capture: one texture per exposure plus its light direction.
 // `source` is what gets solved; `original` is what was loaded. Alignment always
 // measures and corrects from `original`, so applying it twice cannot compound a
@@ -128,7 +131,8 @@ function reliefSpan(st) {
 // the measured relief, the photo and the tests' height seam still say so themselves.
 const SURFACE_INPUTS = ['reliefScale', 'reliefStrength', 'chromaReject', 'albedoSuppress', 'azimuthDeg', 'integrateTaps',
   'reliefBands', 'fineRelief', 'mediumRelief', 'broadRelief', 'physical', 'photoDiffuse', 'neutralize', 'meanLuma'];
-const surfaceKey = () => JSON.stringify(SURFACE_INPUTS.map((k) => state[k] ?? null));
+// A photo's scene (image type, its shape, Remove photo light, Surface detail) is made into the relief too.
+const surfaceKey = () => JSON.stringify([...SURFACE_INPUTS.map((k) => state[k] ?? null), sceneSurfaceKey(state)]);
 let builtSurface = '';
 // Export tiles and the sharp zoom build their own surfaces in the preview's targets.
 // What the preview measured (heightStats, strokeSpread) still holds; only its maps are
@@ -146,6 +150,12 @@ function shadowReach(st, depth, aspect) {
   let reach = 0;
   for (const l of st.lights) {
     if (!l.enabled) continue;
+    if (l.sun) {
+      // The sun stands at one angle everywhere: the rise over its tangent.
+      const [x, y, z] = sunDirection(l, aspect);
+      reach = Math.max(reach, rise * Math.hypot(x, y) / Math.max(z, 0.01));
+      continue;
+    }
     let far = 0;
     for (const [cx, cy] of [[0, 0], [1, 0], [0, aspect], [1, aspect]]) {
       far = Math.max(far, Math.hypot(cx - l.x, cy - l.y * aspect));
@@ -330,6 +340,7 @@ async function setSource(src, keep = false) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+  scenes.setPhoto(c, srcTex);
   canvas.width = imgW; canvas.height = imgH;
   fitCanvas();
 
@@ -688,18 +699,38 @@ function rebuildLightPanel() {
   p.appendChild(head);
   if (isShadow(l)) { shadowPanel(p, l); return; }
 
-  // Light type: one click from bare spot to window light.
+  // Light type: one click from bare spot to window light, or the sun (one direction everywhere).
   const types = document.createElement('div');
   types.className = 'lightTypes';
   const c = characterOf(l);
   for (const [name, value] of lightTypes) {
     const b = document.createElement('button');
     b.textContent = name;
-    if (Math.abs(c - value) < 0.08) b.className = 'on';
-    b.onclick = () => { applyCharacter(l, value); rebuildLightPanel(); rebuildHandles(); render(); };
+    if (!l.sun && Math.abs(c - value) < 0.08) b.className = 'on';
+    b.onclick = () => { delete l.sun; applyCharacter(l, value); rebuildLightPanel(); rebuildHandles(); render(); };
     types.appendChild(b);
   }
+  const sunBtn = document.createElement('button');
+  sunBtn.textContent = 'Sun'; sunBtn.id = 'lightSun';
+  sunBtn.title = 'The sun: light from one direction everywhere, no falloff. Its dot sets the direction from where it is aimed';
+  if (l.sun) sunBtn.className = 'on';
+  sunBtn.onclick = () => { if (l.sun) delete l.sun; else { l.sun = true; l.cone = 0; l.size = Math.min(l.size ?? 0.02, 0.03); } rebuildLightPanel(); rebuildHandles(); render(); };
+  types.appendChild(sunBtn);
   p.appendChild(types);
+  // In a photo's scene a light can be for the subject alone (a rim, a key) or the rest (a background light).
+  if (sceneActive(state)) {
+    const targets = document.createElement('div');
+    targets.className = 'lightTypes lightTarget';
+    for (const [key, name, tip] of [['all', 'Lights all', 'This light falls on everything'], ['subject', 'Subject only', 'This light falls on the subject alone, like a rim or hair light'],
+      ['background', 'Background only', 'This light falls on everything but the subject, like a background light']]) {
+      const b = document.createElement('button');
+      b.textContent = name; b.title = tip; b.dataset.target = key;
+      if ((l.target ?? 'all') === key) b.className = 'on';
+      b.onclick = () => { if (key === 'all') delete l.target; else l.target = key; rebuildLightPanel(); render(); };
+      targets.appendChild(b);
+    }
+    p.appendChild(targets);
+  }
 
 
   p.appendChild(slider('Diffusion', 0, 1, 0.01, () => characterOf(l), (v) => {
@@ -960,6 +991,19 @@ function updateDerived(workingW, st = state) {
     st.shadowDist = st.shadowSpread * 0.005;
     st.shadowDistPx = st.shadowDist * W;
     st.psHeightGain = PS_REFERENCE_W / W;
+  } else if (sceneActive(st)) {
+    // A photo's scene: heights in image widths, the scene's own (scene.js) plus the surfaces'
+    // relief at Surface detail of DETAIL_WIDTHS (the Colour tool's Relief scales it, as it does
+    // a painting's depth). The lights' local shadow march covers that relief; the scene's long
+    // shadows are marched on its preview-size map in the shading pass, whatever the tile.
+    st.calibrated = true;
+    const rd = DETAIL_WIDTHS * (st.scene.detail ?? 0) * reliefBoost(st);
+    st.reliefDepth = rd;
+    st.heightScale = 1;
+    st.reliefStrength = W / 2;
+    st.shadowDist = shadowReach(st, Math.max(rd, 1e-4), imgH / Math.max(1, imgW));
+    st.shadowDistPx = st.shadowDist * W;
+    st.aoScale = 3;
   } else if (st.physical) {
     // Calibrated: heights are in painting widths, so a normal's slope is the height
     // difference over the texel's width. That gain grows with resolution, which is
@@ -1004,6 +1048,11 @@ function updateDerived(workingW, st = state) {
   st.grazeReachPx = st.grazeReach * W;
 }
 
+/** The scene maps (scene.js) settings `st` shade with, or null for a painting. */
+function sceneMapOf(st) {
+  return scenes && srcTex && sceneActive(st) ? scenes.source(st.scene) : null;
+}
+
 /**
  * The live settings as they apply to a render `outW` pixels wide, for an export or
  * the sharp zoom. Single-image surface parameters are measured in pixels of the
@@ -1014,7 +1063,7 @@ function updateDerived(workingW, st = state) {
  * an interrupted render can never leave the preview rescaled.
  */
 function renderState(outW) {
-  const st = { ...state, measuredTex: measuredTex() };
+  const st = { ...state, measuredTex: measuredTex(), sceneMap: sceneMapOf(state) };
   if (st.mode !== 'photometric') {
     const ratio = outW / imgW;
     st.reliefScale *= ratio;
@@ -1036,6 +1085,7 @@ function renderNow() {
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
+    state.sceneMap = sceneMapOf(state);
     const key = surfaceKey();
     if (key !== builtSurface) { builtSurface = key; dirtySurface = true; }
     if (dirtySurface || surfaceClobbered) {
@@ -1081,7 +1131,8 @@ function renderNow() {
         // The preview measures the height spread; export tiles reuse it.
         const mt = measuredTex();
         targets = gbuf.build(srcTex, imgW, imgH, { ...state, measureHeight: !!state.physical,
-          measured: mt && measured.w === imgW && measured.h === imgH ? { tex: mt, rect: [0, 0, 1, 1] } : null });
+          measured: mt && measured.w === imgW && measured.h === imgH ? { tex: mt, rect: [0, 0, 1, 1] } : null,
+          sceneMap: state.sceneMap });
         state.heightStats = { ...gbuf.heightStats };
         strokeMeasuredAt = NaN;
       }
@@ -1248,6 +1299,7 @@ async function boot() {
     gbuf = new GBuffer(glctx);
     shader = new Shader(glctx);
     photo = new Photometric(glctx);
+    scenes = new SceneMaps(glctx);
   } catch (e) { return fail(e); }
 
   $('hint').textContent =
@@ -1337,6 +1389,11 @@ async function boot() {
       comparing: () => !!compareTex,
     },
     sample: () => currentSample,
+    // The settings derived from the others (heightScale, reliefStrength, ...) brought up to date, so a
+    // snapshot taken before the next frame (a new photo's undo step) holds what that frame will.
+    derive: () => { if (imgW) updateDerived(imgW); },
+    // The photo's scene (scene.js): where things stand for a light scene, and what it looks like.
+    scene: { describe: (sc) => scenes.describe(sc), suggestion: () => scenes.suggestion() },
     heights: readHeights,
     exportFull: (rect) => exportImage({ mode: 'single', source: fullSource, rect }, null, { viewMode: 0 }),
     // The relit painting whole at outW px wide (at most the photo's own width), drawn from
@@ -1361,6 +1418,9 @@ async function boot() {
       if (width) { job.width = Math.max(1, Math.min(fullW, Math.round(width))); job.height = Math.max(1, Math.round(fullH * job.width / fullW)); }
       state.exporting = true;
       cancelSharp();
+      // The scene maps the states were captured with may have been dropped since (two are kept);
+      // a group shares one relief, so one scene, made again here if need be.
+      for (const st of states) st.sceneMap = sceneMapOf(st);
       try {
         return await exportFullRes(glctx, { gbuf, photo, shader }, job, states);
       } finally {
@@ -1505,7 +1565,7 @@ function wireExport() {
       return;
     }
     try {
-      status.textContent = `margin ${requiredMargin(scaled)}px — starting…`;
+      status.textContent = `margin ${requiredMargin(scaled, outW)}px — starting…`;
       const t0 = performance.now();
       const canvas = await exportImage(job, (frac, i, n) => {
         status.textContent = `tile ${i}/${n} — ${Math.round(frac * 100)}%`;

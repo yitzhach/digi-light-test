@@ -13,10 +13,14 @@
 // seen from the surface — so the same lamp gives softer shadows as it comes closer.
 
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
-import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, SHADE_SHAPES, isLamp } from './presets.js';
+import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, SHADE_SHAPES, isLamp, sunDirection } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
 import { ADJUST_GLSL, setAdjustUniforms, curveLUT, smoothFactor, smoothGraze, SMOOTH } from './adjust.js';
 import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
+import { SCENE_APPLY } from './scene.js';
+import { FX_GLSL, setFxUniforms } from './fx.js';
+import { BLEND_GLSL, PHOTO_GLSL, FINISH_GLSL } from './glsl.js';
+import { PostFX, postWanted } from './postfx.js';
 
 const GRAZE_RGB = kelvinToLinearRGB(5000);
 // Linear grey the Relief view and Grey surface give the paint under the graze light.
@@ -25,6 +29,8 @@ export const GRAZE_GREY = (0.3).toFixed(3);
 const B = Object.fromEntries(blendModes.map(([k], i) => [k, i]));
 
 export const MAX_LIGHTS = 8;
+// A light in a photo's scene can light everything, the subject alone or the rest alone.
+export const LIGHT_TARGETS = ['all', 'subject', 'background'];
 
 const SHADE_FS = `#version 300 es
 precision highp float;
@@ -61,6 +67,11 @@ uniform float uLightDark[${MAX_LIGHTS}];
 // 3 leaves (dappled). uLightPattern: (size, rotation in radians).
 uniform int   uLightShape[${MAX_LIGHTS}];
 uniform vec2  uLightPattern[${MAX_LIGHTS}];
+// The sun: uLightPos is then the direction to it (x right, y up, z out, in image widths), the same
+// everywhere, with no falloff. uLightTarget: in a photo's scene, 1 lights the subject only, 2 the
+// rest only (a background light), 0 both.
+uniform float uLightSun[${MAX_LIGHTS}];
+uniform int   uLightTarget[${MAX_LIGHTS}];
 uniform sampler2D uShadowRelief;             // relief for the main lights' shadows: grain smoothed out
 
 uniform float uAspect;
@@ -85,6 +96,7 @@ uniform int   uViewMode;     // 0 relit, 1 normals, 2 height, 3 albedo, 4 origin
 
 uniform int   uLayerCount;
 uniform float uOriginalTop;                   // Original on top: the untouched photo over everything
+uniform float uFinishLater;                   // 1: the effects after this pass (postfx.js) finish the picture
 uniform int   uLayerMode[${MAX_LAYERS}];
 uniform int   uLayerSource[${MAX_LAYERS}];   // 0 original photo, 1 relit image
 uniform float uLayerOpacity[${MAX_LAYERS}];
@@ -118,6 +130,18 @@ uniform float uStrokeGain;      // 1 / the 2-98% spread of that band
 uniform vec2  uStrokeStep;      // Stroke direction: the band's Stroke size, in texels, toward the main lamp
 uniform float uStrokeDir;       // and how much of it (Stroke direction x the lamp's share off straight-on)
 
+// A photo's scene (scene.js). Heights are then in image widths, and each point stands at its
+// height (P.z), so a lamp near the subject is nearer the face than the wall behind it.
+uniform float uSceneOn;
+uniform sampler2D uScene;       // this target's scene: behind, front (image widths), subject, sky
+uniform sampler2D uSceneMap;    // the whole picture's level 1: behind, front, subject, sky (preview size)
+uniform float uSceneTop;        // the scene's tallest point, image widths
+uniform float uSceneReach;      // the longest scene shadow, image widths
+uniform float uReliefDepth;     // the surfaces' relief spread in image widths (its contact shadows)
+uniform float uSceneAO;         // how much hollows of the scene (a floor's corner, under a chin) lose of the room light
+uniform float uKeepSky;         // the sky as photographed (0..1)
+uniform int   uApply;           // relight 0 all of it, 1 the subject only, 2 the rest only
+
 const float PI = 3.14159265359;
 const int SHADOW_STEPS = 32;
 const int SHADOW_STEPS_MAX = 96;
@@ -145,7 +169,13 @@ vec3 F_Schlick(float u, vec3 f0) {
 
 float sampleHeight(sampler2D relief, vec2 uv) {
   vec2 globalUV = uUVOffset + uv * uUVScale;
-  return texture(relief, uv).a * uHeightScale * uReliefAmount * (texture(uMask, globalUV).r * 2.0);
+  float h = texture(relief, uv).a * uHeightScale * uReliefAmount * (texture(uMask, globalUV).r * 2.0);
+  if (uSceneOn > 0.5) {
+    // In a scene this march throws the surfaces' own small shadows; the scene's are sceneMarch's.
+    vec4 s = texture(uScene, uv);
+    h -= mix(s.x, s.y, s.z);
+  }
+  return h;
 }
 
 /**
@@ -191,6 +221,54 @@ float shadowMarch(sampler2D relief, vec2 uv, vec3 L, float penumbra, float stren
   return 1.0 - (1.0 - min(vis, 1.0)) * strength;
 }
 
+// The scene's height at a point of the whole picture, from its preview-size map: the heights
+// behind and in front joined by the subject matte, as scene.js joins them in each tile.
+float sceneHeight(vec2 g) {
+  vec4 a = texture(uSceneMap, g);
+  return mix(a.x, a.y, a.z);
+}
+/**
+ * The scene's own long shadows: the subject's across the wall behind it, a room's corner across
+ * its floor. The same horizon march as shadowMarch, but over the whole picture's scene map (the
+ * preview's size, in whole-image UV), so a tile of an export throws exactly the preview's scene
+ * shadows however far they reach. Returns the share of the source still in view.
+ */
+float sceneMarch(vec2 g, vec3 L, float penumbra) {
+  vec2 dxy = L.xy;
+  float lxy = length(dxy);
+  if (lxy < 1e-4) return 1.0;
+  vec2 dir = dxy / lxy;
+  float slope = L.z / lxy, h0 = sceneHeight(g);
+  float maxDist = min(uSceneReach, max(uSceneTop - h0, 0.0) / max(slope, 1e-3));
+  float tMin = 1.5 / float(textureSize(uSceneMap, 0).x);
+  if (maxDist <= tMin) return 1.0;
+  float horizon = -1.0e3;
+  for (int i = 1; i <= 48; i++) {
+    float f = float(i) / 48.0;
+    float t = tMin + (maxDist - tMin) * f * f;
+    vec2 s = g + dir * t / vec2(1.0, uAspect);
+    if (s.x < 0.0 || s.x > 1.0 || s.y < 0.0 || s.y > 1.0) break;
+    horizon = max(horizon, (sceneHeight(s) - h0) / t);
+  }
+  float elev = atan(slope);
+  float open = smoothstep(-penumbra, penumbra, elev);
+  return min(smoothstep(-penumbra, penumbra, elev - atan(horizon)) / max(open, 1e-3), 1.0);
+}
+// Hollows of the scene: how far the scene rises above this point around it, at two radii, as
+// the room light it hides (a floor's corner, under a chin, between an arm and the body).
+float sceneOcclusion(vec2 g) {
+  float h0 = sceneHeight(g), occ = 0.0;
+  for (int k = 0; k < 8; k++) {
+    float a = float(k) * 0.785398;
+    vec2 d = vec2(cos(a), sin(a));
+    for (int j = 1; j <= 2; j++) {
+      float r = 0.02 * float(j);
+      occ += clamp((sceneHeight(g + d * r / vec2(1.0, uAspect)) - h0) / r, 0.0, 1.0);
+    }
+  }
+  return occ / 16.0;
+}
+
 // Diffuse plus GGX specular for one light. aSrc is the roughness already widened by
 // the source's size; NoLw the wrapped cosine.
 vec3 brdf(vec3 N, vec3 V, vec3 L, float NoV, float NoLw, vec3 albedo, vec3 f0, float aSrc) {
@@ -204,29 +282,7 @@ vec3 brdf(vec3 N, vec3 V, vec3 L, float NoV, float NoLw, vec3 albedo, vec3 f0, f
   return D * Vis * F * NoLs + albedo * (1.0 - F) * (1.0 - uMetallic) / PI * NoLw;
 }
 
-// Layer blend modes, per channel on display values: a is what lies below, b the layer.
-float dodge(float a, float b) { return a <= 0.0 ? 0.0 : b >= 1.0 ? 1.0 : min(1.0, a / (1.0 - b)); }
-float burn(float a, float b) { return a >= 1.0 ? 1.0 : b <= 0.0 ? 0.0 : 1.0 - min(1.0, (1.0 - a) / b); }
-float softLightD(float a) { return a <= 0.25 ? ((16.0 * a - 12.0) * a + 4.0) * a : sqrt(a); }
-float blend1(int m, float a, float b) {
-  if (m == ${B.multiply}) return a * b;
-  if (m == ${B.screen}) return 1.0 - (1.0 - a) * (1.0 - b);
-  if (m == ${B.overlay}) return a < 0.5 ? 2.0 * a * b : 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
-  if (m == ${B.softLight}) return b <= 0.5 ? a - (1.0 - 2.0 * b) * a * (1.0 - a) : a + (2.0 * b - 1.0) * (softLightD(a) - a);
-  if (m == ${B.hardLight}) return b < 0.5 ? 2.0 * a * b : 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
-  if (m == ${B.colorDodge}) return dodge(a, b);
-  if (m == ${B.colorBurn}) return burn(a, b);
-  if (m == ${B.linearLight}) return clamp(a + 2.0 * b - 1.0, 0.0, 1.0);
-  if (m == ${B.vividLight}) return b < 0.5 ? burn(a, 2.0 * b) : dodge(a, 2.0 * b - 1.0);
-  if (m == ${B.pinLight}) return b < 0.5 ? min(a, 2.0 * b) : max(a, 2.0 * b - 1.0);
-  if (m == ${B.darken}) return min(a, b);
-  if (m == ${B.lighten}) return max(a, b);
-  return b;
-}
-vec3 blendLayer(int m, vec3 a, vec3 b) {
-  return vec3(blend1(m, a.r, b.r), blend1(m, a.g, b.g), blend1(m, a.b, b.b));
-}
-
+${BLEND_GLSL}
 // Turbo colour ramp (Mikhailov 2019, polynomial fit): perceptually ordered, unlike a
 // plain rainbow, and with more steps than viridis for fine relief.
 vec3 turbo(float t) {
@@ -246,17 +302,7 @@ vec3 acesFilm(vec3 x) {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 
-// The photo as it was, in linear light: its own texel when the render is the photo's size
-// (exports at full size), so Original on top at 100% gives the photo back bit for bit.
-vec3 photoLin() {
-  vec2 at = vUV * vec2(textureSize(uLin, 0));
-  return all(lessThan(abs(at - gl_FragCoord.xy), vec2(0.01))) ? texelFetch(uLin, ivec2(gl_FragCoord.xy), 0).rgb : texture(uLin, vUV).rgb;
-}
-
-vec3 linearToSrgb(vec3 c) {
-  return mix(c * 12.92, 1.055 * pow(max(c, 1e-5), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
-}
-
+${PHOTO_GLSL}
 // Shadow lift, on display (sRGB) values: the darks rise, the lights barely move.
 // y + 5 s y (1 - y)^6 is strongest around y = 0.15 (dark paint, baked-in recesses),
 // leaves white at white, and stays monotonic for s up to 1 (its slope bottoms out
@@ -290,6 +336,8 @@ vec3 vibrance(vec3 c, float v) {
 
 ${ADJUST_GLSL}
 ${OVERLAY_GLSL}
+${FX_GLSL}
+${FINISH_GLSL}
 
 // Stroke definition: the relief smoothed a little (STROKE_FINE of Stroke size, so the
 // grain is left alone) minus the relief smoothed to Stroke size is a band-pass,
@@ -363,8 +411,9 @@ void main() {
 
   if (uViewMode == 1) { outColor = vec4(reliefN * 0.5 + 0.5, 1.0); return; }
   if (uViewMode == 2) {
-    // Calibrated heights are in units of their 2-98% spread, so -0.5..0.5 spans it.
-    float v = clamp(height * uHeightView + 0.5, 0.0, 1.0);
+    // Calibrated heights are in units of their 2-98% spread, so -0.5..0.5 spans it; a scene's
+    // run from its back (0) to its tallest point (1).
+    float v = uSceneOn > 0.5 ? clamp(height / max(uSceneTop, 1e-3), 0.0, 1.0) : clamp(height * uHeightView + 0.5, 0.0, 1.0);
     outColor = vec4(uHeightColour == 1 ? turbo(v) : vec3(v), 1.0); return;
   }
   if (uViewMode == 3) { outColor = vec4(linearToSrgb(texture(uAlbedo, vUV).rgb), 1.0); return; }
@@ -377,8 +426,10 @@ void main() {
   // between "flat print" and "heavy impasto".
   vec3 N = normalize(mix(vec3(0.0, 0.0, 1.0), reliefN, uReliefAmount));
 
-  // Position in whole-image space, so a light stays put as tiles change.
-  vec3 P = vec3(gUV.x, gUV.y * uAspect, 0.0);
+  // Position in whole-image space, so a light stays put as tiles change. A scene's points stand
+  // at their height; a painting's relief is too shallow to move a light's angle.
+  vec4 scene = uSceneOn > 0.5 ? texture(uScene, vUV) : vec4(0.0);
+  vec3 P = vec3(gUV.x, gUV.y * uAspect, uSceneOn > 0.5 ? height * uHeightScale : 0.0);
   vec3 V = normalize(vec3(0.5, 0.5 * uAspect, 1.6) - P);
   float NoV = max(dot(N, V), 1e-4);
 
@@ -395,9 +446,10 @@ void main() {
     if (uLightEnabled[i] < 0.5) continue;
 
     vec3 lp = uLightPos[i];
-    vec3 Lv = vec3(lp.x, lp.y * uAspect, lp.z) - P;
-    float dist = max(length(Lv), 1e-4);
-    vec3 L = Lv / dist;
+    bool sun = uLightSun[i] > 0.5;
+    vec3 Lv = sun ? lp : vec3(lp.x, lp.y * uAspect, lp.z) - P;
+    float dist = sun ? 1.0 : max(length(Lv), 1e-4);
+    vec3 L = sun ? normalize(Lv) : Lv / dist;
     float NoL = dot(N, L);
 
     // Angular radius of the source as this point sees it. A large, close source
@@ -409,7 +461,7 @@ void main() {
 
     // Inverse square, referenced to a half-width distance so that the Distance
     // slider lands on sane values instead of needing a power of ten of Power.
-    float atten = pow(0.5 / dist, uLightFalloff[i]);
+    float atten = sun ? 1.0 : pow(0.5 / dist, uLightFalloff[i]);
 
     // Cone: L.z is the cosine of the angle off the plane normal, so the spot
     // test falls out without needing a separate aim vector while the light
@@ -418,7 +470,9 @@ void main() {
     float cosOuter = mix(0.02, 0.985, cone);
     float cosInner = mix(cosOuter + 0.001, 1.0, uLightSoftness[i]);
     vec3 aim = normalize(vec3(uLightAim[i].x - lp.x, (uLightAim[i].y - lp.y) * uAspect, -lp.z));
-    float spot = cone < 0.01 ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
+    float spot = cone < 0.01 || sun ? 1.0 : smoothstep(cosOuter, cosInner, dot(-L, aim));
+    // In a scene, a light may be for the subject alone or for the rest alone.
+    if (uSceneOn > 0.5 && uLightTarget[i] > 0) spot *= uLightTarget[i] == 1 ? scene.z : 1.0 - scene.z;
     if (spot <= 0.0) continue;
     if (uLightKind[i] == 1) {
       // Cast by something between the lamps and the painting: no relief of its own,
@@ -441,7 +495,7 @@ void main() {
       continue;
     }
     // Shadow lift goes wherever the beam lands, cast shadows and facets turned away included.
-    if (uLightKind[i] == 0) lift += uLightLift[i] * spot * poolShare(lp, dist, uLightFalloff[i]);
+    if (uLightKind[i] == 0) lift += uLightLift[i] * spot * (sun ? 1.0 : poolShare(lp, dist, uLightFalloff[i]));
 
     // Shadows view: everything inside the beam counts, and a facet turned away from
     // the light is in (attached) shadow just as much as one a ridge blocks.
@@ -452,6 +506,7 @@ void main() {
 
     float penumbra = max(srcAngle, 0.012) + 0.3 * uShadowSoftness * uShadowSoftness;
     float shadow = shadowMarch(uShadowRelief, vUV, L, penumbra, uShadow, 0.0, uShadowDist * uLightReach[i]);
+    if (uSceneOn > 0.5) shadow = min(shadow, 1.0 - (1.0 - sceneMarch(gUV, L, max(penumbra, 0.03))) * uShadow);
 
     // A bigger source spreads the highlight: widen the lobe by the source's size
     // relative to its distance (Karis' sphere-light approximation, without the
@@ -475,7 +530,11 @@ void main() {
   // Ambient occlusion straight off the height field: the high-pass is already a
   // local-mean-zero signal, so a negative height *is* a pit and pits catch less
   // of the sky term.
-  float ao = 1.0 - uAO * clamp(-height * uAOScale, 0.0, 1.0);
+  float ao = uSceneOn > 0.5
+    // A scene: the surfaces' own relief (the height above the scene's) in units of its spread,
+    // as a painting's, and the scene's hollows.
+    ? (1.0 - uAO * clamp(-(height * uHeightScale - mix(scene.x, scene.y, scene.z)) / max(uReliefDepth, 1e-5) * uAOScale, 0.0, 1.0)) * (1.0 - uSceneAO * sceneOcclusion(gUV))
+    : 1.0 - uAO * clamp(-height * uAOScale, 0.0, 1.0);
   // A negative light only takes away what the lamps gave; the room light stays.
   acc = max(acc - taken, 0.0);
   acc += albedo * uAmbientColor * uAmbient * ao;
@@ -525,6 +584,17 @@ void main() {
     gs = mix(gs, vec3(dot(gs, vec3(0.2126, 0.7152, 0.0722))), uGrazeGrey);
     relit = mix(relit, gs, uGrazeOpacity);
   }
+  if (uSceneOn > 0.5) {
+    // The sky shines by itself: it stays as photographed. And the relight may be for the subject
+    // alone, or for everything but it.
+    vec3 orig = clamp(linearToSrgb(photoLin()), 0.0, 1.0);
+    relit = mix(relit, orig, scene.w * uKeepSky);
+    if (uApply > 0) relit = mix(orig, relit, uApply == 1 ? scene.z : 1.0 - scene.z);
+  }
+  // Atmosphere (fx.js): haze over a scene's far parts, light rays through the air.
+  vec2 Pw = vec2(gUV.x, gUV.y * uAspect);
+  if (uHaze.x > 0.0) relit = haze(relit, Pw, height * uHeightScale, scene.w);
+  if (uRays.x > 0.0) relit = rays(relit, Pw, scene.z);
   // Colour tool: the adjustments, mixed with the unadjusted image by its Opacity.
   vec3 adj = adjustColour(relit);
   relit = uAdjMix >= 1.0 ? adj : mix(relit, adj, uAdjMix);
@@ -538,11 +608,8 @@ void main() {
       col = mix(col, blendLayer(uLayerMode[i], col, b), uLayerOpacity[i] * dot(lmask, uLayerSel[i]));
     }
   }
-  col = overlays(col, gUV);
-  if (uOriginalTop > 0.0) col = mix(col, clamp(linearToSrgb(photoLin()), 0.0, 1.0), uOriginalTop);
-  float hidden = dot(uMaskOverlay, vec4(1.0)) > 0.0 ? 1.0 - dot(lmask, uMaskOverlay) : 0.0;
-  col = mix(col, vec3(1.0, 0.18, 0.12), 0.45 * hidden);
-  outColor = vec4(col, 1.0);
+  // With glow or background blur (postfx.js) they run first and finish the picture themselves.
+  outColor = vec4(uFinishLater > 0.5 ? col : finish(col, gUV, lmask), 1.0);
 }`;
 
 export class Shader {
@@ -555,6 +622,7 @@ export class Shader {
     this.layerMaskVersion = -1;
     this.curveTex = glctx.gl.createTexture();
     this.curveKey = '';
+    this.post = new PostFX(glctx);   // glow and background blur, after this pass
     this.curveLUT({ rgb: [[0, 0], [1, 1]] });
   }
 
@@ -581,8 +649,13 @@ export class Shader {
   draw(targets, state, aspect, viewW, viewH, tile) {
     const { gl } = this.glctx;
     const p = this.prog;
-    // A tile draws into whatever target its caller bound; the preview, to the canvas.
+    // A tile draws into whatever target its caller bound; the preview, to the canvas. With glow
+    // or background blur this pass draws into their source first, and they finish the picture
+    // into that target (postfx.js).
     if (!tile) bindTarget(gl, null);
+    const post = postWanted(state) && targets.lin ? this.post : null;
+    const out = post ? gl.getParameter(gl.FRAMEBUFFER_BINDING) : null;
+    if (post) bindTarget(gl, post.source(viewW, viewH));
     gl.viewport(0, 0, viewW, viewH);
     gl.useProgram(p.program);
     if (this.maskVersion !== (state.maskVersion ?? 0)) {
@@ -619,6 +692,8 @@ export class Shader {
       ['uStrokeRelief', (targets.stroke || targets.normal).tex],
       ['uStrokeFine', (targets.strokeFine || targets.normal).tex],
       ['uAdjCurve', this.curveTex],
+      ['uScene', (targets.scene || targets.normal).tex],
+      ['uSceneMap', state.sceneMap?.a || (targets.scene || targets.normal).tex],
     ]);
 
     const lights = state.lights.slice(0, MAX_LIGHTS);
@@ -634,8 +709,12 @@ export class Shader {
     const lift = new Float32Array(MAX_LIGHTS);
     const kind = new Int32Array(MAX_LIGHTS), dark = new Float32Array(MAX_LIGHTS);
     const shape = new Int32Array(MAX_LIGHTS), pattern = new Float32Array(MAX_LIGHTS * 2);
+    const sunOn = new Float32Array(MAX_LIGHTS), target = new Int32Array(MAX_LIGHTS);
     lights.forEach((l, i) => {
       pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
+      // The sun: the direction from where it is aimed to where its dot is, in image widths.
+      if (l.sun) { const d = sunDirection(l, aspect); pos[i * 3] = d[0]; pos[i * 3 + 1] = d[1]; pos[i * 3 + 2] = d[2]; sunOn[i] = 1; }
+      target[i] = Math.max(0, LIGHT_TARGETS.indexOf(l.target ?? 'all'));
       col[i * 3] = l.rgb[0]; col[i * 3 + 1] = l.rgb[1]; col[i * 3 + 2] = l.rgb[2];
       pow[i] = l.power;
       cone[i] = l.cone;
@@ -680,6 +759,8 @@ export class Shader {
     gl.uniform1fv(u.uLightDark, dark);
     gl.uniform1iv(u.uLightShape, shape);
     gl.uniform2fv(u.uLightPattern, pattern);
+    gl.uniform1fv(u.uLightSun, sunOn);
+    gl.uniform1iv(u.uLightTarget, target);
     gl.uniform1f(u.uMetallic, state.metallic ?? 0);
     gl.uniform1f(u.uShadowSoftness, state.shadowSoftness ?? 0.35);
     gl.uniform1f(u.uHighlightRolloff, state.highlightRolloff ?? 1);
@@ -788,6 +869,7 @@ export class Shader {
     gl.uniform3fv(u.uGrazeWhiteBalance, new Float32Array(gWhite.map((v) => 1 + gWb * (v - 1))));
     setAdjustUniforms(gl, u, state, (curves) => this.curveLUT(curves), reliefView);
     setOverlayUniforms(gl, u, state, reliefView);
+    setFxUniforms(gl, u, state, aspect, reliefView);
     // Stroke definition needs its smoothed relief (GBuffer buildStroke) and the
     // spread of the band it leaves (app.js measures it on the preview; export tiles reuse it).
     const strokeOn = state.viewMode === 0 || state.viewMode === 7;
@@ -796,14 +878,27 @@ export class Shader {
     const sd = strokeLamp(lights, aspect);
     gl.uniform2f(u.uStrokeStep, sd.x * (state.strokeSigmaPx || 0), sd.y * (state.strokeSigmaPx || 0));
     gl.uniform1f(u.uStrokeDir, Math.min(1, Math.max(0, state.strokeDir ?? 0)) * sd.share);
+    // A photo's scene (scene.js; app.js updateDerived sets its heights' units).
+    const sc = state.sceneMap ? state.scene : null;
+    gl.uniform1f(u.uSceneOn, sc ? 1 : 0);
+    gl.uniform1f(u.uSceneTop, sc ? state.sceneMap.top : 0);
+    gl.uniform1f(u.uSceneReach, sc ? 1.2 : 0);
+    gl.uniform1f(u.uReliefDepth, sc ? state.reliefDepth || 0 : 0);
+    gl.uniform1f(u.uSceneAO, sc ? 0.6 * state.ao : 0);
+    gl.uniform1f(u.uKeepSky, sc ? Math.min(1, Math.max(0, sc.keepSky ?? 1)) : 0);
+    gl.uniform1i(u.uApply, sc ? Math.max(0, SCENE_APPLY.indexOf(sc.apply ?? 'all')) : 0);
     gl.uniform4fv(u.uMaskOverlay, overlay);
     gl.uniform1i(u.uLayerCount, reliefView ? 0 : layers.length);
     gl.uniform1iv(u.uLayerMode, lMode);
     gl.uniform1iv(u.uLayerSource, lSrc);
     gl.uniform1fv(u.uLayerOpacity, lOp);
-    gl.uniform1f(u.uOriginalTop, reliefView ? 0 : Math.min(1, Math.max(0, state.originalTop ?? 0)));
+    const originalTop = reliefView ? 0 : Math.min(1, Math.max(0, state.originalTop ?? 0));
+    gl.uniform1f(u.uOriginalTop, originalTop);
+    gl.uniform1f(u.uFinishLater, post ? 1 : 0);
 
     drawFullscreen(gl);
+    if (post) post.run({ src: post.source(viewW, viewH), w: viewW, h: viewH, state, sceneTex: targets.scene?.tex, out,
+      finish: { tile: t, lin: targets.lin.tex, layerMask: this.layerMaskTex, maskOverlay: overlay, originalTop, aspect } });
   }
 }
 
@@ -824,7 +919,8 @@ export function sceneWhite(lights, aspect, ambient) {
     let ax = (l.aimX ?? l.x) - l.x, ay = ((l.aimY ?? l.y) - l.y) * aspect, az = -l.z;
     const an = Math.hypot(ax, ay, az) || 1; ax /= an; ay /= an; az /= an;
     let w = 0;
-    for (const u of [1 / 6, 0.5, 5 / 6]) for (const v of [1 / 6, 0.5, 5 / 6]) {
+    if (l.sun) w = l.power * Math.max(0, sunDirection(l, aspect)[2]) / Math.PI;
+    else for (const u of [1 / 6, 0.5, 5 / 6]) for (const v of [1 / 6, 0.5, 5 / 6]) {
       const lx = l.x - u, ly = (l.y - v) * aspect, lz = l.z, d = Math.max(Math.hypot(lx, ly, lz), 1e-4);
       const spot = cone < 0.01 ? 1 : smooth(cosOuter, cosInner, -(lx * ax + ly * ay + lz * az) / d);
       w += l.power * Math.pow(0.5 / d, l.falloff ?? 2) * spot * Math.max(0, lz / d) / Math.PI / 9;
@@ -854,6 +950,10 @@ export function strokeLamp(lights, aspect) {
     if (w > bw) { bw = w; best = l; }
   }
   if (!best) return { x: 0, y: 0, share: 0 };
+  if (best.sun) {
+    const [x, y, z] = sunDirection(best, aspect), h = Math.hypot(x, y);
+    return h < 1e-6 ? { x: 0, y: 0, share: 0 } : { x: x / h, y: y / h, share: h / Math.hypot(h, z) };
+  }
   const dx = best.x - 0.5, dy = (best.y - 0.5) * aspect, h = Math.hypot(dx, dy);
   if (h < 1e-6) return { x: 0, y: 0, share: 0 };
   return { x: dx / h, y: dy / h, share: h / Math.hypot(h, best.z) };

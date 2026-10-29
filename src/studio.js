@@ -14,6 +14,11 @@ import { initAutomation } from './automation.js';
 import { initGuard } from './guard.js';
 import { adjustDefaults, validateAdjust, buildAdjustUI, eyeButton } from './adjust.js';
 import { overlayDefaults, validateOverlays, buildOverlayUI } from './overlays.js';
+import { sceneDefaults, validateScene } from './scene.js';
+import { fxDefaults, validateFx } from './fx.js';
+import { initSceneUI } from './sceneui.js';
+import { LIGHT_SCENES } from './scenelights.js';
+import { LIGHT_TARGETS } from './shade.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -115,7 +120,7 @@ export function initStudio(api) {
   // (see app.js); projects and presets saved before they existed open with physical 0.
   const defaults = { ...LOOK_NEUTRAL, fineRelief: 0.65, mediumRelief: 0.8, broadRelief: 0.15, neutralize: 0, metallic: 0, shadowSoftness: 0.2, highlightRolloff: 0.7, meanLuma: 0.25, shadowDetail: SHADOW_DETAIL,
     physical: 1, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: EVEN_SHARE, strokes: [], layers: [], originalTop: 0, graze: GRAZE_DEFAULT,
-    layersOn: 1, adjust: adjustDefaults(), overlays: overlayDefaults(), fineHidden: null };
+    layersOn: 1, adjust: adjustDefaults(), overlays: overlayDefaults(), fineHidden: null, scene: sceneDefaults(), fx: fxDefaults() };
   const LEGACY = { originalTop: 0, layersOn: 1, physical: 0, paintingWidthCm: 60, textureDepthMm: 1, photoDiffuse: 0, shadowDetail: 0, ...LOOK_NEUTRAL };
   const QUICK_RANGES = { originalTop: [0, 1], layersOn: [0, 1], physical: [0, 1], paintingWidthCm: [10, 300], textureDepthMm: [0, 10] };
   // Derived from texture depth when calibrated, so not checked against their sliders.
@@ -128,16 +133,17 @@ export function initStudio(api) {
     reliefScale: 3, integrateTaps: 8, chromaReject: 0.6, albedoSuppress: 0.7, reliefAmount: 1, roughness: 0.55, specular: 1, shadow: 0.7, shadowSpread: 4, ao: 0.4 };
   const FINE_KEYS = Object.keys(FINE_DEFAULTS);
   // Filled in once their sections exist; sync() may run before.
-  var colourSync = null, overlaySync = null, eyes = [];
+  var colourSync = null, overlaySync = null, sceneUI = null, eyes = [];
   const baseMap = { reliefScale:'reliefScale', azimuth:'azimuthDeg', taps:'integrateTaps', reliefStrength:'reliefStrength', chromaReject:'chromaReject', albedoSuppress:'albedoSuppress', reliefAmount:'reliefAmount', heightScale:'heightScale', roughness:'roughness', specular:'specular', shadow:'shadow', shadowSpread:'shadowSpread', ao:'ao', ambient:'ambient', exposure:'exposure' };
   const keys = [...new Set([...Object.values(baseMap), ...extraKeys, 'lights', 'selected'])];
-  const presetKeys = keys.filter(k => !['strokes', 'meanLuma', 'fineHidden'].includes(k));
+  // A preset carries a look, not what the photo shows: its scene (image type and shape) stays the photo's.
+  const presetKeys = keys.filter(k => !['strokes', 'meanLuma', 'fineHidden', 'scene'].includes(k));
   // Objects with their own checks in validate (not plain numbers).
-  const OBJECT_KEYS = ['lights', 'strokes', 'layers', 'graze', 'adjust', 'overlays', 'fineHidden'];
+  const OBJECT_KEYS = ['lights', 'strokes', 'layers', 'graze', 'adjust', 'overlays', 'fineHidden', 'scene', 'fx'];
   // While the sweep inspector borrows the lights, saves and history see the real ones.
   let sweep = null;
   const live = k => sweep && (k === 'lights' || k === 'selected') ? sweep[k] : state[k];
-  const snapshot = () => Object.fromEntries(keys.map(k => [k, structuredClone(live(k))]));
+  const snapshot = () => { api.derive?.(); return Object.fromEntries(keys.map(k => [k, structuredClone(live(k))])); };
   const history = new History();
   let before = false, split = false, brush = '', maskLayer = -1, painting = false, restoring = false, loading = false, projectId = null, batching = false;
   let sourceRevision = 0;
@@ -211,7 +217,7 @@ export function initStudio(api) {
     for (const [id,k] of Object.entries(baseMap)) if ($(id)) $(id).value = state[k];
     for (const k of extraKeys) if ($(k)) $(k).value = state[k];
     document.querySelectorAll('#creativeSliders .row').forEach(row => { const i = row.querySelector('input'); row.querySelector('output').textContent = Number(i.value).toFixed(+i.step < 0.01 ? 3 : 2); });
-    syncQuick(); syncLook(); syncColour(); syncOverlays(); syncEyes(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
+    syncQuick(); syncLook(); syncColour(); syncOverlays(); syncEyes(); sceneUI?.sync(); refresh(); rebuildMask(); renderLayers(); renderGraze(); historyUI();
   }
   const COMPASS = ['right', 'upper right', 'top', 'upper left', 'left', 'lower left', 'bottom', 'lower right'];
   function renderGraze() {
@@ -546,7 +552,9 @@ export function initStudio(api) {
   function syncOverlays(){overlaySync?.();}
   function syncEyes(){for(const e of eyes)e.sync();$('colourSection')?.classList.toggle('off',!state.adjust?.on);$('fineTune')?.classList.toggle('off',!!state.fineHidden);$('layersSection')?.classList.toggle('layersOff',state.layersOn===0);}
   function makeLight(v) {
-    const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:2,aimX:0.5,aimY:0.5,useKelvin:true,hex:'#ffffff',enabled:true}; applyColor(l); return l;
+    const l={x:v.x,y:v.y,z:v.z,power:v.power,kelvin:v.kelvin,cone:v.cone,softness:v.softness,size:v.size,falloff:v.falloff??2,aimX:v.aimX??0.5,aimY:v.aimY??0.5,useKelvin:true,hex:'#ffffff',enabled:true};
+    if(v.sun)l.sun=true; if(v.target&&v.target!=='all')l.target=v.target; if(v.lift)l.lift=v.lift;
+    applyColor(l); return l;
   }
   function useLighting(name) { stopSweep(); const scene=lighting[name]; state.lights=scene.lights.map(makeLight); state.selected=0; state.ambient=scene.ambient; for (const k of ['shadow','shadowSoftness',...Object.keys(LOOK_NEUTRAL)]) if (k in scene) state[k]=scene[k]; refresh(); }
   // Any calibrated control switches a legacy project over to calibrated relief.
@@ -708,10 +716,14 @@ export function initStudio(api) {
     for(const k of keys)if(!OBJECT_KEYS.includes(k)){const v=p.settings[k]??LEGACY[k];if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>10000)throw new Error('Invalid project settings.');settings[k]=v;}
     for(const [id,k] of Object.entries(baseMap)){if(settings.physical&&DERIVED.includes(k))continue;const el=$(id);if(settings[k]<+el.min||settings[k]>+el.max)throw new Error(`Invalid ${k}.`);}
     for(const [k,,min,max] of [...newControls,...lookControls])if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
-    settings.adjust=validateAdjust(p.settings.adjust);settings.overlays=validateOverlays(p.settings.overlays);settings.fineHidden=validFine(p.settings.fineHidden);
+    settings.adjust=validateAdjust(p.settings.adjust);settings.overlays=validateOverlays(p.settings.overlays);settings.fineHidden=validFine(p.settings.fineHidden);settings.scene=validateScene(p.settings.scene);settings.fx=validateFx(p.settings.fx);
     for(const [k,[min,max]] of Object.entries(QUICK_RANGES))if(settings[k]<min||settings[k]>max)throw new Error(`Invalid ${k}.`);
     settings.lights=p.settings.lights.map(l=>{const light={};for(const [k,min,max] of [['x',LIGHT_MIN,LIGHT_MAX],['y',LIGHT_MIN,LIGHT_MAX],['z',LIGHT_Z_MIN,2.5],['power',0,POWER_MAX],['kelvin',1800,10000],['cone',0,1],['softness',0,1],['falloff',0,2],['aimX',LIGHT_MIN,LIGHT_MAX],['aimY',LIGHT_MIN,LIGHT_MAX],['size',0,2],['lift',-1,1]]){const v=l[k]??({lift:0,softness:0.5,falloff:2,aimX:l.x,aimY:l.y,size:0.01+0.25*(l.softness??0.5)**2}[k]);if(!Number.isFinite(v)||v<min||v>max)throw new Error('Invalid light values.');light[k]=v;}if(!/^#[0-9a-f]{6}$/i.test(l.hex))throw new Error('Invalid light colour.');light.hex=l.hex;if(l.kind!=null&&l.kind!=='light'){if(!LIGHT_KINDS.includes(l.kind))throw new Error('Invalid light kind.');light.kind=l.kind;const d=l.dark??0.6;if(!Number.isFinite(d)||d<0||d>1)throw new Error('Invalid shadow darkness.');light.dark=d;
-      const sh=l.shape??'pool',ps=l.patternSize??1,pr=l.patternRot??0;if(!SHADE_SHAPES.includes(sh)||!(ps>=0.25&&ps<=4)||!(pr>=0&&pr<=360))throw new Error('Invalid shadow shape.');if(sh!=='pool'||ps!==1||pr!==0)Object.assign(light,{shape:sh,patternSize:ps,patternRot:pr});}light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;applyColor(light);return light;});
+      const sh=l.shape??'pool',ps=l.patternSize??1,pr=l.patternRot??0;if(!SHADE_SHAPES.includes(sh)||!(ps>=0.25&&ps<=4)||!(pr>=0&&pr<=360))throw new Error('Invalid shadow shape.');if(sh!=='pool'||ps!==1||pr!==0)Object.assign(light,{shape:sh,patternSize:ps,patternRot:pr});}light.useKelvin=!!l.useKelvin;light.enabled=!!l.enabled;
+      // The sun (a direction, no falloff) and, in a photo's scene, what a light is for.
+      if(l.sun!=null){if(typeof l.sun!=='boolean'||(l.sun&&light.kind))throw new Error('Invalid sun.');if(l.sun)light.sun=true;}
+      if(l.target!=null&&l.target!=='all'){if(!LIGHT_TARGETS.includes(l.target))throw new Error('Invalid light target.');light.target=l.target;}
+      applyColor(light);return light;});
     settings.selected=Math.max(0,Math.min(settings.lights.length-1,Math.trunc(settings.selected)));
     let points=0;
     const checkStrokes=(strokes,modes)=>{if(!Array.isArray(strokes)||strokes.length>2000)throw new Error('Too many corrections.');return strokes.map(s=>{if(!modes.includes(s?.mode)||!Number.isFinite(s.radius)||s.radius<=0||s.radius>10||!Number.isFinite(s.aspect)||s.aspect<=0||s.aspect>100||!Array.isArray(s.points))throw new Error('Invalid brush stroke.');points+=s.points.length;if(points>200000)throw new Error('Too many brush points.');return {mode:s.mode,radius:s.radius,aspect:s.aspect,points:s.points.map(q=>{if(!Array.isArray(q)||q.length!==2||q.some(v=>!Number.isFinite(v)||v<0||v>1))throw new Error('Invalid brush point.');return q;})};});};
@@ -812,6 +824,8 @@ export function initStudio(api) {
   const auto=initAuto({guard:()=>({afterOneTap:oneTap,preview:guard.preview}),compare:say=>batch.openAuto(say),state,api,before:panel.querySelector('h2'),snapshot,restore,checkpoint,setBatching:v=>{batching=v;},makeLight,lighting,grazePresets,looks,LOOK_KEYS,LOOK_NEUTRAL,
     findRaking,userPresets:()=>storage('presets','readonly',s=>s.getAll()).then(r=>r.sort((a,b)=>a.name.localeCompare(b.name))),presetSettings:p=>validatePreset(p).settings,
     userProjects:()=>storage('projects','readonly',s=>s.getAll()),projectSettings:p=>validate(p),currentProject:()=>projectId,unmasked});
+  // Scene: what the picture shows, light scenes for photos, effects (sceneui.js).
+  sceneUI=initSceneUI({state,api,after:$('autoSection'),checkpoint,oneTap,snapshot,restore,setBatching:v=>{batching=v;}});
   buildSaveExport();
   // One section at a time: bottom tool strip on phones, vertical rail on desktop (toolrail.js).
   const tools=initToolRail({panel:$('panel')});
@@ -819,10 +833,12 @@ export function initStudio(api) {
   buildSearch();
   // window.digilight: the same app for scripts and AI agents (automation.js, docs/automation.md).
   const presetTables={lighting:{names:Object.keys(lighting),apply:n=>{useLighting(n);sync();}},graze:{names:Object.keys(grazePresets),apply:n=>{stopSweep();setGraze({...grazePresets[n]});sync();}},
-    looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}}};
-  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,lamp,
+    looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}},
+    // Light scenes for photos (scenelights.js), by id: the picture must show a scene (Photo, Portrait, Room, Object).
+    scene:{names:LIGHT_SCENES.map(x=>x.id),apply:n=>{sceneUI.useScene(n,{quiet:true});sync();}}};
+  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,lamp,scene:sceneUI,
     openProject:p=>{const run=queue.then(async()=>{loading=true;try{await open(p);}finally{loading=false;}});queue=run.catch(()=>{});return run;}});
-  window.__studio={guard,calibrate:cal,lamp,probe,auto,tools,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
+  window.__studio={guard,calibrate:cal,lamp,probe,auto,tools,scene:sceneUI,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 
   // Save & export: every way out of the app in one section, one sub-tab at a time.
   function buildSaveExport(){

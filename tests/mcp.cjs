@@ -25,7 +25,8 @@ const full = process.argv.includes('--full');
   const ok = async (name, args) => { const x = await call(name, args); assert.ok(!x.r.isError, `${name}: ${x.t}`); return x; };
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard', 'measure_relief'])
+    for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard', 'measure_relief',
+      'set_image_type', 'suggest_image_type', 'list_light_scenes', 'apply_light_scene'])
       assert.ok(names.includes(n), 'missing tool ' + n);
     assert.ok((await client.getInstructions?.() || '').includes('open_image'), 'server instructions');
     console.log('PASS mcp lists its tools');
@@ -84,6 +85,7 @@ const full = process.argv.includes('--full');
     assert.deepEqual((await ok('remove_light', { index: 1 })).json(), { lights: 1 });
     console.log('PASS set_settings (checked, one undo step), undo/redo, apply_preset, add_light / remove_light');
 
+
     const png = path.join(out, 'relit.png');
     const e = (await ok('export_image', { path: png, width: 320 })).json();
     const b = fs.readFileSync(png);
@@ -112,6 +114,21 @@ const full = process.argv.includes('--full');
     await ok('open_project', { path: proj });
     assert.equal((await ok('get_settings', { path: 'exposure' })).json(), 0.1, 'project reopened');
     console.log('PASS export_image (file, width, crop, record beside it), save_project, open_project');
+
+    // A photo's scene: the sample painting reads as artwork; as an object it opens on window light;
+    // light scenes listed and applied; effects by set_settings; back to artwork.
+    const sug = (await ok('suggest_image_type')).json();
+    assert.equal(sug.type, 'artwork', 'the sample painting reads as artwork ' + JSON.stringify(sug));
+    const typed = (await ok('set_image_type', { type: 'object' })).json();
+    assert.ok(typed.type === 'object' && typed.lightScene === 'window', JSON.stringify(typed));
+    const scenes = (await ok('list_light_scenes')).json().map((x) => x.id);
+    assert.ok(scenes.includes('gallery') && scenes.includes('golden-hour') && !scenes.includes('butterfly'), scenes.join());
+    const lit = (await ok('apply_light_scene', { id: 'gallery', flip: true })).json();
+    assert.ok(lit.id === 'gallery' && Number.isFinite(lit.exposure), JSON.stringify(lit));
+    await ok('set_settings', { changes: { 'fx.haze.on': 1, 'fx.haze.amount': 0.3 } });
+    assert.ok((await call('apply_light_scene', { id: 'nope' })).r.isError, 'an unknown scene is an error');
+    assert.equal((await ok('set_image_type', { type: 'artwork' })).json().type, 'artwork');
+    console.log('PASS suggest_image_type, set_image_type, list_light_scenes, apply_light_scene, effects');
 
     if (full) {
       // Analyze answers within 45 s; while it runs in the background it says so, and calling again keeps waiting.

@@ -15,6 +15,9 @@ import { OVERLAYS } from './overlays.js';
 import { imageMetrics, pictureStats } from './measure.js';
 import { drawResampled } from './resample.js';
 import { changeMap } from './changemap.js';
+import { SCENE_TYPES, SCENE_FIELDS, SCENE_APPLY } from './scene.js';
+import { FX } from './fx.js';
+import { LIGHT_SCENES, scenesFor } from './scenelights.js';
 
 export const API_VERSION = 1;
 const clone = (v) => structuredClone(v);
@@ -25,6 +28,8 @@ const LIGHT_FIELDS = [['x', 'Across (painting widths, 0 left … 1 right)'], ['y
   ['power', 'Power'], ['kelvin', 'Colour temperature (K), with useKelvin 1'], ['cone', 'Beam cone'], ['softness', 'Softness'], ['falloff', 'Falloff'],
   ['aimX', 'Aim across'], ['aimY', 'Aim up'], ['size', 'Lamp size'], ['lift', 'Shadow lift (−1 … 1)'], ['enabled', 'On (true/false)'], ['useKelvin', 'Use colour temperature'], ['hex', 'Colour (#rrggbb)'],
   ['kind', 'Kind: light, shade (a soft shadow: less light where it falls) or negative (a lamp in reverse)'], ['dark', 'Darkness of a shade (0–1)'],
+  ['sun', 'The sun (true/false): one direction everywhere, from the aim point to x, y, z; no falloff'],
+  ['target', 'In a photo\'s scene: all, subject (lights the subject alone) or background (everything else)'],
   ['shape', 'Shape of a shade: pool, window, blinds or leaves'], ['patternSize', 'Shape size (0.25–4)'], ['patternRot', 'Shape turn (0–360°)']];
 const GRAZE_FIELDS = [['enabled', 'Visible', 'grazeVis'], ['angle', 'Direction (0° from the right, 90° top)', null, 0, 359.9], ['elevation', 'Angle to wall', 'grazeElevation'],
   ['opacity', 'Opacity', 'grazeOpacity'], ['detail', 'Detail', 'grazeDetail'], ['fine', 'Fine', 'grazeFine'], ['reach', 'Shadow length', 'grazeReach'],
@@ -61,7 +66,7 @@ export function parseSets(text) {
   return out;
 }
 
-export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, lamp, $ }) {
+export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, lamp, scene, $ }) {
   // One call at a time: each waits for the one before (a render during an Analyze would see its trial looks).
   let queue = Promise.resolve();
   const serial = (fn) => (...args) => { const run = queue.then(() => fn(...args)); queue = run.catch(() => {}); return run; };
@@ -157,7 +162,44 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       out.push({ path: `overlays.${O.key}.on`, label: `${O.name} · on`, value: now.overlays?.[O.key]?.on });
       for (const [k, l, min, max, step] of O.fields) out.push({ path: `overlays.${O.key}.${k}`, label: `${O.name} · ${l}`, min, max, step, value: now.overlays?.[O.key]?.[k] });
     }
+    // What the picture shows (imageType() sets it with its usual light scene) and its scene's shape.
+    out.push({ path: 'scene.type', label: `What the picture shows: ${SCENE_TYPES.join(', ')}`, value: now.scene?.type });
+    for (const [k, l, min, max, step] of SCENE_FIELDS) out.push({ path: `scene.${k}`, label: `Scene · ${l}`, min, max, step, value: now.scene?.[k] });
+    out.push({ path: 'scene.apply', label: `Scene · relight ${SCENE_APPLY.join(', ')}`, value: now.scene?.apply });
+    out.push({ path: 'scene.wall', label: 'Scene · a room\'s back wall {x0, y0, x1, y1} (fractions, y from the top; null: from the photo)', value: now.scene?.wall ?? null });
+    out.push({ path: 'scene.horizon', label: 'Scene · a photo\'s horizon (fraction from the top; null: from the sky)', value: now.scene?.horizon ?? null });
+    for (const F of FX) {
+      out.push({ path: `fx.${F.key}.on`, label: `${F.name} · on`, value: now.fx?.[F.key]?.on });
+      for (const [k, l, min, max, step] of F.fields) out.push({ path: `fx.${F.key}.${k}`, label: `${F.name} · ${l}`, min, max, step, value: now.fx?.[F.key]?.[k] });
+    }
     return out;
+  }
+
+  // What the picture shows (the Scene tool): get it, or set it as the tool does (a photo type opens
+  // on its usual light scene, exposure fitted, guarded), in one undo step.
+  function imageType(type) {
+    if (type == null) return { type: state.scene.type, scene: clone(state.scene) };
+    needPhoto();
+    if (!SCENE_TYPES.includes(type)) throw new Error(`Image type is one of: ${SCENE_TYPES.join(', ')}.`);
+    if (state.mode !== 'single') throw new Error('Image types are for a single photograph.');
+    scene.setType(type);
+    return { type: state.scene.type, scene: clone(state.scene), lightScene: scene.active };
+  }
+  // What the photo itself looks like (scenedepth.js suggestType): {type, sure, why}.
+  function suggestType() {
+    needPhoto();
+    scene.suggest();
+    const s = scene.suggestion;
+    return s && { type: s.type, sure: Math.round(s.sure * 100) / 100, why: s.why };
+  }
+  const lightScenes = (type = state.scene.type) => (type === 'artwork' ? LIGHT_SCENES : scenesFor(type)).map(({ id, name, note, types }) => ({ id, name, note, types }));
+  function applyLightScene(id, opts = {}) {
+    needPhoto();
+    if (!LIGHT_SCENES.some((x) => x.id === id)) throw new Error(`No light scene "${id}". Scenes: ${LIGHT_SCENES.map((x) => x.id).join(', ')}.`);
+    const sc = scene.useScene(id, { quiet: true, flip: !!opts.flip });
+    api.refresh(); checkpoint();
+    const g = guarded();
+    return { id, name: sc.name, exposure: state.exposure, ...(g?.fixed ? { guard: g.note } : {}) };
   }
 
   // Analyze and looks (auto.js).
@@ -445,6 +487,8 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     analyze: serial(analyze), looks, applyLook: serial(applyLook),
     getAnalysis: serial(async () => getAnalysis()), setAnalysis: serial(setAnalysis),
     presets: () => Object.fromEntries(Object.entries(presets).map(([k, t]) => [k, [...t.names]])), applyPreset: serial(async (k, n) => applyPreset(k, n)),
+    imageType: serial(async (t) => imageType(t)), suggestType: serial(async () => suggestType()),
+    lightScenes, applyLightScene: serial(async (id, o) => applyLightScene(id, o)),
     addLight: serial(async (k, p) => addLight(k, p)), removeLight: serial(async (i) => removeLight(i)),
     undo: serial(async () => step('undo')), redo: serial(async () => step('redo')),
     render: serial(render), export: serial(exportImage), exportMany: serial(exportMany),

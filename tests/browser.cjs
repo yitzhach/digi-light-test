@@ -20,8 +20,9 @@ await page.click('#toolRail .railAll');console.log('PASS opens on Setup with Ana
 {const relit=await pixels();await page.evaluate(()=>{document.querySelector('#layersSection').open=true;});await slider('originalTop',1);assert.equal(await setting('originalTop'),1);await page.click('#compare');const orig=await pixels();await page.click('#compare');await settle();assert.equal(await pixels(),orig);await slider('originalTop',.5);const half=await pixels();assert.notEqual(half,relit);assert.notEqual(half,orig);await slider('originalTop',0);await settle();assert.equal(await pixels(),relit);await page.evaluate(()=>{document.querySelector('#layersSection').open=false;});console.log('PASS Original on top layer opacity');}
 {assert.ok(await page.locator('#toolSearchInput').isHidden(),'search bar hidden until the icon');await page.click('#searchBtn');assert.ok(await page.locator('#toolSearchInput').isVisible()&&await page.evaluate(()=>document.activeElement.id==='toolSearchInput'),'search icon opens and focuses it');
 await page.fill('#toolSearchInput','batch');await settle();assert.ok(await page.locator('#toolSearchList li').count()>0);await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#saveSection').open&&!document.querySelector('[data-pane=batch]').hidden));
-await page.waitForFunction(()=>!document.body.classList.contains('searchOpen'));// the pick closed it (blur, 150 ms later)
-await page.evaluate(()=>document.body.classList.add('searchOpen'));await page.fill('#toolSearchInput','graze opac');await settle();await page.fill('#toolSearchInput','Shadow lift');await settle();await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#grazeSection').open||[...document.querySelectorAll('details')].some(d=>d.open)));
+await page.waitForFunction(()=>!document.body.classList.contains('searchOpen'));// the pick closed it
+// Open it again with the icon, which focuses it: opened without focus, the pick's deferred blur close (150 ms on) can shut it again.
+await page.click('#searchBtn');await page.fill('#toolSearchInput','graze opac');await settle();await page.fill('#toolSearchInput','Shadow lift');await settle();await page.keyboard.press('Enter');await settle();assert.ok(await page.evaluate(()=>document.querySelector('#grazeSection').open||[...document.querySelectorAll('details')].some(d=>d.open)));
 await page.locator('#saveSection .subTabs [data-pane=image]').click();console.log('PASS tool search opens sections and Save & export tabs');}
 // Tool rail (desktop): a vertical rail between painting and panel; All (default) shows every section, a tool only its own.
 {const tool=()=>page.evaluate(()=>__studio.tools.current),R=await page.locator('#toolRail').boundingBox(),S=await page.locator('#stage').boundingBox(),P=await page.locator('#panel').boundingBox();
@@ -445,7 +446,8 @@ const f=await page.evaluate(async()=>{__bench.state.textureDepthMm=3;__bench.dir
 assert.equal(f.reached,'yes',JSON.stringify(f.samples));assert.equal(await setting('textureDepthMm'),f.depth);assert.equal(f.hi2,f.hi+1);
 const t=[...f.samples].sort((a,b)=>a[0]-b[0]);assert.ok(t.at(-1)[1]>t[0][1],'contrast rises with depth '+JSON.stringify(t));
 const lo=t.filter(s=>s[0]<=f.depth).at(-1),up=t.find(s=>s[0]>=f.depth);assert.ok(lo[1]<1&&up[1]>=1&&up[0]/lo[0]<1.1,'bracket '+JSON.stringify([lo,up]));
-const strip=j=>{const o=JSON.parse(j);delete o.textureDepthMm;delete o.physical;return JSON.stringify(o);};assert.equal(strip(f.after),strip(f.before));
+// Only the depth changes, calibrated, and with it what calibrated mode derives from it (studio.js DERIVED).
+const strip=j=>{const o=JSON.parse(j);for(const k of ['textureDepthMm','physical','heightScale','reliefStrength'])delete o[k];return JSON.stringify(o);};assert.equal(strip(f.after),strip(f.before));
 assert.match(await page.locator('#lampFitResult').textContent(),/^Texture depth [\d.]+ mm: the renders match .*Each lamp alone: 1: ((under|over) )?[\d.]+ mm · 2: ((under|over) )?[\d.]+ mm · 3: ((under|over) )?[\d.]+ mm/,JSON.stringify(f.per));
 await page.click('#undo');await settle();assert.equal(await setting('textureDepthMm'),JSON.parse(f.before).textureDepthMm);await page.click('#redo');await settle();assert.equal(await setting('textureDepthMm'),f.depth);
 console.log('PASS texture contrast score and Fit depth to photos',JSON.stringify({...u,depth:f.depth,lamps:f.lamps.map(d=>d&&+d.toFixed(2)),photo:f.photo.map(p=>+p.toFixed(4)),tries:f.samples.length}));}
@@ -773,8 +775,12 @@ await drag(r.x+r.width*0.15,cy,60,2);let v=(await info()).v,want=mid+60/span*(I.
 assert.ok(Math.abs(v-want)<=Math.max(I.step,(I.max-I.min)*0.03),'relative drag '+JSON.stringify({v,want,I}));
 // an up-or-down drag that starts on a slider scrolls and leaves the value alone
 await setV(mid);r=await S.boundingBox();await drag(r.x+r.width*0.8,r.y+r.height/2,3,-60);assert.ok(Math.abs((await info()).v-mid)<=I.step/2,'vertical drag leaves it '+(await info()).v);
-// a tap on the track jumps there
-r=await S.boundingBox();await touch('touchStart',[[r.x+13+span*0.85,r.y+r.height/2]]);await touch('touchEnd',[]);await m.waitForTimeout(50);v=(await info()).v;want=I.min+0.85*(I.max-I.min);
+// a tap on the track jumps there. That drag flung the panel: on a slow machine it is still coasting when
+// the tap lands (often hundreds of px, onto the painting), so wait for it to stop and bring the slider back.
+const still=()=>m.evaluate(()=>new Promise(res=>{const p=document.querySelector('#panel');let y=p.scrollTop,n=0;const f=()=>{n=p.scrollTop===y?n+1:0;y=p.scrollTop;if(n>=10)res();else requestAnimationFrame(f);};requestAnimationFrame(f);}));
+await still();await S.scrollIntoViewIfNeeded();await still();
+r=await S.boundingBox();const at=[r.x+13+span*0.85,r.y+r.height/2];assert.equal(await m.evaluate(([x,y])=>document.elementFromPoint(x,y)?.id,at),id,'the tap lands on the slider');
+await touch('touchStart',[at]);await touch('touchEnd',[]);await m.waitForTimeout(50);v=(await info()).v;want=I.min+0.85*(I.max-I.min);
 assert.ok(Math.abs(v-want)<=Math.max(I.step,(I.max-I.min)*0.03),'tap jumps '+JSON.stringify({v,want}));
 await ctx.close();console.log('PASS phone: 16px fields and no double-tap zoom; sliders drag from anywhere, scroll leaves them, tap jumps');}}
 // Automation API (window.digilight, docs/automation.md): set by name is one undo step and checked like an import,
@@ -989,5 +995,61 @@ assert.ok((r.fix[0]<2.5||r.fix[1]>r.start[1])&&r.fix[2]===1&&/Fixed/.test(r.fix[
 assert.ok(r.darkBefore.ok,'clean before the dark change');assert.ok(r.dark.fixed&&r.dark.after.newCrushed<r.dark.before.newCrushed&&r.dark.after.newCrushed<=0.00075&&/^Guard: room light /.test(r.dark.note),'darks lifted to half the limit '+JSON.stringify(r.dark));
 assert.ok(!r.short.ok&&r.short.fixed&&r.shortAmbient===0.01&&r.short.after.newCrushed<r.short.before.newCrushed&&/still over the limit/.test(r.short.note),'short of the limit: applied '+JSON.stringify([r.shortAmbient,r.short]));
 await ctx.close();console.log('PASS guard: whites and darks brought back in the same undo step, off switch, chip and Fix',JSON.stringify({note:r.g.note,dark:r.dark&&r.dark.note}));}
+// Scene (sceneui.js, scene.js, scenedepth.js): a photo of a person is suggested as a portrait, never switched by itself; Relight as
+// Portrait reads its space and opens on a light scene in one undo step; the subject stands in front of its backdrop and throws its
+// shadow there, to the side away from the light; sun lights, lights for the subject only, relighting the subject only; effects
+// (background blur keeps the subject's pixels); a tiled export matches the preview; saved in projects; validated; the API.
+{const ctx=await browser.newContext({viewport:{width:1350,height:900}});const a=await ctx.newPage();a.on('pageerror',e=>errors.push(e.message));
+await a.goto('http://127.0.0.1:'+(process.env.DIGILIGHT_PORT||8766)+'/?synth');await a.waitForFunction(()=>window.digilight&&window.__studio);await a.waitForTimeout(300);
+await a.evaluate(async()=>{__studio.guard.enabled=false;const {SCENES}=await import('/tests/scenes.mjs');const s=SCENES.portrait(240,300);
+  const c=document.createElement('canvas');c.width=s.w;c.height=s.h;c.getContext('2d').putImageData(new ImageData(s.rgba,s.w,s.h),0,0);await __bench.setSource(c);});
+await a.waitForFunction(()=>__studio.scene.suggestion,null,{timeout:60000});
+const px=(sel)=>a.evaluate((sel)=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);
+  const d=x.getImageData(0,0,c.width,c.height).data,at=([u,v])=>{const i=(Math.round(v*(c.height-1))*c.width+Math.round(u*(c.width-1)))*4;return [d[i],d[i+1],d[i+2]];};return sel.map(at);},sel);
+const S0=await a.evaluate(()=>({type:__bench.state.scene.type,sug:__studio.scene.suggestion.type,shown:!document.querySelector('#sceneQuick .sceneSuggest').hidden,hist:__studio.history.index}));
+assert.deepEqual([S0.type,S0.sug,S0.shown],['artwork','portrait',true],'suggested, not switched '+JSON.stringify(S0));
+await a.evaluate(()=>__studio.tools.show('setup'));await a.locator('#sceneQuick .sceneSuggest button').click();await a.waitForTimeout(300);
+const S1=await a.evaluate(()=>({type:__bench.state.scene.type,active:__studio.scene.active,steps:__studio.history.index,lights:__bench.state.lights.length,exp:__bench.state.exposure}));
+assert.ok(S1.type==='portrait'&&S1.active==='loop'&&S1.steps===S0.hist+1&&S1.lights===2,'Relight as Portrait: soft key, one undo step '+JSON.stringify(S1));
+await a.click('#undo');await a.waitForTimeout(200);assert.equal(await a.evaluate(()=>__bench.state.scene.type),'artwork','undo');await a.click('#redo');await a.waitForTimeout(200);assert.equal(await a.evaluate(()=>__bench.state.scene.type),'portrait','redo');
+// The space: in the Height view the face stands out of its backdrop.
+await a.evaluate(()=>{__bench.state.viewMode=2;});const [hFace,hBack]=await px([[0.5,0.36],[0.08,0.2]]);await a.evaluate(()=>{__bench.state.viewMode=0;});
+assert.ok(hFace[0]>hBack[0]+80,'subject in front of the backdrop '+JSON.stringify([hFace,hBack]));
+// One hard lamp: its shadow falls on the backdrop away from it (Shadows view: blue where shadowed).
+const one=(x,more={})=>a.evaluate(([x,more])=>digilight.setSettings({lights:[{x,y:0.62,z:0.75,power:6,kelvin:5000,useKelvin:true,hex:'#ffffff',cone:0,softness:0.5,size:0.01,falloff:2,aimX:0.5,aimY:0.62,enabled:true,...more}],ambient:0.1,shadow:1}),[x,more]);
+const shadowAt=async(pts)=>{await a.evaluate(()=>{__bench.state.viewMode=6;});const v=await px(pts);await a.evaluate(()=>{__bench.state.viewMode=0;});return v.map(([r,,b])=>b-r);};
+await one(-0.2);const left=await shadowAt([[0.78,0.4],[0.22,0.4]]);await one(1.2);const right=await shadowAt([[0.78,0.4],[0.22,0.4]]);
+assert.ok(left[0]>80&&left[1]<30&&right[1]>80&&right[0]<30,'the subject\'s shadow falls on the far side '+JSON.stringify({left,right}));
+// The sun: one direction everywhere, validated; a light for the subject alone leaves the backdrop to the room light.
+await one(-0.2,{sun:true});const sun=await shadowAt([[0.78,0.4],[0.22,0.4]]);assert.ok(sun[0]>80&&sun[1]<30,'sun shadow '+JSON.stringify(sun));
+await one(-0.2);const [bAll]=await px([[0.12,0.5]]);await one(-0.2,{target:'subject'});const [bSub,fSub]=await px([[0.12,0.5],[0.45,0.36]]);
+assert.ok(bSub[1]<bAll[1]-20&&fSub[1]>40,'a light for the subject alone '+JSON.stringify({bAll,bSub,fSub}));
+let bad=await a.evaluate(async()=>{const out=[];for(const ch of [{'lights.0.target':'moon'},{'scene.type':'nope'},{'scene.depth':9},{'fx.glow.amount':2}])try{await digilight.set(ch);out.push('accepted');}catch(e){out.push('refused');}return out;});
+assert.deepEqual(bad,['refused','refused','refused','refused'],'validated');
+// Relight the subject only: the backdrop stays exactly as photographed.
+await one(-0.2);await a.evaluate(()=>digilight.set({'scene.apply':'subject'}));const [rel]=await px([[0.1,0.15]]);await a.evaluate(()=>{__bench.state.viewMode=4;});const [orig]=await px([[0.1,0.15]]);await a.evaluate(()=>{__bench.state.viewMode=0;});
+assert.ok(rel.every((v,i)=>Math.abs(v-orig[i])<=1),'subject only: backdrop as photographed '+JSON.stringify({rel,orig}));await a.evaluate(()=>digilight.set({'scene.apply':'all'}));
+// Background blur: the subject's pixels unchanged, the backdrop's detail softened.
+const patch=(u0,v0)=>a.evaluate(([u0,v0])=>{__bench.render();const c=__bench.canvas,g=document.createElement('canvas');g.width=c.width;g.height=c.height;const x=g.getContext('2d');x.drawImage(c,0,0);
+  const w=12,X=Math.round(u0*c.width),Y=Math.round(v0*c.height),d=x.getImageData(X,Y,w,w).data;let m=0,q=0;for(let i=0;i<d.length;i+=4){m+=d[i+1];q+=d[i+1]*d[i+1];}m/=w*w;return {sd:Math.sqrt(q/(w*w)-m*m),px:Array.from(d.slice(0,48))};},[u0,v0]);
+const f0=await patch(0.47,0.34),b0=await patch(0.05,0.55);await a.evaluate(()=>digilight.set({'fx.blur.on':1,'fx.blur.amount':1,'fx.blur.size':0.02}));const f1=await patch(0.47,0.34),b1=await patch(0.05,0.55);
+assert.deepEqual(f1.px,f0.px,'the subject stays sharp');assert.ok(b1.sd<b0.sd*0.8,'the backdrop softened '+JSON.stringify([b0.sd,b1.sd]));
+// Every effect on, a light scene: a tiled export is the preview.
+const ex=await a.evaluate(async()=>{await digilight.applyLightScene('window-frame');await digilight.set({'fx.glow.on':1,'fx.haze.on':1,'fx.rays.on':1});__bench.render();
+  const c=__bench.canvas,pv=document.createElement('canvas');pv.width=c.width;pv.height=c.height;pv.getContext('2d').drawImage(c,0,0);
+  __bench.state.maxTile=120;const e=await __bench.exportFullRes();delete __bench.state.maxTile;
+  const p=pv.getContext('2d').getImageData(0,0,pv.width,pv.height).data,q=e.getContext('2d').getImageData(0,0,e.width,e.height).data;let s=0,m=0;for(let i=0;i<p.length;i+=4)for(let k=0;k<3;k++){const d=Math.abs(p[i+k]-q[i+k]);s+=d;m=Math.max(m,d);}
+  return {mean:s/(p.length*0.75),max:m,size:[e.width,e.height]};});
+assert.ok(ex.mean<0.05&&ex.max<=2,'tiled export with scene and effects matches the preview '+JSON.stringify(ex));
+// Saved in a project and back: the same picture.
+const pr=await a.evaluate(async()=>{const img=await digilight.render(),p=await digilight.getProject();await digilight.set({'scene.type':'artwork','fx.on':0});const off=await digilight.render();await digilight.setProject(p);const back=await digilight.render();return {changed:off!==img,same:back===img,type:__bench.state.scene.type};});
+assert.ok(pr.changed&&pr.same&&pr.type==='portrait','scene and effects saved in the project '+JSON.stringify(pr));
+// The API: the type with its light scene, the scenes for it, a scene by preset.
+const api=await a.evaluate(async()=>{const d=digilight,t=await d.imageType('room'),l=d.lightScenes().map(x=>x.id),c=await d.applyLightScene('candle',{flip:true}),p=await d.applyPreset('scene','gallery');
+  const desc=d.describe().filter(x=>/^(scene|fx)\./.test(x.path)).length;return {type:t.type,scene:t.lightScene,l,c:c.id,p:p.name,desc,s:await d.suggestType()};});
+assert.ok(api.type==='room'&&api.scene==='gallery'&&api.l.includes('candle')&&!api.l.includes('butterfly')&&api.c==='candle'&&api.p==='gallery'&&api.desc>=20&&api.s.type==='portrait',JSON.stringify(api));
+// The Scene tool's light scene tiles come (each rendered for this photo).
+await a.evaluate(()=>__studio.tools.show('scene'));await a.waitForFunction(()=>[...document.querySelectorAll('#sceneLooks .autoLook canvas')].filter(c=>c.width>10).length>=2,null,{timeout:240000});
+await ctx.close();console.log('PASS scene: portrait suggested, not switched; Relight as Portrait in one undo step; subject forward, its shadow away from the light; sun, subject-only light and relight; blur keeps the subject; tiled export; project; validated; API',JSON.stringify({left,right,ex}));}
 assert.deepEqual(errors,[]);console.log('PASS no browser or WebGL errors');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

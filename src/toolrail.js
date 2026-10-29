@@ -6,6 +6,7 @@ const svg = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 export const TOOLS = [
   ['setup', 'Setup', svg('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/>')],
   ['auto', 'Auto', svg('<path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9z"/><path d="M18.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>')],
+  ['scene', 'Scene', svg('<circle cx="16.5" cy="7" r="2.5"/><path d="M2.5 19.5l6-8 4 5 2.5-3 6.5 6z"/>')],
   ['light', 'Light', svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>')],
   ['graze', 'Graze', svg('<path d="M2.5 19.5h19"/><path d="M6 19.5c.8-3.5 2.7-3.5 3.5 0M12 19.5c.8-4.5 3-4.5 3.8 0M18 19.5c.5-2.5 1.8-2.5 2.3 0"/><path d="M2.5 6.5l9 7M2.5 10.5l5 3.9"/>')],
   ['layers', 'Layers', svg('<path d="M12 3.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12.5l9 4.8 9-4.8"/><path d="M3 16.5l9 4.8 9-4.8"/>')],
@@ -19,6 +20,7 @@ export const TOOLS = [
 const ANCHORS = {
   setup: ['openPhoto', 'src', 'quickSetup'],
   auto: ['autoSection'],
+  scene: ['sceneSection'],
   light: ['lightPanel'],
   graze: ['grazeSection'],
   layers: ['layersSection'],
@@ -86,6 +88,7 @@ export function initToolRail({ panel }) {
       void panel.offsetHeight; panel.scrollTop = 0;   // after the new layout, or scroll anchoring moves it
     }
     if (remember) { saved[layout()] = tool; try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch { /* private mode */ } }
+    document.dispatchEvent(new CustomEvent('digilight:tool', { detail: { tool } }));
   }
   // Show the tool holding an element (tool search, links between sections).
   function reveal(el) {

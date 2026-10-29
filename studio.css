@@ -281,3 +281,17 @@ body.searchOpen #toolSearch { display:block; padding-bottom:6px; }
 #guardChip { pointer-events:none; }   /* a light's dot under it can still be dragged; only Fix takes clicks */
 #guardChip button { pointer-events:auto; flex:none; font:inherit; font-weight:600; padding:4px 12px; border-radius:12px; border:0; background:#ffe2a8; color:#3a2a10; cursor:pointer; min-height:28px; }
 body.fullView #guardChip { top:20px; }
+
+/* Scene (sceneui.js): what the picture shows, light scenes, effects */
+.sceneTypes { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 6px; }
+.sceneTypes button { flex:1 1 auto; padding:5px 7px; font-size:12px; }
+.sceneQuick { margin:2px 0 10px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+.sceneQuick > span { color:var(--dim); font-size:12px; }
+.sceneSuggest { color:var(--ink); }
+.sceneSuggest button { margin-left:4px; padding:3px 8px; font-size:11px; }
+#sceneBody[hidden], #sceneRoom[hidden], #sceneHorizonRow[hidden] { display:none; }
+#sceneSliders .row[hidden] { display:none; }
+#wallGuide { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.lightTarget button { font-size:11px; }
+/* A photo's scene: the painting-only parts of Quick setup are dimmed, still there for Artwork */
+body.sceneMode #quickSetup > :not(.sceneQuick):not(.views):not(#autoStatus) { opacity:.45; }
