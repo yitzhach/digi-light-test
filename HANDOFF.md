@@ -7,15 +7,20 @@ current state, what waits on the user and what is next. Where things are, how to
 **docs/roadmap.md**. Real-photo evidence for measured relief: **docs/real-light-test.md**.
 
 ## Now
-Everything is on `main` (10-30, faster sharp zoom).
-- **Sharp zoom keeps what it rendered** (app.js "sharp zoom"). Zoomed in, the full-resolution view
-  was thrown away on every scroll and rendered again (~4 s here in software GL: relief build ~60%,
-  shading ~30%, resampling ~5%). Now rendered parts stay as patches on a 64 px grid: scrolling
-  back over them is sharp at once (measured 4.1 s → ~10 ms), only newly exposed strips render,
-  a band of 256 px around the view renders ahead after a 0.3 s pause, and a new zoom keeps the old
-  detail stretched until the new size is ready. Idle wait 250 → 100 ms; an export resumes the fill.
-  ~128 MB cap, farthest patches dropped first. Stitched patches match the export (diff 0.02).
-  `__bench.sharp()` / `api.sharp()` now compose the view from the patches.
+Everything is on `main` (10-30, faster sharp zoom and re-shading).
+- **Sharp zoom keeps what it rendered** (app.js "sharp zoom"). Rendered parts stay as patches on
+  a 64 px grid: scrolling back is sharp at once (4.1 s → ~10 ms), only newly exposed strips render,
+  a 256 px band renders ahead after a 0.3 s pause, a new zoom shows the old detail stretched until
+  the new is ready (user: "zoomed scrolling fixed").
+- **Light, colour and tone changes only re-shade.** Each patch keeps its relief (its own GBuffers,
+  build-only targets freed, padded 32 px beyond the lights' reach so a moved light rarely
+  rebuilds; ~256 MB budget, the view's always kept). Large photo at 300% in software GL: light or
+  exposure change 5.8 s → 3.0 s back to sharp (relief build skipped; on a GPU the share saved is
+  larger). The sharp layer no longer borrows the preview's relief, so the first edit after it no
+  longer rebuilds the preview's. A surface change (relief sliders, new photo) still rebuilds.
+- **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
+  1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
+  `__bench.sharpStats()` counts relief builds vs shades.
 - Photos as spaces (Scene tool), browser.cjs flakes fixed, plaster not a sky, undo steps derived:
   docs/history.md "HANDOFF, 10-30".
 
@@ -30,8 +35,8 @@ Everything is on `main` (10-30, faster sharp zoom).
 5. Is the guard chip welcome? Roadmap §6 choices (lamp photos per piece, evenness slider, blind
    voting, phone or iMac, default look, 16-bit / TIFF). Older open picks: docs/history.md.
 6. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
-7. On the iMac, zoomed in: is scrolling sharp soon enough now? If a fresh area or a light change
-   is still slow, say which (Next up 4).
+7. On the iMac: after a light or exposure change, how long until the zoomed view is sharp
+   again? And is it a Retina (5K) iMac (then fit-to-screen is sharp now too)?
 
 ## Next up
 1. Scene: a real depth model (Depth Anything V2 small, ~25 MB ONNX, in the browser by WebGPU or
@@ -41,9 +46,9 @@ Everything is on `main` (10-30, faster sharp zoom).
    elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
 3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:
    the finest band's slopes, more sheen than the slider's top for the door.
-4. Sharp zoom, if still slow on the iMac: keep each patch's relief so a light change re-shades
-   without rebuilding it; async readback (no stall while scrolling); a quick half-size pass first.
-5. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
+4. Sharp zoom, if still slow on the iMac: async readback (no stall while it renders); re-shade live
+   during a drag when the GPU is quick enough; a quick half-size pass for fresh areas.
+5. Roadmap NEXT in order: `?round=` link, agent tools
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
 ## Quick test set (details: docs/working.md)

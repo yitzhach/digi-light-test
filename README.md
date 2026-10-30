@@ -214,14 +214,16 @@ like an image editor's hand tool: hold Space and drag, or drag with the middle
 button. A dot outside the visible
 part of the stage, beyond the painting or scrolled out of view, is pinned to its
 edge with a dashed ring. Zoom is a view setting: it is not undone or saved.
-The preview works on a copy of at most 1400 px, so zoomed in on a larger photo the
+The preview works on a copy of at most 1400 px, so zoomed in on a larger photo (or at
+fit on a high-density screen, when the photo has the pixels) the
 view sharpens a moment after you stop: the visible part is rendered again from the
 full-resolution photo, through the same tiles as Export, at about one pixel per
 screen pixel. What you inspect at 400% is what the export contains. What has been
 rendered stays: scrolling back over it is sharp at once, a band around the view is
 rendered ahead while you look, and a new zoom shows the old detail stretched until
 the new is ready. A change to the picture shows the working copy until the view is
-still again (single photographs only).
+still again; a change to lights, colour or tone comes back sooner, since the relief
+already worked out for the sharp view is kept and only lit again (single photographs only).
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
 Split and brush mode.
 

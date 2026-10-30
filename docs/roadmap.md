@@ -61,7 +61,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
     full-screen viewer, each guarded as a tap gives it); "Pin as A" (Hold flips to the pinned look;
     P, hold Space); press and hold an Auto thumbnail to see it on the picture (no undo step);
     thumbnails 100 px minimum (three across on a phone).
-  - Let the sharp layer render at fit-to-screen (`sharpPlan` refuses at zoom ≤1, app.js 1127).
+  - **Done 10-30:** the sharp layer renders at fit-to-screen on dense screens; it keeps rendered
+    patches across scrolls and zooms, and each patch's relief across light and tone changes.
   - A `?round=` link so a round renders on your own GPU at about 1–2 s per look.
 - **Agent tools.**
   - `open_image` accepts data URLs (MCP line 100).
