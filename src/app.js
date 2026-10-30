@@ -1176,33 +1176,53 @@ function renderNow() {
 // its own pixels. Once the view has been still for a moment, the visible part is
 // rendered again from the full-resolution source, through the export's tiles with
 // the export's rescaled settings, at about one pixel per screen pixel, and laid
-// exactly over the preview. Anything that changes the picture or the view hides it
-// at once and starts the wait again; a newer request cancels a render in flight.
-const SHARP_IDLE_MS = 250;
-const sharp = document.createElement('canvas');
+// exactly over the preview. What is rendered is kept as patches (canvases on a grid
+// of SHARP_CELL output pixels): scrolling keeps them and renders only what it brings
+// into view, then a band around the view in the background, so a short scroll is
+// sharp at once. A new zoom keeps the old patches, stretched, until the view is
+// filled at the new size. Anything that changes the picture drops them all; a newer
+// request cancels a render in flight (between tiles).
+const SHARP_IDLE_MS = 100;
+const SHARP_CELL = 64;            // a multiple of 8, as glow and background blur's tiles need
+const SHARP_RING = 4;             // cells rendered ahead around the view
+const SHARP_MAX_PX = 32e6;        // pixels kept (4 bytes each); the farthest patches go first
+const sharp = document.createElement('div');
 sharp.id = 'sharp';
-sharp.style.display = 'none';
 paper.appendChild(sharp);
-let sharpTimer = 0, sharpJob = 0, sharpShown = null;
+let sharpTimer = 0, sharpJob = 0;
+// The patches at the current size ({canvas, c0, r0, c1, r1} in cells) with the cells they
+// cover (sharpGrid.covered, one count per cell), and the patches of an earlier zoom.
+let sharpGrid = null, sharpPatches = [], sharpStale = [];
 
 /** Cancel a pending or running sharp render, leaving what is shown. */
 function cancelSharp() {
   clearTimeout(sharpTimer);
   sharpJob++;
 }
+function dropPatches(list) { for (const p of list) p.canvas.remove(); }
+/** The picture changed: no patch shows it any more. */
 function hideSharp() {
   cancelSharp();
-  if (sharpShown) { sharp.style.display = 'none'; sharpShown = null; }
+  dropPatches(sharpPatches); dropPatches(sharpStale);
+  sharpPatches = []; sharpStale = []; sharpGrid = null;
 }
+/** The view changed: keep what is rendered and fill in the rest once it is still. */
 function scheduleSharp() {
-  hideSharp();
-  if (sharpPlan()) sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS);
+  cancelSharp();
+  const plan = sharpPlan();
+  if (!plan) { hideSharp(); return; }
+  if (sharpGrid && (sharpGrid.outW !== plan.outW || sharpGrid.outH !== plan.outH)) {
+    sharpStale.push(...sharpPatches);
+    sharpPatches = []; sharpGrid = null;
+  }
+  sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS);
 }
 
 /**
  * What a sharp render of the view would cover, or null when it would add nothing:
  * not zoomed past fit, the screen shows no more pixels than the preview has, or the
- * photo has no more either. Single photographs only.
+ * photo has no more either. Single photographs only. rect: the visible part, in
+ * output pixels of an outW x outH render.
  */
 function sharpPlan() {
   if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource || (state.viewZoom || 1) <= 1) return null;
@@ -1221,29 +1241,106 @@ function sharpPlan() {
   return rect.w > 0 && rect.h > 0 ? { outW, outH, rect } : null;
 }
 
-async function renderSharp() {
-  const plan = sharpPlan();
-  if (!plan) return;
-  const job = sharpJob, { outW, outH, rect } = plan;
+/** The cells [c0, c1) x [r0, r1) covering `rect`, widened by `ring` cells, within the picture. */
+function cellSpan(rect, ring = 0) {
+  const C = SHARP_CELL, { cols, rows } = sharpGrid;
+  return {
+    c0: Math.max(0, Math.floor(rect.x / C) - ring), c1: Math.min(cols, Math.ceil((rect.x + rect.w) / C) + ring),
+    r0: Math.max(0, Math.floor(rect.y / C) - ring), r1: Math.min(rows, Math.ceil((rect.y + rect.h) / C) + ring),
+  };
+}
+function cover(p, n) {
+  const { covered, cols } = sharpGrid;
+  for (let r = p.r0; r < p.r1; r++) for (let c = p.c0; c < p.c1; c++) covered[r * cols + c] += n;
+}
+
+/**
+ * Render the cells of `span` no patch covers yet, as one patch: their bounding box,
+ * through the export's tiles. False when it was cancelled.
+ */
+async function fillSpan(span, job) {
+  const { outW, outH, covered, cols } = sharpGrid, C = SHARP_CELL;
+  let c0 = Infinity, c1 = -1, r0 = Infinity, r1 = -1;
+  for (let r = span.r0; r < span.r1; r++) {
+    for (let c = span.c0; c < span.c1; c++) {
+      if (covered[r * cols + c]) continue;
+      c0 = Math.min(c0, c); c1 = Math.max(c1, c + 1); r0 = Math.min(r0, r); r1 = Math.max(r1, r + 1);
+    }
+  }
+  if (c1 < 0) return true;
+  const x = c0 * C, y = r0 * C;
+  const rect = { x, y, w: Math.min(outW, c1 * C) - x, h: Math.min(outH, r1 * C) - y };
+  const out = document.createElement('canvas');
+  out.width = rect.w; out.height = rect.h;
   // The tiles reuse the preview's surface targets, so the next frame rebuilds them.
   surfaceClobbered = true;
   let done = false;
-  sharp.width = rect.w; sharp.height = rect.h;
   try {
     done = await renderTiles(glctx, { gbuf, photo, shader },
       { mode: 'single', source: fullSource, width: outW, height: outH }, renderState(outW), rect,
-      sharp.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting });
+      out.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting });
   } catch (e) {
     console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
   } finally {
     gbuf.resize(imgW, imgH);   // give back the tile-sized targets now, not at the next frame
   }
-  if (!done || job !== sharpJob) return;
-  Object.assign(sharp.style, {
-    left: `${rect.x / outW * 100}%`, top: `${rect.y / outH * 100}%`,
-    width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%`, display: '',
+  if (!done || job !== sharpJob) return false;
+  Object.assign(out.style, { left: `${x / outW * 100}%`, top: `${y / outH * 100}%`, width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%` });
+  sharp.appendChild(out);
+  const patch = { canvas: out, c0, r0, c1, r1 };
+  sharpPatches.push(patch);
+  cover(patch, 1);
+  return true;
+}
+
+async function renderSharp() {
+  const plan = sharpPlan();
+  if (!plan) return;
+  const job = sharpJob, { outW, outH, rect } = plan;
+  if (!sharpGrid) {
+    const cols = Math.ceil(outW / SHARP_CELL), rows = Math.ceil(outH / SHARP_CELL);
+    sharpGrid = { outW, outH, cols, rows, covered: new Uint16Array(cols * rows) };
+  }
+  const view = cellSpan(rect);
+  if (!await fillSpan(view, job)) return;
+  // The view is filled at this size: an earlier zoom's patches can go.
+  dropPatches(sharpStale); sharpStale = [];
+  // Too many pixels kept: the patches farthest from the view go first.
+  const mc = (view.c0 + view.c1) / 2, mr = (view.r0 + view.r1) / 2;
+  const far = (p) => Math.hypot((p.c0 + p.c1) / 2 - mc, (p.r0 + p.r1) / 2 - mr);
+  sharpPatches.sort((a, b) => far(a) - far(b));
+  let px = 0;
+  sharpPatches = sharpPatches.filter((p) => {
+    px += p.canvas.width * p.canvas.height;
+    if (px <= SHARP_MAX_PX || far(p) === 0) return true;
+    p.canvas.remove(); cover(p, -1);
+    return false;
   });
-  sharpShown = { outW, outH, rect: { ...rect } };
+  // Then, after a pause, a band around it, a side at a time so a new scroll waits for little.
+  await new Promise((r) => setTimeout(r, 300));
+  if (job !== sharpJob) return;
+  const ring = cellSpan(rect, SHARP_RING);
+  const sides = [
+    { ...ring, r1: view.r0 }, { ...ring, r0: view.r1 },
+    { ...ring, r0: view.r0, r1: view.r1, c1: view.c0 }, { ...ring, r0: view.r0, r1: view.r1, c0: view.c1 },
+  ];
+  for (const side of sides) if (!await fillSpan(side, job)) return;
+}
+
+/**
+ * The sharp view as one canvas, once the visible part is all rendered at the current
+ * size: the output-pixel rectangle of an outW x outH render it holds, and its pixels.
+ */
+function sharpView() {
+  const plan = sharpPlan();
+  if (!plan || !sharpGrid || sharpGrid.outW !== plan.outW || sharpGrid.outH !== plan.outH) return null;
+  const { rect } = plan, { covered, cols } = sharpGrid, span = cellSpan(rect);
+  for (let r = span.r0; r < span.r1; r++) for (let c = span.c0; c < span.c1; c++) if (!covered[r * cols + c]) return null;
+  const out = document.createElement('canvas');
+  out.width = rect.w; out.height = rect.h;
+  const g = out.getContext('2d');
+  for (const p of sharpPatches) g.drawImage(p.canvas, p.c0 * SHARP_CELL - rect.x, p.r0 * SHARP_CELL - rect.y);
+  return { outW: plan.outW, outH: plan.outH, rect: { ...rect }, canvas: out };
 }
 
 function syncOutputs() {
@@ -1403,7 +1500,7 @@ async function boot() {
       const width = Math.max(1, Math.min(fullW, Math.round(outW))), height = Math.max(1, Math.round(fullH * width / fullW));
       return exportImage({ mode: 'single', source: fullSource, width, height, rect }, null, { viewMode: 0 });
     },
-    sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
+    sharp: sharpView,
     // Many variants in one tiled pass (automation exportMany): captureState(outW) is the live
     // settings as an export outW px wide would use them, with the preview's measurements brought
     // up to date, and the key of the relief they need; exportStates(states, {width, rect}) renders
@@ -1426,6 +1523,7 @@ async function boot() {
       } finally {
         state.exporting = false;
         surfaceClobbered = true;
+        scheduleSharp();
       }
     },
     // A new light, as + Light / + Shadow make it ('light', 'shade' or 'negative').
@@ -1449,7 +1547,7 @@ async function boot() {
     exportFullRes: (job, onP) => exportImage(job || { mode: 'single', source: fullSource }, onP),
     // The sharp zoom overlay, while it is shown: its canvas and the output-pixel
     // rectangle of an outW x outH render that it holds.
-    sharp: () => sharpShown && { ...sharpShown, canvas: sharp },
+    sharp: sharpView,
     // --- diagnostics used by the test harness
     shots: () => shots,
     measured: () => measured && { on: measured.on, w: measured.w, h: measured.h, height: measured.height, info: measured.info },
@@ -1614,6 +1712,7 @@ async function exportImage(job, onProgress, extra) {
   } finally {
     state.exporting = false;
     surfaceClobbered = true;
+    scheduleSharp();   // what the export cancelled
   }
 }
 

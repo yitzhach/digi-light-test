@@ -13,7 +13,7 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
 
 ## Map (src/)
 - `app.js` — main bench: load image, build the G-buffer (relief rebuilt only when `surfaceKey()`
-  changes), re-shade on interaction, sharp zoom, exports (`exportFull`, `renderAt`, `exportStates`)
+  changes), re-shade on interaction, sharp zoom (patches kept per zoom size, `sharpView` for tests), exports (`exportFull`, `renderAt`, `exportStates`)
 - `studio.js` + `presets.js` — Creative Studio UI, surface/material/lighting presets, undo History
 - `auto.js` — Auto: Analyze (readout, depth fit, raking direction) and the one-tap looks
   (`BUILT_IN` with fixed ids, `LOOK_BIAS` / `LOOK_VERSION` by id), Strength mix

@@ -337,18 +337,21 @@ await page.screenshot({path:outputDir + '/desktop-tested.png'});
 await page.waitForFunction(()=>__bench.canvas.width===1400);await settle();await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null,'no overlay at fit');
 while(await setting('viewZoom')<4)await page.click('#zoomIn');await page.evaluate(()=>{const s=document.querySelector('#scroller');s.scrollLeft=s.scrollWidth*.3;s.scrollTop=s.scrollHeight*.3;});
 await page.waitForFunction(()=>__bench.sharp());await page.screenshot({path:outputDir+'/zoom-400-sharp.png'});
-const compareSharp=()=>page.evaluate(async()=>{const s=__bench.sharp(),{x,y,w,h}=s.rect,o=s.canvas.getBoundingClientRect(),c=__bench.canvas.getBoundingClientRect(),v=document.querySelector('#scroller').getBoundingClientRect();
+const compareSharp=()=>page.evaluate(async()=>{const s=__bench.sharp(),{x,y,w,h}=s.rect,P=[...document.querySelectorAll('#sharp canvas')].map(e=>e.getBoundingClientRect()),o={left:Math.min(...P.map(b=>b.left)),top:Math.min(...P.map(b=>b.top)),right:Math.max(...P.map(b=>b.right)),bottom:Math.max(...P.map(b=>b.bottom))},c=__bench.canvas.getBoundingClientRect(),v=document.querySelector('#scroller').getBoundingClientRect();
   const a=s.canvas.getContext('2d').getImageData(0,0,w,h).data,e=await __bench.exportFullRes(),b=e.getContext('2d').getImageData(x,y,w,h).data;
   const m=document.createElement('canvas');m.width=w;m.height=h;const k=__bench.canvas.width/s.outW;m.getContext('2d').drawImage(__bench.canvas,x*k,y*k,w*k,h*k,0,0,w,h);const p=m.getContext('2d').getImageData(0,0,w,h).data;
   let d=0,soft=0,n=0;for(let i=0;i<a.length;i+=4)for(let j=0;j<3;j++){d+=Math.abs(a[i+j]-b[i+j]);soft+=Math.abs(p[i+j]-b[i+j]);n++;}
   return {outW:s.outW,exportW:e.width,rect:s.rect,diff:d/n,soft:soft/n,edges:[o.left-Math.max(c.left,v.left),o.top-Math.max(c.top,v.top),o.right-Math.min(c.right,v.right),o.bottom-Math.min(c.bottom,v.bottom)]};});
 const r=await compareSharp();assert.ok(r.outW===1800&&r.exportW===1800&&r.rect.x>0&&r.rect.y>0,JSON.stringify(r));assert.ok(r.diff<0.5,'overlay vs export '+r.diff);assert.ok(r.soft>3*r.diff+1,'preview is softer '+JSON.stringify(r));
-assert.ok(r.edges.every(e=>Math.abs(e)<3),'overlay lies over the visible part '+r.edges);
+assert.ok(r.edges[0]<1&&r.edges[1]<1&&r.edges[2]>-1&&r.edges[3]>-1,'patches cover the visible part '+r.edges);
 // With the graze light on (Long shadows) the overlay must still match the export of the same region.
 await page.selectOption('#grazePreset','Long shadows');await settle();assert.equal((await setting('graze')).enabled,true);await page.waitForFunction(()=>__bench.sharp());{const g=await compareSharp();assert.ok(g.diff<0.5,'graze overlay vs export '+g.diff);assert.deepEqual(g.rect,r.rect,'same region');console.log('graze overlay diff',+g.diff.toFixed(4));}
 await page.evaluate(()=>{document.querySelector('#sharp').style.display='none';});await page.screenshot({path:outputDir+'/zoom-400-preview.png'});await page.evaluate(()=>{document.querySelector('#sharp').style.display='';});
-await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));assert.equal(await page.evaluate(()=>__bench.sharp()),null,'scrolling hides it');
-// Checked as the slider moves: the overlay comes back 250 ms after the view is still again.
+// Scrolling keeps what is rendered: once the band around the view is done (the view and a patch on each side), a short scroll is sharp at once, from the patches already there, and still matches the export.
+{const patches=()=>page.evaluate(()=>document.querySelectorAll('#sharp canvas').length);await page.waitForFunction(()=>document.querySelectorAll('#sharp canvas').length===5,null,{timeout:90000});const n=await patches();
+await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));assert.ok(await page.evaluate(()=>!!__bench.sharp()),'scrolling keeps it');
+const g=await compareSharp();assert.equal(await patches(),n,'nothing rendered again');assert.ok(g.diff<0.5,'scrolled overlay vs export '+g.diff);assert.notDeepEqual(g.rect,r.rect);console.log('scrolled overlay diff',+g.diff.toFixed(4),'patches',n);}
+// Checked as the slider moves: a slider drops the patches, and they come back once the view is still again.
 await page.waitForFunction(()=>__bench.sharp());assert.equal(await page.locator('#fineRelief').evaluate(el=>{el.value=1.1;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return __bench.sharp();}),null,'a slider hides it');await settle();
 await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
