@@ -7,32 +7,17 @@ current state, what waits on the user and what is next. Where things are, how to
 **docs/roadmap.md**. Real-photo evidence for measured relief: **docs/real-light-test.md**.
 
 ## Now
-Everything is on `main` (10-29, photos relit as spaces).
-- **Photos, people, rooms and booths relit as spaces** (new Scene tool; README "Scene"). Say what
-  the picture shows: Artwork (the painting relighter, bit for bit unchanged), Photo, Portrait,
-  Room · booth or Object; the app suggests one. A photo type reads its space from the photo alone
-  (src/scenedepth.js, ~0.1 s; no AI model: the CDN and Hugging Face are blocked here): depth, the
-  subject's outline, sky, a room's walls, the photo's own light. Light then falls off into the
-  background, the subject throws its shadow on what is behind it, a light can be the sun or light
-  the subject or the background alone. 18 one-tap light scenes (sun at three hours; window plain,
-  framed, blinds, leaves; overcast; gallery spots; five studio setups; neon, candle, moon, stage)
-  and four effects (haze, light rays, glow, background blur); exports match the preview tile for
-  tile. API `imageType` / `suggestType` / `lightScenes` / `applyLightScene`, CLI `--type --scene
-  --flip`, four MCP tools (docs/automation.md). Look goldens only gained the `scene` / `fx` keys.
-- **browser.cjs flakes: both causes found, fixed in the test, checks kept** (docs/working.md
-  Gotchas). "Tap jumps": the test's vertical drag flings the panel, and on a slow machine it is
-  still coasting when the tap lands (on the painting). TAP_MS was not it. Reproduced with CPU
-  throttling (the old block failed 4 of 5 runs at 3-6×; fixed, 10 of 10 pass at 1-12×). Tool search:
-  re-opened by hand without focus, so the first pick's deferred blur close shut it (reproduced by
-  timing); now opened with the icon. The full suite, run alone, passes (65 checks, ~20 min), as do
-  mcp.cjs, exact.cjs (artwork bit for bit) and scenedepth.mjs.
-- The type suggestion read the lintel crop's white plaster as an overcast sky (Photo): a grey sky
-  must now be smoother than a blue one. All 11 test photos read as Artwork (browser.cjs checks 3;
-  tests/scenes.mjs has a plaster panel matched to the lintel's texture, and a grey sky).
-- Undo steps now hold the derived values of their own settings (studio.js `snapshot` derives
-  first): a new photo's step held stale ones, and undoing to it lost Redo. So Fit depth's check
-  now sets `heightScale` / `reliefStrength` aside with the depth (they follow it when calibrated).
-- Earlier: docs/history.md "HANDOFF, 10-29".
+Everything is on `main` (10-30, faster sharp zoom).
+- **Sharp zoom keeps what it rendered** (app.js "sharp zoom"). Zoomed in, the full-resolution view
+  was thrown away on every scroll and rendered again (~4 s here in software GL: relief build ~60%,
+  shading ~30%, resampling ~5%). Now rendered parts stay as patches on a 64 px grid: scrolling
+  back over them is sharp at once (measured 4.1 s → ~10 ms), only newly exposed strips render,
+  a band of 256 px around the view renders ahead after a 0.3 s pause, and a new zoom keeps the old
+  detail stretched until the new size is ready. Idle wait 250 → 100 ms; an export resumes the fill.
+  ~128 MB cap, farthest patches dropped first. Stitched patches match the export (diff 0.02).
+  `__bench.sharp()` / `api.sharp()` now compose the view from the patches.
+- Photos as spaces (Scene tool), browser.cjs flakes fixed, plaster not a sky, undo steps derived:
+  docs/history.md "HANDOFF, 10-30".
 
 ## Waiting on the user
 1. Try the Scene tool on your own photos (a booth shot, a portrait, a piece on a wall or floor):
@@ -45,6 +30,8 @@ Everything is on `main` (10-29, photos relit as spaces).
 5. Is the guard chip welcome? Roadmap §6 choices (lamp photos per piece, evenness slider, blind
    voting, phone or iMac, default look, 16-bit / TIFF). Older open picks: docs/history.md.
 6. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
+7. On the iMac, zoomed in: is scrolling sharp soon enough now? If a fresh area or a light change
+   is still slow, say which (Next up 4).
 
 ## Next up
 1. Scene: a real depth model (Depth Anything V2 small, ~25 MB ONNX, in the browser by WebGPU or
@@ -54,7 +41,9 @@ Everything is on `main` (10-29, photos relit as spaces).
    elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
 3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:
    the finest band's slopes, more sheen than the slider's top for the door.
-4. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
+4. Sharp zoom, if still slow on the iMac: keep each patch's relief so a light change re-shades
+   without rebuilding it; async readback (no stall while scrolling); a quick half-size pass first.
+5. Roadmap NEXT in order: sharp layer at fit-to-screen, `?round=` link, agent tools
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
 ## Quick test set (details: docs/working.md)

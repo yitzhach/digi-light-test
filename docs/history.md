@@ -7,6 +7,34 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 10-30 ("Now" bullets moved out when the sharp zoom cache went in)
+Everything is on `main` (10-29, photos relit as spaces).
+- **Photos, people, rooms and booths relit as spaces** (new Scene tool; README "Scene"). Say what
+  the picture shows: Artwork (the painting relighter, bit for bit unchanged), Photo, Portrait,
+  Room · booth or Object; the app suggests one. A photo type reads its space from the photo alone
+  (src/scenedepth.js, ~0.1 s; no AI model: the CDN and Hugging Face are blocked here): depth, the
+  subject's outline, sky, a room's walls, the photo's own light. Light then falls off into the
+  background, the subject throws its shadow on what is behind it, a light can be the sun or light
+  the subject or the background alone. 18 one-tap light scenes (sun at three hours; window plain,
+  framed, blinds, leaves; overcast; gallery spots; five studio setups; neon, candle, moon, stage)
+  and four effects (haze, light rays, glow, background blur); exports match the preview tile for
+  tile. API `imageType` / `suggestType` / `lightScenes` / `applyLightScene`, CLI `--type --scene
+  --flip`, four MCP tools (docs/automation.md). Look goldens only gained the `scene` / `fx` keys.
+- **browser.cjs flakes: both causes found, fixed in the test, checks kept** (docs/working.md
+  Gotchas). "Tap jumps": the test's vertical drag flings the panel, and on a slow machine it is
+  still coasting when the tap lands (on the painting). TAP_MS was not it. Reproduced with CPU
+  throttling (the old block failed 4 of 5 runs at 3-6×; fixed, 10 of 10 pass at 1-12×). Tool search:
+  re-opened by hand without focus, so the first pick's deferred blur close shut it (reproduced by
+  timing); now opened with the icon. The full suite, run alone, passes (65 checks, ~20 min), as do
+  mcp.cjs, exact.cjs (artwork bit for bit) and scenedepth.mjs.
+- The type suggestion read the lintel crop's white plaster as an overcast sky (Photo): a grey sky
+  must now be smoother than a blue one. All 11 test photos read as Artwork (browser.cjs checks 3;
+  tests/scenes.mjs has a plaster panel matched to the lintel's texture, and a grey sky).
+- Undo steps now hold the derived values of their own settings (studio.js `snapshot` derives
+  first): a new photo's step held stale ones, and undoing to it lost Redo. So Fit depth's check
+  now sets `heightScale` / `reliefStrength` aside with the depth (they follow it when calibrated).
+- Earlier: docs/history.md "HANDOFF, 10-29".
+
 ## HANDOFF, 10-29 ("Now" bullets moved out when photo relighting went in)
 Everything is on `main` (10-28, rough surface; work branch `claude/quirky-allen-tna7jh`).
 - **The sunlit-facets gap, found and mostly closed** (docs/real-light-test.md "10-28, rough
