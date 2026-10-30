@@ -55,11 +55,16 @@ export function requiredMargin(state, W = 0) {
  * tile's surface is then built once, from the first, and every variant is shaded on it
  * with its own smoothings, lights and tone, so a round of looks costs one relief build.
  *
+ * Kept reliefs (the sharp zoom): `relief` {get(key), make(key)} gives each padded tile
+ * (key "x,y,w,h") its own GBuffer, which `get` returns again later so a light or tone
+ * change only shades; `margin` makes the padding at least that wide, so a kept relief
+ * still has room when a light's shadows grow a little.
+ *
  * @param builders {gbuf, photo, shader}
  * @param job      {mode:'single', source, width?, height?} | {mode:'photometric', sources:[], solver}
  * @returns true when done; false if `cancelled()` turned true between tiles
  */
-export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled } = {}) {
+export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled, relief, margin: minMargin = 0 } = {}) {
   const states = Array.isArray(state) ? state : [state], outs = Array.isArray(out) ? out : [out];
   state = states[0];
   const { gl, caps } = glctx;
@@ -77,7 +82,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
   // Glow and background blur work on grids a half to an eighth of the tile's size (postfx.js):
   // tiles on multiples of 8 pixels put those grids where the whole picture's are.
   const align = states.some(postWanted) ? 8 : 1;
-  const margin = Math.ceil(Math.max(...states.map((st) => requiredMargin(st, W))) / align) * align;
+  const margin = Math.ceil(Math.max(minMargin, ...states.map((st) => requiredMargin(st, W))) / align) * align;
   // Keep the padded tile inside the driver's texture limit with room to spare;
   // several float targets of this size are alive at once.
   // Overridable so the seam behaviour can be exercised on small test images, and
@@ -122,11 +127,16 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
         // The same region in source pixels.
         const from = [px0 * kx, py0 * ky, pw * kx, ph * ky];
 
-        cut.width = pw; cut.height = ph;
-        const resized = kx !== 1 || ky !== 1;
+        const key = `${px0},${py0},${pw},${ph}`;
+        const kept = !photometric && relief ? relief.get(key) : null;
+        const g = kept || (!photometric && relief ? relief.make(key) : gbuf);
 
         let targets;
-        if (photometric) {
+        if (kept) {
+          // The relief is already built: only this state's smoothings of it, if they differ.
+          g.buildGraze(state.grazeSigmaPx ?? 0); g.buildShadow(state.shadowSigmaPx ?? 0); g.buildStroke(state.strokeSigmaPx ?? 0);
+          targets = g.targets;
+        } else if (photometric) {
           // Cut the same region out of every exposure. The solve is per pixel and
           // assumes all exposures see the same pixel, so they must be cut alike.
           const pieces = sources.map((src) => {
@@ -144,6 +154,8 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
             meanSigma: state.psMeanSigma || 16,
           });
         } else {
+          cut.width = pw; cut.height = ph;
+          const resized = kx !== 1 || ky !== 1;
           cutx.clearRect(0, 0, pw, ph);
           // Resized: our own area average (resample.js), the same pixels in every session;
           // the browser's high-quality drawImage was not. At 1:1 drawImage is an exact copy.
@@ -157,7 +169,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
           // Measured relief and a photo's scene: this tile's window of their preview-sized maps (v up).
           const inMap = [px0 / W, (H - py1) / H, px1 / W, (H - py0) / H];
-          targets = gbuf.build(tex, pw, ph, state.measuredTex || state.sceneMap
+          targets = g.build(tex, pw, ph, state.measuredTex || state.sceneMap
             ? { ...state, measured: state.measuredTex ? { tex: state.measuredTex, rect: inMap } : null, sceneMap: state.sceneMap ? { ...state.sceneMap, rect: inMap } : null }
             : state);
         }
@@ -170,7 +182,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
         for (let k = 0; k < states.length; k++) {
           const st = states[k], out = outs[k];
           // A variant's own smoothings of the shared relief (each reruns only if it differs).
-          if (k > 0 && !photometric) { gbuf.buildGraze(st.grazeSigmaPx ?? 0); gbuf.buildShadow(st.shadowSigmaPx ?? 0); gbuf.buildStroke(st.strokeSigmaPx ?? 0); }
+          if (k > 0 && !photometric) { g.buildGraze(st.grazeSigmaPx ?? 0); g.buildShadow(st.shadowSigmaPx ?? 0); g.buildStroke(st.strokeSigmaPx ?? 0); }
           bindTarget(gl, target);
 
           // Textures are uploaded flipped, so v = 0 is the BOTTOM of the image and

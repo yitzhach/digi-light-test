@@ -353,6 +353,10 @@ await page.evaluate(()=>{document.querySelector('#scroller').scrollTop+=50;});aw
 const g=await compareSharp();assert.equal(await patches(),n,'nothing rendered again');assert.ok(g.diff<0.5,'scrolled overlay vs export '+g.diff);assert.notDeepEqual(g.rect,r.rect);console.log('scrolled overlay diff',+g.diff.toFixed(4),'patches',n);}
 // Checked as the slider moves: a slider drops the patches, and they come back once the view is still again.
 await page.waitForFunction(()=>__bench.sharp());assert.equal(await page.locator('#fineRelief').evaluate(el=>{el.value=1.1;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return __bench.sharp();}),null,'a slider hides it');await settle();
+// A light or tone change keeps each patch's relief: the view comes back from shading alone, and still matches the export.
+{await page.waitForFunction(()=>__bench.sharp()&&__bench.sharpStats().patches===5,null,{timeout:90000});const a=await page.evaluate(()=>__bench.sharpStats());await slider('exposure',0.3);await page.evaluate(()=>{__bench.state.lights[0].x+=0.04;__bench.render();});
+await page.waitForFunction(()=>__bench.sharp());const b=await page.evaluate(()=>__bench.sharpStats());assert.equal(b.builds,a.builds,'no relief built again '+JSON.stringify([a,b]));assert.ok(b.shades>a.shades,'shaded from the kept relief');
+const g=await compareSharp();assert.ok(g.diff<0.5,'relit overlay vs export '+g.diff);console.log('relit overlay diff',+g.diff.toFixed(4),JSON.stringify(b));}
 await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
 await page.setViewportSize({width:390,height:844});await settle();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const mobile=await page.locator('#gl').boundingBox();assert.ok(mobile.width>100&&mobile.height>100);await page.screenshot({path:outputDir + '/mobile-tested.png'});

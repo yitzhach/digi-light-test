@@ -134,11 +134,12 @@ const SURFACE_INPUTS = ['reliefScale', 'reliefStrength', 'chromaReject', 'albedo
 // A photo's scene (image type, its shape, Remove photo light, Surface detail) is made into the relief too.
 const surfaceKey = () => JSON.stringify([...SURFACE_INPUTS.map((k) => state[k] ?? null), sceneSurfaceKey(state)]);
 let builtSurface = '';
-// Export tiles and the sharp zoom build their own surfaces in the preview's targets.
+// Export tiles build their own surfaces in the preview's targets (the sharp zoom has its own).
 // What the preview measured (heightStats, strokeSpread) still holds; only its maps are
 // gone, so the next frame rebuilds them but an export does not need to first.
 let surfaceClobbered = false;
 let surfaceBuilds = 0;   // tests count rebuilds
+let surfaceGen = 0;      // counts real surface changes (not rebuilds after an export): the sharp zoom's reliefs hold while it stands
 
 /**
  * The longest shadow any enabled light can cast across the painting: the tallest
@@ -1076,18 +1077,19 @@ function renderState(outW) {
 
 let pendingFrame = 0;
 function render() {
-  hideSharp();   // whatever is about to change, the sharp overlay would not show it
+  dimSharp();   // whatever is about to change, the sharp overlay would not show it
   if (!pendingFrame) pendingFrame = requestAnimationFrame(() => { pendingFrame = 0; renderNow(); });
 }
 function renderNow() {
   if (!srcTex || state.exporting) return;
-  hideSharp();
+  dimSharp();
   document.dispatchEvent(new Event('digilight:render'));
   try {
     updateDerived(imgW);
     state.sceneMap = sceneMapOf(state);
     const key = surfaceKey();
     if (key !== builtSurface) { builtSurface = key; dirtySurface = true; }
+    if (dirtySurface) surfaceGen++;
     if (dirtySurface || surfaceClobbered) {
       surfaceBuilds++;
       if (state.mode === 'photometric') {
@@ -1172,39 +1174,61 @@ function renderNow() {
 
 // ---------------------------------------------------------------- sharp zoom
 
-// The preview works on a copy of at most 1400 px, so zoomed in far enough it shows
-// its own pixels. Once the view has been still for a moment, the visible part is
-// rendered again from the full-resolution source, through the export's tiles with
-// the export's rescaled settings, at about one pixel per screen pixel, and laid
-// exactly over the preview. What is rendered is kept as patches (canvases on a grid
-// of SHARP_CELL output pixels): scrolling keeps them and renders only what it brings
-// into view, then a band around the view in the background, so a short scroll is
-// sharp at once. A new zoom keeps the old patches, stretched, until the view is
-// filled at the new size. Anything that changes the picture drops them all; a newer
-// request cancels a render in flight (between tiles).
+// The preview works on a copy of at most 1400 px, so zoomed in far enough (or at fit on a
+// high-density screen) it shows its own pixels. Once the view has been still for a moment,
+// the visible part is rendered again from the full-resolution source, through the export's
+// tiles with the export's rescaled settings, at about one pixel per screen pixel, and laid
+// exactly over the preview. What is rendered is kept as patches (canvases on a grid of
+// SHARP_CELL output pixels): scrolling keeps them and renders only what it brings into
+// view, then a band around the view in the background, so a short scroll is sharp at once.
+// A new zoom keeps the old patches, stretched, until the view is filled at the new size.
+// Each patch also keeps its relief (its own GBuffers, padded a little wider than needed),
+// so a change to lights, colour or tone hides the patches and only shades them again; a
+// change to the surface drops them. A newer request cancels a render in flight (between tiles).
 const SHARP_IDLE_MS = 100;
 const SHARP_CELL = 64;            // a multiple of 8, as glow and background blur's tiles need
 const SHARP_RING = 4;             // cells rendered ahead around the view
-const SHARP_MAX_PX = 32e6;        // pixels kept (4 bytes each); the farthest patches go first
+const SHARP_MAX_PX = 32e6;        // patch pixels kept (4 bytes each); the farthest go first
+const SHARP_RELIEF_PX = 32e6;     // relief target pixels kept (8 bytes each, ~6 per tile pixel); the view's always
+const SHARP_SPARE = 32;           // padding beyond what the lights need, so moving one rarely rebuilds
 const sharp = document.createElement('div');
 sharp.id = 'sharp';
 paper.appendChild(sharp);
-let sharpTimer = 0, sharpJob = 0;
-// The patches at the current size ({canvas, c0, r0, c1, r1} in cells) with the cells they
-// cover (sharpGrid.covered, one count per cell), and the patches of an earlier zoom.
+let sharpTimer = 0, sharpJob = 0, sharpLit = 0;
+// The patches at the current size ({canvas, c0, r0, c1, r1 in cells, rect, margin, reliefs,
+// lit}), sharpGrid.covered counting the shown ones per cell, and the patches of an earlier zoom.
 let sharpGrid = null, sharpPatches = [], sharpStale = [];
+const sharpCount = { builds: 0, shades: 0 };   // tests: tiles whose relief was built, or only shaded
 
 /** Cancel a pending or running sharp render, leaving what is shown. */
 function cancelSharp() {
   clearTimeout(sharpTimer);
   sharpJob++;
 }
-function dropPatches(list) { for (const p of list) p.canvas.remove(); }
-/** The picture changed: no patch shows it any more. */
+function dropReliefs(p) {
+  for (const g of p.reliefs?.values() || []) g.dispose();
+  p.reliefs = null;
+}
+function dropPatches(list) { for (const p of list) { p.canvas?.remove(); dropReliefs(p); } }
+/** Drop everything: the photo, the surface or the kind of view changed. */
 function hideSharp() {
   cancelSharp();
   dropPatches(sharpPatches); dropPatches(sharpStale);
   sharpPatches = []; sharpStale = []; sharpGrid = null;
+}
+/** The picture is about to change: hide every patch; those with a relief are shaded again. */
+function dimSharp() {
+  cancelSharp();
+  sharpLit++;
+  dropPatches(sharpStale); sharpStale = [];
+  if (!sharpGrid) return;
+  sharpGrid.covered.fill(0);
+  sharpPatches = sharpPatches.filter((p) => {
+    p.canvas.style.display = 'none';
+    if (p.reliefs) return true;
+    p.canvas.remove();
+    return false;
+  });
 }
 /** The view changed: keep what is rendered and fill in the rest once it is still. */
 function scheduleSharp() {
@@ -1212,20 +1236,20 @@ function scheduleSharp() {
   const plan = sharpPlan();
   if (!plan) { hideSharp(); return; }
   if (sharpGrid && (sharpGrid.outW !== plan.outW || sharpGrid.outH !== plan.outH)) {
-    sharpStale.push(...sharpPatches);
+    // Shown ones stay, stretched, until the view is filled at the new size.
+    for (const p of sharpPatches) { dropReliefs(p); if (p.lit === sharpLit) sharpStale.push(p); else p.canvas.remove(); }
     sharpPatches = []; sharpGrid = null;
   }
   sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS);
 }
 
 /**
- * What a sharp render of the view would cover, or null when it would add nothing:
- * not zoomed past fit, the screen shows no more pixels than the preview has, or the
- * photo has no more either. Single photographs only. rect: the visible part, in
- * output pixels of an outW x outH render.
+ * What a sharp render of the view would cover, or null when it would add nothing: the
+ * screen shows no more pixels than the preview has, or the photo has no more either.
+ * Single photographs only. rect: the visible part, in output pixels of an outW x outH render.
  */
 function sharpPlan() {
-  if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource || (state.viewZoom || 1) <= 1) return null;
+  if (state.mode !== 'single' || state.exporting || state.sweeping || !srcTex || !fullSource) return null;
   // A lamp photo in Before / Split exists only at the preview's size.
   if (compareTex && (state.viewMode === 4 || state.compareSplit >= 0)) return null;
   const c = canvas.getBoundingClientRect(), v = viewBox();
@@ -1253,12 +1277,67 @@ function cover(p, n) {
   const { covered, cols } = sharpGrid;
   for (let r = p.r0; r < p.r1; r++) for (let c = p.c0; c < p.c1; c++) covered[r * cols + c] += n;
 }
+const overlaps = (p, s) => p.c0 < s.c1 && s.c0 < p.c1 && p.r0 < s.r1 && s.r0 < p.r1;
 
 /**
- * Render the cells of `span` no patch covers yet, as one patch: their bounding box,
+ * Render patch `p` (its rect, with its margin) into its canvas: from its kept reliefs
+ * where it has them, building and keeping any it lacks. False when it was cancelled.
+ */
+async function shadePatch(p, st, job) {
+  const { outW, outH } = sharpGrid, used = new Set();
+  p.reliefs ||= new Map();
+  const relief = {
+    get: (key) => { const g = p.reliefs.get(key); if (g) { sharpCount.shades++; used.add(key); } return g; },
+    make: (key) => {
+      sharpCount.builds++;
+      const g = new GBuffer(glctx, gbuf);
+      g.afterHeight = gbuf.afterHeight;   // the tests' known-relief seam
+      p.reliefs.set(key, g); used.add(key);
+      return g;
+    },
+  };
+  const out = document.createElement('canvas');
+  out.width = p.rect.w; out.height = p.rect.h;
+  let done = false;
+  try {
+    done = await renderTiles(glctx, { gbuf, photo, shader },
+      { mode: 'single', source: fullSource, width: outW, height: outH }, st, p.rect,
+      out.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting, relief, margin: p.margin });
+  } catch (e) {
+    console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
+    dropReliefs(p);   // one may be half built
+    return false;
+  }
+  for (const [key, g] of p.reliefs) {
+    if (used.has(key)) g.keepForShading();
+    else if (done) { g.dispose(); p.reliefs.delete(key); }   // tiled differently this time
+  }
+  if (!done || job !== sharpJob) return false;
+  Object.assign(out.style, p.pos);
+  if (p.canvas) p.canvas.replaceWith(out); else sharp.appendChild(out);
+  p.canvas = out;
+  p.lit = sharpLit;
+  cover(p, 1);
+  return true;
+}
+
+/** Shade again the hidden patches overlapping `span` whose reliefs still have room. */
+async function relightPatches(span, st, job) {
+  const need = requiredMargin(st, sharpGrid.outW);
+  for (const p of sharpPatches) {
+    if (p.lit === sharpLit || !overlaps(p, span)) continue;
+    if (p.margin < need) { dropReliefs(p); continue; }   // the lights reach further: built anew below
+    if (!await shadePatch(p, st, job)) return false;
+  }
+  sharpPatches = sharpPatches.filter((p) => p.lit === sharpLit || p.reliefs || (p.canvas.remove(), false));
+  return true;
+}
+
+/**
+ * Render the cells of `span` no shown patch covers yet, as one patch: their bounding box,
  * through the export's tiles. False when it was cancelled.
  */
-async function fillSpan(span, job) {
+async function fillSpan(span, st, job) {
   const { outW, outH, covered, cols } = sharpGrid, C = SHARP_CELL;
   let c0 = Infinity, c1 = -1, r0 = Infinity, r1 = -1;
   for (let r = span.r0; r < span.r1; r++) {
@@ -1270,61 +1349,67 @@ async function fillSpan(span, job) {
   if (c1 < 0) return true;
   const x = c0 * C, y = r0 * C;
   const rect = { x, y, w: Math.min(outW, c1 * C) - x, h: Math.min(outH, r1 * C) - y };
-  const out = document.createElement('canvas');
-  out.width = rect.w; out.height = rect.h;
-  // The tiles reuse the preview's surface targets, so the next frame rebuilds them.
-  surfaceClobbered = true;
-  let done = false;
-  try {
-    done = await renderTiles(glctx, { gbuf, photo, shader },
-      { mode: 'single', source: fullSource, width: outW, height: outH }, renderState(outW), rect,
-      out.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting });
-  } catch (e) {
-    console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
-  } finally {
-    gbuf.resize(imgW, imgH);   // give back the tile-sized targets now, not at the next frame
-  }
-  if (!done || job !== sharpJob) return false;
-  Object.assign(out.style, { left: `${x / outW * 100}%`, top: `${y / outH * 100}%`, width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%` });
-  sharp.appendChild(out);
-  const patch = { canvas: out, c0, r0, c1, r1 };
-  sharpPatches.push(patch);
-  cover(patch, 1);
+  const pos = { left: `${x / outW * 100}%`, top: `${y / outH * 100}%`, width: `${rect.w / outW * 100}%`, height: `${rect.h / outH * 100}%` };
+  // A multiple of 8, so glow and background blur's alignment never changes the tiles.
+  const margin = Math.ceil((requiredMargin(st, outW) + SHARP_SPARE) / 8) * 8;
+  const p = { canvas: null, pos, c0, r0, c1, r1, rect, margin, reliefs: null, lit: -1 };
+  if (!await shadePatch(p, st, job)) { dropReliefs(p); return false; }
+  // A hidden patch wholly under the new one goes.
+  sharpPatches = sharpPatches.filter((q) => q.lit === sharpLit || !(q.c0 >= c0 && q.c1 <= c1 && q.r0 >= r0 && q.r1 <= r1) || (dropPatches([q]), false));
+  sharpPatches.push(p);
   return true;
+}
+
+/** Keep the patches nearest the view within the budgets: pixels shown, then reliefs. */
+function trimSharp(view) {
+  const mc = (view.c0 + view.c1) / 2, mr = (view.r0 + view.r1) / 2;
+  const far = (p) => (overlaps(p, view) ? 0 : Math.hypot((p.c0 + p.c1) / 2 - mc, (p.r0 + p.r1) / 2 - mr));
+  sharpPatches.sort((a, b) => far(a) - far(b));
+  let px = 0, held = 0;
+  sharpPatches = sharpPatches.filter((p) => {
+    px += p.rect.w * p.rect.h;
+    if (px > SHARP_MAX_PX && far(p) > 0) {
+      if (p.lit === sharpLit) cover(p, -1);
+      dropPatches([p]);
+      return false;
+    }
+    for (const g of p.reliefs?.values() || []) held += g.heldPixels;
+    if (held > SHARP_RELIEF_PX && far(p) > 0) dropReliefs(p);
+    return p.lit === sharpLit || p.reliefs || (p.canvas.remove(), false);
+  });
 }
 
 async function renderSharp() {
   const plan = sharpPlan();
   if (!plan) return;
   const job = sharpJob, { outW, outH, rect } = plan;
+  if (sharpGrid?.surface !== surfaceGen) {
+    // A new surface: no relief holds. What is shown stays until the view is filled again.
+    for (const p of sharpPatches) { dropReliefs(p); if (p.lit === sharpLit) sharpStale.push(p); else p.canvas.remove(); }
+    sharpPatches = []; sharpGrid = null;
+  }
   if (!sharpGrid) {
     const cols = Math.ceil(outW / SHARP_CELL), rows = Math.ceil(outH / SHARP_CELL);
-    sharpGrid = { outW, outH, cols, rows, covered: new Uint16Array(cols * rows) };
+    sharpGrid = { outW, outH, cols, rows, covered: new Uint16Array(cols * rows), surface: surfaceGen };
   }
+  const st = renderState(outW);
   const view = cellSpan(rect);
-  if (!await fillSpan(view, job)) return;
+  if (!await relightPatches(view, st, job) || !await fillSpan(view, st, job)) return;
   // The view is filled at this size: an earlier zoom's patches can go.
   dropPatches(sharpStale); sharpStale = [];
-  // Too many pixels kept: the patches farthest from the view go first.
-  const mc = (view.c0 + view.c1) / 2, mr = (view.r0 + view.r1) / 2;
-  const far = (p) => Math.hypot((p.c0 + p.c1) / 2 - mc, (p.r0 + p.r1) / 2 - mr);
-  sharpPatches.sort((a, b) => far(a) - far(b));
-  let px = 0;
-  sharpPatches = sharpPatches.filter((p) => {
-    px += p.canvas.width * p.canvas.height;
-    if (px <= SHARP_MAX_PX || far(p) === 0) return true;
-    p.canvas.remove(); cover(p, -1);
-    return false;
-  });
-  // Then, after a pause, a band around it, a side at a time so a new scroll waits for little.
+  trimSharp(view);
+  // Then, after a pause, the rest of what is kept, and a band around the view, a side at a
+  // time so a new scroll waits for little.
   await new Promise((r) => setTimeout(r, 300));
   if (job !== sharpJob) return;
+  if (!await relightPatches({ c0: 0, r0: 0, c1: sharpGrid.cols, r1: sharpGrid.rows }, st, job)) return;
   const ring = cellSpan(rect, SHARP_RING);
   const sides = [
     { ...ring, r1: view.r0 }, { ...ring, r0: view.r1 },
     { ...ring, r0: view.r0, r1: view.r1, c1: view.c0 }, { ...ring, r0: view.r0, r1: view.r1, c0: view.c1 },
   ];
-  for (const side of sides) if (!await fillSpan(side, job)) return;
+  for (const side of sides) if (!await fillSpan(side, st, job)) return;
+  trimSharp(view);
 }
 
 /**
@@ -1339,7 +1424,7 @@ function sharpView() {
   const out = document.createElement('canvas');
   out.width = rect.w; out.height = rect.h;
   const g = out.getContext('2d');
-  for (const p of sharpPatches) g.drawImage(p.canvas, p.c0 * SHARP_CELL - rect.x, p.r0 * SHARP_CELL - rect.y);
+  for (const p of sharpPatches) if (p.lit === sharpLit) g.drawImage(p.canvas, p.rect.x - rect.x, p.rect.y - rect.y);
   return { outW: plan.outW, outH: plan.outH, rect: { ...rect }, canvas: out };
 }
 
@@ -1548,6 +1633,8 @@ async function boot() {
     // The sharp zoom overlay, while it is shown: its canvas and the output-pixel
     // rectangle of an outW x outH render that it holds.
     sharp: sharpView,
+    // The sharp zoom's work so far: tiles whose relief was built, or kept and only shaded; patches held.
+    sharpStats: () => ({ ...sharpCount, patches: sharpPatches.length, reliefs: sharpPatches.reduce((n, p) => n + (p.reliefs?.size || 0), 0) }),
     // --- diagnostics used by the test harness
     shots: () => shots,
     measured: () => measured && { on: measured.on, w: measured.w, h: measured.h, height: measured.height, info: measured.info },

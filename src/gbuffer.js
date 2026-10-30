@@ -295,10 +295,11 @@ void main() {
 }`;
 
 export class GBuffer {
-  constructor(glctx) {
+  // `shared`: another GBuffer whose compiled programs this one uses (the sharp zoom's kept reliefs).
+  constructor(glctx, shared) {
     this.glctx = glctx;
     const { gl } = glctx;
-    this.progs = {
+    this.progs = shared?.progs || {
       luma: program(gl, LUMA_FS, 'luma'),
       blur: program(gl, BLUR_FS, 'blur'),
       slope: program(gl, SLOPE_FS, 'slope'),
@@ -351,19 +352,43 @@ export class GBuffer {
   }
 
   resize(w, h) {
-    if (this.size.w === w && this.size.h === h) return;
+    if (this.targets && this.size.w === w && this.size.h === h && !this.trimmed) return;
     const { gl, caps } = this.glctx;
-    if (this.targets) {
-      // A Set, because T.graze may be T.normal itself.
-      for (const t of new Set(Object.values(this.targets))) {
-        gl.deleteTexture(t.tex);
-        gl.deleteFramebuffer(t.fbo);
-      }
-    }
+    this.dispose();
     const mk = () => makeTarget(gl, w, h, { float: true, caps });
     this.targets = { lin: mk(), tmp: mk(), blur: mk(), fine: mk(), broad: mk(), formIn: mk(), formOut: mk(), slope: mk(), height: mk(), normal: mk(), albedo: mk() };
     this.sigmas = {};
     this.size = { w, h };
+  }
+
+  /** Free every target (a Set, because T.graze may be T.normal itself). */
+  dispose() {
+    const { gl } = this.glctx;
+    for (const t of new Set(Object.values(this.targets || {}))) {
+      gl.deleteTexture(t.tex);
+      gl.deleteFramebuffer(t.fbo);
+    }
+    this.targets = null;
+    this.trimmed = false;
+  }
+
+  /**
+   * Keep only what shading and the smoothings read (a kept relief): the band blurs and
+   * slopes go, about half the memory. The next build makes them again.
+   */
+  keepForShading() {
+    const { gl } = this.glctx, T = this.targets;
+    if (!T || this.trimmed) return;
+    for (const k of ['blur', 'fine', 'broad', 'formIn', 'formOut', 'slope']) {
+      gl.deleteTexture(T[k].tex); gl.deleteFramebuffer(T[k].fbo);
+      delete T[k];
+    }
+    this.trimmed = true;
+  }
+
+  /** Pixels of every target held (sizes the sharp zoom's kept reliefs against its budget). */
+  get heldPixels() {
+    return this.targets ? new Set(Object.values(this.targets)).size * this.size.w * this.size.h : 0;
   }
 
   /**
