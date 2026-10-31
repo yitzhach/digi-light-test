@@ -18,6 +18,12 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   exposure change 5.8 s → 3.0 s back to sharp (relief build skipped; on a GPU the share saved is
   larger). The sharp layer no longer borrows the preview's relief, so the first edit after it no
   longer rebuilds the preview's. A surface change (relief sliders, new photo) still rebuilds.
+- **Live re-shade during drags.** The app times its own re-shades of the view (ms per pixel); if
+  the view's would take ≤80 ms (`SHARP_LIVE_MS`), a light, colour or tone change keeps the sharp
+  view shown and re-shades it as you drag, one shade at a time (a newer change starts the next,
+  never cancels one in flight). Slower machines keep the old way (soft while dragging, sharp
+  100 ms after), so the drag stays smooth. A relief change still hides it at once.
+  `__bench.sharpLive(ms)` reads the timing and sets the limit (browser.cjs forces it on).
 - **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
   1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
   `__bench.sharpStats()` counts relief builds vs shades.
@@ -35,8 +41,8 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
 5. Is the guard chip welcome? Roadmap §6 choices (lamp photos per piece, evenness slider, blind
    voting, phone or iMac, default look, 16-bit / TIFF). Older open picks: docs/history.md.
 6. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
-7. On the iMac: after a light or exposure change, how long until the zoomed view is sharp
-   again? And is it a Retina (5K) iMac (then fit-to-screen is sharp now too)?
+7. On the iMac, zoomed in: does a light drag stay sharp (live), and is the drag still smooth? In
+   the console, `__bench.sharpLive()` shows the timing. Is it a Retina (5K) iMac?
 
 ## Next up
 1. Scene: a real depth model (Depth Anything V2 small, ~25 MB ONNX, in the browser by WebGPU or
@@ -46,8 +52,8 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
    elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
 3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:
    the finest band's slopes, more sheen than the slider's top for the door.
-4. Sharp zoom, if still slow on the iMac: async readback (no stall while it renders); re-shade live
-   during a drag when the GPU is quick enough; a quick half-size pass for fresh areas.
+4. Sharp zoom, if still slow on the iMac: async readback (no stall while it renders); a quick
+   half-size pass for fresh areas; a lower live limit or a live pass at half size if 80 ms drags.
 5. Roadmap NEXT in order: `?round=` link, agent tools
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 

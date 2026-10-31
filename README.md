@@ -223,7 +223,9 @@ rendered stays: scrolling back over it is sharp at once, a band around the view 
 rendered ahead while you look, and a new zoom shows the old detail stretched until
 the new is ready. A change to the picture shows the working copy until the view is
 still again; a change to lights, colour or tone comes back sooner, since the relief
-already worked out for the sharp view is kept and only lit again (single photographs only).
+already worked out for the sharp view is kept and only lit again. Where the computer is
+quick enough (it times this itself), a light or slider drag keeps the sharp view on screen and
+re-lights it as you drag (single photographs only).
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
 Split and brush mode.
 
