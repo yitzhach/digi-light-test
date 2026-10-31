@@ -1210,6 +1210,7 @@ const sharpCount = { builds: 0, shades: 0 };   // tests: tiles whose relief was 
 function cancelSharp() {
   clearTimeout(sharpTimer);
   sharpJob++;
+  for (const c of sharp.querySelectorAll('[data-filling]')) c.remove();   // half-drawn: gone at once
 }
 function dropReliefs(p) {
   if (p.reliefs) sharpLiveGen++;   // a live shade may be using them
@@ -1338,23 +1339,29 @@ async function shadePatch(p, st, cancelled, sig) {
   };
   const out = document.createElement('canvas');
   out.width = p.rect.w; out.height = p.rect.h;
+  Object.assign(out.style, p.pos);
+  // Nothing shown there (not live): each tile shows as it lands, over the preview.
+  const early = !p.canvas || p.canvas.style.display === 'none';
+  if (early) { out.dataset.filling = '1'; sharp.appendChild(out); }
   let done = false;
   try {
     done = await renderTiles(glctx, { gbuf, photo, shader },
       { mode: 'single', source: fullSource, width: outW, height: outH }, st, p.rect,
-      out.getContext('2d'), { cancelled, relief, margin: p.margin });
+      out.getContext('2d'), { cancelled, relief, margin: p.margin, asyncRead: true });
   } catch (e) {
     console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
     dropReliefs(p);   // one may be half built
-    return false;
+    done = false;
   }
+  if (early && (!done || cancelled())) out.remove();
+  delete out.dataset.filling;
+  if (!p.reliefs) return false;
   for (const [key, g] of p.reliefs || []) {
     if (used.has(key)) g.keepForShading();
     else if (done) { g.dispose(); p.reliefs.delete(key); }   // tiled differently this time
   }
   if (!done || cancelled()) return false;
   if (!built) sharpRate = (performance.now() - t0) / (p.rect.w * p.rect.h);
-  Object.assign(out.style, p.pos);
   p.shots ||= new Map();
   p.shots.delete(sig); p.shots.set(sig, out);   // newest last
   for (const k of p.shots.keys()) if (p.shots.size > SHARP_SHOTS) p.shots.delete(k);

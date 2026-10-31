@@ -55,6 +55,10 @@ export function requiredMargin(state, W = 0) {
  * tile's surface is then built once, from the first, and every variant is shaded on it
  * with its own smoothings, lights and tone, so a round of looks costs one relief build.
  *
+ * `asyncRead` (the sharp zoom): each tile is read back without stalling the page while the
+ * GPU finishes it, so scrolling and sliders stay live; the preview may draw meanwhile, which
+ * is why it needs reliefs of its own (`relief`). Exports read back at once.
+ *
  * Kept reliefs (the sharp zoom): `relief` {get(key), make(key)} gives each padded tile
  * (key "x,y,w,h") its own GBuffer, which `get` returns again later so a light or tone
  * change only shades; `margin` makes the padding at least that wide, so a kept relief
@@ -64,7 +68,7 @@ export function requiredMargin(state, W = 0) {
  * @param job      {mode:'single', source, width?, height?} | {mode:'photometric', sources:[], solver}
  * @returns true when done; false if `cancelled()` turned true between tiles
  */
-export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled, relief, margin: minMargin = 0 } = {}) {
+export async function renderTiles(glctx, builders, job, state, rect, out, { onProgress, cancelled, relief, margin: minMargin = 0, asyncRead = false } = {}) {
   const states = Array.isArray(state) ? state : [state], outs = Array.isArray(out) ? out : [out];
   state = states[0];
   const { gl, caps } = glctx;
@@ -194,7 +198,12 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
             sy: ph / H,
           });
 
-          gl.readPixels(0, 0, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+          if (asyncRead) {
+            await readPixelsAsync(gl, pw, ph, buf);
+            if (cancelled && cancelled()) return false;
+          } else {
+            gl.readPixels(0, 0, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+          }
 
           // readPixels comes back bottom-up; un-flip while copying only the
           // interior, which is the part that had full context on every side.
@@ -226,6 +235,29 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
     if (target) { gl.deleteTexture(target.tex); gl.deleteFramebuffer(target.fbo); }
   }
   return true;
+}
+
+/**
+ * readPixels of the bound framebuffer into `buf` through a pixel buffer and a fence: the
+ * copy is queued on the GPU and the page waits for it in short timeouts, not blocked.
+ */
+async function readPixelsAsync(gl, w, h, buf) {
+  const pbo = gl.createBuffer();
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, buf.byteLength, gl.STREAM_READ);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+  try {
+    while (gl.clientWaitSync(sync, 0, 0) === gl.TIMEOUT_EXPIRED) await new Promise((r) => setTimeout(r, 4));
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, buf);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  } finally {
+    gl.deleteSync(sync);
+    gl.deleteBuffer(pbo);
+  }
 }
 
 /**
