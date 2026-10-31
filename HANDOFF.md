@@ -37,9 +37,16 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   tile also shows as it lands, so the sharp view fills in piece by piece over the preview. Fresh
   tiles' photo resampling now runs in a worker (resampleworker.js, the same code: exact.cjs checks
   the pixels match bit for bit): longest freeze ~0.1 s.
-- **Agent tools** (roadmap): MCP `render_preview` `region` (a full-detail loupe, measured there) and
-  `compare` (A | B | difference image with numbers; B = the photo, changed settings or a look;
-  changes nothing). mcp.cjs checks both (the look case needs `--full`).
+- **Agent tools** (roadmap): MCP `render_preview` `region` (a full-detail loupe, measured there),
+  `compare` (A | B | difference image with numbers; B = the photo, changed settings or a look) and
+  `batch_render` (2–12 versions dressed as CLI batch jobs: a labelled contact sheet, each one's
+  metrics, guard note and changed settings; `out_dir` writes files). None changes anything;
+  mcp.cjs checks them (compare's look case needs `--full`). API `digilight.versions(spec)`.
+- **`?round=round5` renders a lighting round on the user's own computer** into the batch viewer
+  (rate, Save ratings). Round files moved to `rounds/` (deployed; make_round.py takes them from
+  there too); a URL or inline JSON also works. Each version is dressed as the CLI dresses a batch
+  job; settings and undo history untouched (browser.cjs checks). Tried end to end on the sample:
+  Analyze + 10 sharp versions at 1932×2576 in 875 s in software GL (a GPU is far faster).
 - **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
   1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
   `__bench.sharpStats()` counts relief builds vs shades.
@@ -70,8 +77,7 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
    the finest band's slopes, more sheen than the slider's top for the door.
 4. Sharp zoom, if still slow on the iMac: a quick half-size pass for fresh areas; a lower live
    limit or a live pass at half size if 80 ms drags.
-5. Roadmap NEXT in order: `?round=` link, agent tools left (`batch_render`)
-   (`render_preview` region + stats, `compare`), narrower Analyze cache.
+5. Roadmap NEXT: a narrower Analyze cache (docs/roadmap.md).
 
 ## Quick test set (details: docs/working.md)
 Cloud: `export DIGILIGHT_BROWSER=/opt/pw-browsers/chromium`; `cd tools && npm install` once.
