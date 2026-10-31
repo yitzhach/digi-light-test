@@ -30,6 +30,12 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   a signature of the settings (`shadeSig`: state minus view keys and big buffers), so going back
   to a setting seen before (Before/After, undo, an effect off and on) shows at once. The first
   time grain goes on still costs one shade.
+- **No page freeze while the sharp view renders** (user's iMac is a Retina 5K: at fit the sharp
+  view is the whole picture, ~5.6 Mpx). Tiles are read back through a pixel buffer and a fence
+  (export.js `readPixelsAsync`, sharp zoom only), so the page keeps drawing while the GPU works:
+  longest freeze on a large photo 6.2 s → 0.38 s (346 frames drawn during the render, was 5). Each
+  tile also shows as it lands, so the sharp view fills in piece by piece over the preview. The
+  0.38 s left is the photo's resampling for a fresh tile (resample.js, on the main thread).
 - **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
   1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
   `__bench.sharpStats()` counts relief builds vs shades.
@@ -47,8 +53,8 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
 5. Is the guard chip welcome? Roadmap §6 choices (lamp photos per piece, evenness slider, blind
    voting, phone or iMac, default look, 16-bit / TIFF). Older open picks: docs/history.md.
 6. On a computer with a GPU: `RENDERER_B=gpu node tests/renderers.cjs`.
-7. On the iMac, zoomed in: does a light drag stay sharp (live), and is the drag still smooth? In
-   the console, `__bench.sharpLive()` shows the timing. Is it a Retina (5K) iMac?
+7. On the iMac (Retina 5K): does the page stay responsive while it sharpens? Zoomed in, does a
+   light drag stay sharp (live)? In the console, `__bench.sharpLive()` shows the timing.
 
 ## Next up
 1. Scene: a real depth model (Depth Anything V2 small, ~25 MB ONNX, in the browser by WebGPU or
