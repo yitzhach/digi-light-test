@@ -16,7 +16,7 @@ const path = require('path');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { z } = require('zod');
-const { parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
+const { parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, shrunk, analyzeCached, writeRecord } = require('./digilight-headless.cjs');
 
 const log = (...a) => process.stderr.write('[digilight] ' + a.join(' ') + '\n');
 const FORMATS = { '.png': 'png', '.jpg': 'jpeg', '.jpeg': 'jpeg', '.webp': 'webp' };
@@ -278,6 +278,20 @@ server.registerTool('undo', { title: 'Undo', description: 'Undoes the last chang
 server.registerTool('redo', { title: 'Redo', description: 'Redoes the last undone change. Returns false when there is nothing to redo.', inputSchema: {} },
   changing(async ({ call }) => ({ redone: await call('redo') })));
 
+// A part of the picture, as fractions of its width and height.
+const REGION = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().gt(0).max(1), h: z.number().gt(0).max(1) })
+  .describe('{x, y, w, h} as fractions (0–1) of the picture\'s width and height, from its top left');
+// The settings object with dotted paths ("graze.opacity", "lights.0.power") set: a copy.
+function withPaths(obj, changes) {
+  const out = JSON.parse(JSON.stringify(obj));
+  for (const [p, v] of Object.entries(changes)) {
+    const keys = p.split('.'); let o = out;
+    for (const k of keys.slice(0, -1)) { if (o[k] == null || typeof o[k] !== 'object') throw new Error(`No setting ${p}.`); o = o[k]; }
+    if (!(keys.at(-1) in o)) throw new Error(`No setting ${p}.`);
+    o[keys.at(-1)] = v;
+  }
+  return out;
+}
 // The change map (src/changemap.js): what changed, pixel by pixel, against the photo.
 const CHANGE_MAP = z.enum(['light', 'colour']).describe('Also return the change map: "light" (how much light each pixel gained or lost against the photo: grey unchanged, orange brighter, blue darker, full colour at 2 stops) or "colour" (how far each pixel is off the photo\'s own colour at its new brightness: black none, white 32 levels or more). Its numbers come as "change": same (share of pixels identical to the photo), light (stops: percentiles, shares brighter / darker), colour (levels: percentiles, share off)');
 server.registerTool('render_preview', {
@@ -286,13 +300,71 @@ server.registerTool('render_preview', {
   inputSchema: {
     max_size: z.number().int().min(128).max(2000).optional(),
     change_map: CHANGE_MAP.optional(),
+    region: REGION.optional().describe('Look closer: only this part, rendered at full detail from the full-resolution photo (a loupe), shrunk to max_size; metrics are measured on it at full detail'),
   },
-}, tool(async ({ page: pg, call }, { max_size, change_map }) => {
+}, tool(async ({ page: pg, call }, { max_size, change_map, region }) => {
   await needOpen(call);
-  const { url, metrics, change } = await preview(pg, call, max_size || 800, 0.85, true, change_map ? { map: change_map } : undefined);
+  const change = change_map ? { map: change_map } : undefined;
+  const { url, metrics, change: changed } = region
+    ? await shrunk(pg, await call('export', { format: 'png', crop: region, metrics: true, change }), max_size || 800)
+    : await preview(pg, call, max_size || 800, 0.85, true, change);
   return { content: [{ type: 'image', data: url.split(',')[1], mimeType: 'image/jpeg' },
-    ...(change ? [{ type: 'image', data: change.url.split(',')[1], mimeType: 'image/jpeg' }] : []),
-    { type: 'text', text: JSON.stringify({ metrics, ...(change ? { change: change.stats } : {}) }, null, 1) }] };
+    ...(changed ? [{ type: 'image', data: changed.url.split(',')[1], mimeType: 'image/jpeg' }] : []),
+    { type: 'text', text: JSON.stringify({ ...(region ? { region } : {}), metrics, ...(changed ? { change: changed.stats } : {}) }, null, 1) }] };
+}));
+
+server.registerTool('compare', {
+  title: 'Compare two versions',
+  description: 'Shows the picture as it is (A) beside another version (B) and how they differ: one image A | B | difference (black = the same; brighter = more different, ×4), plus numbers (mean and 99th-percentile difference in levels, share of pixels changed by more than 2 levels, shares B made brighter / darker) and each one\'s metrics. B is the photo itself (photo: true), the current settings with some changed (settings, dotted paths as set_settings takes them), or a look (look: id or name; applied, read and undone). Nothing is changed. region compares only that part at full detail (a loupe); otherwise the whole picture max_size px on its long side.',
+  inputSchema: {
+    photo: z.boolean().optional().describe('B is the untouched photo'),
+    settings: z.record(z.string(), z.any()).optional().describe('B is the current settings with these changed, e.g. {"exposure": 0.3, "graze.enabled": true}'),
+    look: z.union([z.string(), z.number().int()]).optional().describe('B is this look (from list_looks)'),
+    region: REGION.optional(),
+    max_size: z.number().int().min(128).max(2000).optional().describe('Long side of each panel, default 600'),
+  },
+}, tool(async ({ page: pg, call }, { photo, settings, look, region, max_size }) => {
+  await needOpen(call);
+  if ([photo, settings, look].filter((v) => v != null && v !== false).length !== 1) throw new Error('Give B as one of: photo: true, settings, or look.');
+  const size = max_size || 600, a = await call('settings');
+  let b;
+  if (photo) b = { ...a, originalTop: 1 };
+  else if (settings) b = withPaths(a, settings);
+  else {
+    if (!(await call('looks')).length) throw new Error('No looks yet: run analyze first.');
+    await call('applyLook', look, { strength: 1 });
+    b = await call('settings');
+    await call('undo');
+  }
+  const info = await call('info'), { width: pw, height: ph } = info.photo;
+  // The whole picture a little over the panel size (so the difference is measured on real pixels), or the region at full detail.
+  const item = (s) => ({ settings: s, format: 'png', ...(region ? { crop: region } : { width: Math.min(pw, Math.round(size * 1.5 * Math.min(1, pw / ph))) }) });
+  const [A, B] = await call('exportMany', [item(a), item(b)], { metrics: true });
+  const r = await pg.evaluate(async ([ua, ub, m]) => {
+    const load = async (u) => { const im = new Image(); im.src = u; await im.decode(); return im; };
+    const [ia, ib] = [await load(ua), await load(ub)], w = ia.width, h = ia.height;
+    const px = (im) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, w, h); };
+    const da = px(ia).data, db = px(ib).data, diff = new ImageData(w, h), dd = diff.data, levels = new Uint32Array(256);
+    let sum = 0, changed = 0, brighter = 0, darker = 0;
+    for (let i = 0; i < da.length; i += 4) {
+      const d = Math.max(Math.abs(db[i] - da[i]), Math.abs(db[i + 1] - da[i + 1]), Math.abs(db[i + 2] - da[i + 2]));
+      levels[d]++; sum += d;
+      if (d > 2) { changed++; const l = (db[i] - da[i]) * 0.2126 + (db[i + 1] - da[i + 1]) * 0.7152 + (db[i + 2] - da[i + 2]) * 0.0722; if (l > 2) brighter++; else if (l < -2) darker++; }
+      for (let k = 0; k < 3; k++) dd[i + k] = Math.min(255, Math.abs(db[i + k] - da[i + k]) * 4);
+      dd[i + 3] = 255;
+    }
+    const n = w * h; let acc = 0, p99 = 0;
+    for (let v = 0; v < 256; v++) { acc += levels[v]; if (acc >= 0.99 * n) { p99 = v; break; } }
+    const k = Math.min(1, m / Math.max(w, h)), pw = Math.round(w * k), ph = Math.round(h * k), gap = 8;
+    const c = document.createElement('canvas'); c.width = pw * 3 + gap * 2; c.height = ph;
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high';
+    const dc = document.createElement('canvas'); dc.width = w; dc.height = h; dc.getContext('2d').putImageData(diff, 0, 0);
+    [ia, ib, dc].forEach((im, j) => g.drawImage(im, j * (pw + gap), 0, pw, ph));
+    return { url: c.toDataURL('image/jpeg', 0.85), stats: { size: [w, h], meanLevels: +(sum / n).toFixed(2), p99Levels: p99,
+      changed: +(changed / n).toFixed(4), brighter: +(brighter / n).toFixed(4), darker: +(darker / n).toFixed(4) } };
+  }, [A.image, B.image, size]);
+  return { content: [{ type: 'image', data: r.url.split(',')[1], mimeType: 'image/jpeg' },
+    { type: 'text', text: JSON.stringify({ b: photo ? 'photo' : settings ? { settings } : { look }, ...(region ? { region } : {}), difference: r.stats, metricsA: A.metrics, metricsB: B.metrics }, null, 1) }] };
 }));
 
 server.registerTool('export_image', {

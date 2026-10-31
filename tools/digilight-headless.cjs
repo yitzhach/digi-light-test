@@ -116,16 +116,23 @@ async function openInput(call, input) {
  *  (digilight's change option) also {change: {url, stats}}, the change map shrunk the same way. */
 async function preview(page, call, maxSize = 800, quality = 0.85, metrics = false, change = undefined) {
   const r = await call('render', { format: 'png', metrics, change });
-  const shrink = (u) => page.evaluate(async ([u, m, q]) => {
+  if (!metrics && !change) return shrink(page, typeof r === 'string' ? r : r.image, maxSize, quality);
+  return shrunk(page, r, maxSize, quality);
+}
+/** An image data URL shrunk to fit `maxSize` px on its long side, as a JPEG data URL. */
+function shrink(page, url, maxSize, quality = 0.85) {
+  return page.evaluate(async ([u, m, q]) => {
     const im = new Image(); im.src = u; await im.decode();
     const k = Math.min(1, m / Math.max(im.width, im.height));
     const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
     const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', q);
-  }, [u, maxSize, quality]);
-  const url = await shrink(typeof r === 'string' ? r : r.image);
-  if (!metrics && !change) return url;
-  return { url, metrics: r.metrics, ...(r.change ? { change: { url: await shrink(r.change.image), stats: r.change.stats } } : {}) };
+  }, [url, maxSize, quality]);
+}
+/** A render or export's {image, metrics, change?} shrunk the same way: {url, metrics, change?: {url, stats}}. */
+async function shrunk(page, r, maxSize, quality = 0.85) {
+  return { url: await shrink(page, r.image, maxSize, quality), metrics: r.metrics,
+    ...(r.change ? { change: { url: await shrink(page, r.change.image, maxSize, quality), stats: r.change.stats } } : {}) };
 }
 
 // Analyze, cached on disk: DIGILIGHT_CACHE (default ~/.cache/digilight/analysis; "0" = off).
@@ -180,4 +187,4 @@ async function writeRecord(call, file, { input, job, output, guard, metrics, cha
   return out;
 }
 
-module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, analyzeCached, writeRecord, codeHash: () => code(), inputId };
+module.exports = { ROOT, TYPES, serve, parseSets, dataURL, fromDataURL, cleanError, launch, openInput, preview, shrunk, analyzeCached, writeRecord, codeHash: () => code(), inputId };

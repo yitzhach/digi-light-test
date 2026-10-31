@@ -26,7 +26,7 @@ const full = process.argv.includes('--full');
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard', 'measure_relief',
-      'set_image_type', 'suggest_image_type', 'list_light_scenes', 'apply_light_scene'])
+      'set_image_type', 'suggest_image_type', 'list_light_scenes', 'apply_light_scene', 'compare'])
       assert.ok(names.includes(n), 'missing tool ' + n);
     assert.ok((await client.getInstructions?.() || '').includes('open_image'), 'server instructions');
     console.log('PASS mcp lists its tools');
@@ -59,6 +59,22 @@ const full = process.argv.includes('--full');
     const ch = JSON.parse(pc[2].text).change;
     assert.ok(ch && ch.size && typeof ch.same === 'number' && ch.light && ch.colour, 'change map numbers ' + JSON.stringify(ch));
     console.log('PASS describe_settings filter, list_presets, render_preview image, metrics and change map');
+    // A loupe: a region at full detail, measured there.
+    const pr = (await ok('render_preview', { max_size: 300, region: { x: 0.4, y: 0.4, w: 0.1, h: 0.1 } })).r.content;
+    const prm = JSON.parse(pr[1].text);
+    assert.ok(pr[0].type === 'image' && prm.region.w === 0.1 && prm.metrics.crop && prm.metrics.crop.w === Math.round(info.photo.width * 0.1), 'render_preview region ' + JSON.stringify(prm.metrics.crop));
+    // Compare: A | B | difference, and numbers; nothing changed.
+    const before = (await ok('get_settings', { path: 'exposure' })).json();
+    const same = (await ok('compare', { settings: { exposure: before }, max_size: 200 })).r.content;
+    const sd = JSON.parse(same[1].text).difference;
+    assert.ok(same[0].type === 'image' && sd.changed === 0 && sd.meanLevels === 0, 'B the same as A: no difference ' + JSON.stringify(sd));
+    const up = JSON.parse((await ok('compare', { settings: { exposure: before + 0.5 }, max_size: 200 })).r.content[1].text).difference;
+    assert.ok(up.changed > 0.5 && up.brighter > up.darker, 'B brighter ' + JSON.stringify(up));
+    const ph = JSON.parse((await ok('compare', { photo: true, region: { x: 0.4, y: 0.4, w: 0.1, h: 0.1 }, max_size: 200 })).r.content[1].text);
+    assert.ok(ph.difference.changed > 0 && ph.metricsB && ph.region, 'B the photo, a region ' + JSON.stringify(ph.difference));
+    assert.ok((await call('compare', { photo: true, look: 'gallery' })).r.isError, 'one B only');
+    assert.equal((await ok('get_settings', { path: 'exposure' })).json(), before, 'compare changes nothing');
+    console.log('PASS render_preview region (full-detail loupe), compare (A | B | difference: the same, brighter, the photo)', JSON.stringify({ up, photo: ph.difference }));
 
     const set = (await ok('set_settings', { changes: { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 } })).json();
     assert.deepEqual(set, { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 });

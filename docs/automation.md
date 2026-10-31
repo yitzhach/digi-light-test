@@ -488,7 +488,8 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `get_settings` / `set_settings` | read, or change by path (`{"exposure": 0.3, "graze.opacity": 0.6}`), checked as the panel would |
 | `undo` / `redo` | one step per change |
 | `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
-| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings; `change_map` `light` / `colour` adds the change map as a second picture, with its numbers |
+| `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings; `change_map` `light` / `colour` adds the change map as a second picture, with its numbers; `region` `{x, y, w, h}` (fractions) renders only that part at full detail (a loupe), measured there |
+| `compare` | the picture as it is (A) beside another version (B) and their difference, one image A \| B \| difference (×4), with numbers (mean / p99 difference in levels, share changed, shares brighter / darker) and both metrics. B: `photo: true`, `settings` (dotted paths changed from the current ones) or `look`; `region` for a full-detail part. Changes nothing |
 | `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`); `change_map` also writes `FILE-change.png` |
 | `measure_relief` | relief measured from lamp or sun photos (`photos` `[{path, sun: {from_deg, angle_deg}} or {path, lamp: {left_cm, above_cm, out_cm}}]`, each optionally `line_up` (a handheld photo; one shaped unlike the open photo is lined up anyway), `painting_width_cm`, `deepest_mm`) |
 | `save_project` | writes a `.digilight.json` project that the website (Projects › Import) opens too |

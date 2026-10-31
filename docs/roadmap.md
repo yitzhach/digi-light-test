@@ -66,8 +66,8 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - A `?round=` link so a round renders on your own GPU at about 1–2 s per look.
 - **Agent tools.**
   - `open_image` accepts data URLs (MCP line 100).
-  - `render_preview` takes `region` and returns `stats`.
-  - A `compare` tool returns an A|B crop pair plus the difference.
+  - **Done 10-31:** `render_preview` takes `region` (a full-detail loupe, measured there); a
+    `compare` tool returns A | B | difference with numbers (B: the photo, changed settings, a look).
   - `batch_render`.
 - **Exact, traceable pictures, run end to end by an AI** (the user, 10-21: "mathematically pixel
   for pixel accurate images", never a regenerated look-alike). The app is already a calculation,
