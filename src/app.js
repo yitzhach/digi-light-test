@@ -1169,6 +1169,7 @@ function renderNow() {
       shader.draw(drawTargets, state, imgH / imgW, imgW, imgH);
     }
     scheduleSharp();
+    showKeptShots();
     if (sharpLiveOn()) liveShade();
   } catch (e) { fail(e); }
 }
@@ -1294,7 +1295,34 @@ const overlaps = (p, s) => p.c0 < s.c1 && s.c0 < p.c1 && p.r0 < s.r1 && s.r0 < p
  * Render patch `p` (its rect, with its margin) into its canvas: from its kept reliefs
  * where it has them, building and keeping any it lacks. False when it was cancelled.
  */
-async function shadePatch(p, st, cancelled) {
+// What a shade depends on beyond the relief: every setting but the view's own and the big
+// buffers (their versions stand in). Each patch keeps its last SHARP_SHOTS shades by it, so
+// Before / After, undo and an effect switched off and on again show at once.
+const SHARP_SHOTS = 3;
+const SIG_SKIP = new Set(['viewZoom', 'selected', 'exporting', 'placingSphere', 'maskCanvas', 'layerMaskData', 'sceneMap', 'sphere']);
+let sigLit = -1, sigText = '';
+function shadeSig() {
+  if (sigLit !== sharpLit) { sigText = JSON.stringify(state, (k, v) => (SIG_SKIP.has(k) ? undefined : v)); sigLit = sharpLit; }
+  return sigText;
+}
+function showShot(p, canvas, lit) {
+  canvas.style.display = '';
+  if (p.canvas !== canvas) { if (p.canvas) p.canvas.replaceWith(canvas); else sharp.appendChild(canvas); }
+  p.canvas = canvas;
+  p.lit = lit;
+  if (lit === sharpLit) cover(p, 1);
+}
+/** Show at once every hidden patch that kept a shade of the current settings. */
+function showKeptShots() {
+  if (!sharpGrid) return;
+  const sig = shadeSig();
+  for (const p of sharpPatches) {
+    const shot = p.lit !== sharpLit && p.shots?.get(sig);
+    if (shot) { p.shots.delete(sig); p.shots.set(sig, shot); showShot(p, shot, sharpLit); }
+  }
+}
+
+async function shadePatch(p, st, cancelled, sig) {
   const { outW, outH } = sharpGrid, used = new Set(), lit = sharpLit, t0 = performance.now();
   let built = false;
   p.reliefs ||= new Map();
@@ -1327,11 +1355,11 @@ async function shadePatch(p, st, cancelled) {
   if (!done || cancelled()) return false;
   if (!built) sharpRate = (performance.now() - t0) / (p.rect.w * p.rect.h);
   Object.assign(out.style, p.pos);
-  if (p.canvas) p.canvas.replaceWith(out); else sharp.appendChild(out);
-  p.canvas = out;
+  p.shots ||= new Map();
+  p.shots.delete(sig); p.shots.set(sig, out);   // newest last
+  for (const k of p.shots.keys()) if (p.shots.size > SHARP_SHOTS) p.shots.delete(k);
   // Shaded live with settings that have moved on since: shown, but shaded again once still.
-  p.lit = lit;
-  if (lit === sharpLit) cover(p, 1);
+  showShot(p, out, lit);
   return true;
 }
 
@@ -1341,7 +1369,7 @@ async function relightPatches(span, st, job) {
   for (const p of sharpPatches) {
     if (p.lit === sharpLit || !overlaps(p, span)) continue;
     if (p.margin < need) { dropReliefs(p); continue; }   // the lights reach further: built anew below
-    if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting)) return false;
+    if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting, shadeSig())) return false;
   }
   sharpPatches = sharpPatches.filter((p) => p.lit === sharpLit || p.reliefs || (p.canvas.remove(), false));
   return true;
@@ -1367,7 +1395,7 @@ async function fillSpan(span, st, job) {
   // A multiple of 8, so glow and background blur's alignment never changes the tiles.
   const margin = Math.ceil((requiredMargin(st, outW) + SHARP_SPARE) / 8) * 8;
   const p = { canvas: null, pos, c0, r0, c1, r1, rect, margin, reliefs: null, lit: -1 };
-  if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting)) { dropReliefs(p); return false; }
+  if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting, shadeSig())) { dropReliefs(p); return false; }
   // A hidden patch wholly under the new one goes.
   sharpPatches = sharpPatches.filter((q) => q.lit === sharpLit || !(q.c0 >= c0 && q.c1 <= c1 && q.r0 >= r0 && q.r1 <= r1) || (dropPatches([q]), false));
   sharpPatches.push(p);
@@ -1381,7 +1409,7 @@ function trimSharp(view) {
   sharpPatches.sort((a, b) => far(a) - far(b));
   let px = 0, held = 0;
   sharpPatches = sharpPatches.filter((p) => {
-    px += p.rect.w * p.rect.h;
+    px += p.rect.w * p.rect.h * (p.shots?.size || 1);
     if (px > SHARP_MAX_PX && far(p) > 0) {
       if (p.lit === sharpLit) cover(p, -1);
       dropPatches([p]);
@@ -1416,9 +1444,9 @@ async function liveShade() {
       sharpLiveAgain = false;
       const plan = sharpPlan();
       if (!plan || !sharpLiveOn()) break;
-      const st = renderState(sharpGrid.outW), view = cellSpan(plan.rect), need = requiredMargin(st, sharpGrid.outW);
+      const st = renderState(sharpGrid.outW), sig = shadeSig(), view = cellSpan(plan.rect), need = requiredMargin(st, sharpGrid.outW);
       for (const p of sharpPatches.filter((q) => q.lit !== sharpLit && q.reliefs && q.margin >= need && overlaps(q, view))) {
-        if (!await shadePatch(p, st, cancelled)) return;
+        if (!await shadePatch(p, st, cancelled, sig)) return;
       }
     } while (sharpLiveAgain);
   } finally {
