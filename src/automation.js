@@ -210,14 +210,20 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     return { tone: { p05: r3(A.p05), p50: r3(A.p50), p95: r3(A.p95), saturation: r3(A.sat), clipHigh: r3(A.clip.hi), clipLow: r3(A.clip.lo) },
       light: A.litFrom === 'set' ? { litFromDeg: A.litDeg } : { even: true, brighterTowardDeg: Math.round(A.pool.deg), poolStrength: r3(A.pool.strength) },
       strokes: { contrast: r3(A.photoScore), directionDeg: A.strokes ? Math.round(A.strokes.strokeDeg) : null, coherence: A.strokes ? r3(A.strokes.coherence) : null },
-      rakeDeg: Math.round(A.rake), depthMm: A.depth, depthWhy: A.depthWhy, measuredRelief: A.measured, ms: A.ms, looks: looks() };
+      rakeDeg: Math.round(A.rake), depthMm: A.depth, depthWhy: A.depthWhy, measuredRelief: A.measured, ms: A.ms, ...(A.reused != null ? { reusedLooks: A.reused } : {}), looks: looks() };
   }
   // A built-in look has a fixed id (auto.js BUILT_IN) and a recipe version; prefer the id in jobs.
   const looks = () => (auto.analysis?.items || []).map((it, index) => ({ index, ...(it.id ? { id: it.id, version: it.version } : {}), name: it.name, kind: it.kind, note: it.note, exposure: it.settings.exposure }));
-  async function analyze() {
+  // reuse: an earlier getAnalysis() of this photo from these settings, made by the same measuring
+  // code (the caller's to know: digilight-headless.cjs analyzeCached): its measurements are kept,
+  // and so are the built-in looks whose settings are the same (summary reusedLooks). Another
+  // photo's or setup's is ignored.
+  async function analyze({ reuse } = {}) {
     needPhoto();
     if (state.mode !== 'single') throw new Error('Analyze works on a single photograph.');
-    await auto.analyze();
+    if (typeof reuse === 'string') reuse = JSON.parse(reuse);
+    const ok = reuse?.format === 'digilight-analysis' && reuse.version === API_VERSION && reuse.key === analysisKey() && Array.isArray(reuse.analysis?.items);
+    await auto.analyze({ reuse: ok ? reuse.analysis : null });
     if (!auto.analysis) throw new Error($('autoReadout')?.textContent || 'Analyze failed.');
     return summary();
   }

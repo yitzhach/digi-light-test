@@ -134,7 +134,7 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - Second piece (panel with a lintel) replicated it (0.54 / 0.51 measured, about 0 today). A
     protruding object (the lintel, a few cm) needs modelling apart: its step is not measurable from
     shading, so its cast shadow is missing.
-- **Narrower Analyze cache.** Cache the photo measurements separately from look fitting, so a look tweak doesn't re-run the 172 s Analyze.
+- **Done 10-31: narrower Analyze cache.** The tools' cache keeps the photo's measurements under a key of the measuring code alone (src/ but auto.js and presets.js, plus auto.js `MEASURE_VERSION`), and Analyze (`analyze({reuse})`) keeps the built-in looks whose settings did not change: a one-look tweak on the lintel 191 s → 28 s.
 - **Fixed test set plus goldens.**
   - The door photos, steel+plaster, DSC_8382 and the painting sample.
   - `tests/browser.cjs` saves each built-in look's settings so changes are caught.

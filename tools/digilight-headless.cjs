@@ -157,17 +157,40 @@ function cacheDir() {
 // A file's or a data URL's sha256 (the cache and records key photos by their bytes); else the name.
 const inputId = (input) => { input = String(input || ''); if (/^data:/.test(input)) return sha(input); return !/^(sample:|https?:)/.test(input) && fs.existsSync(input) ? sha(fs.readFileSync(input)) : input; };
 
-/** Analyze the open photo (opened from `input`), from the cache when it can. Returns the summary with cached: true|false. */
+// The code the photo's measurements depend on: src/ but the looks (auto.js and presets.js, whose
+// measuring part is versioned by auto.js MEASURE_VERSION). A change to a look leaves it alone.
+let measureHash = null;
+function measureCode() {
+  if (!measureHash) {
+    const dir = path.join(ROOT, 'src'), LOOKS = ['auto.js', 'presets.js'];
+    const version = /MEASURE_VERSION = (\d+)/.exec(fs.readFileSync(path.join(dir, 'auto.js'), 'utf8'))?.[1];
+    measureHash = sha('measure ' + version, ...fs.readdirSync(dir).sort().filter((f) => !LOOKS.includes(f)).map((f) => f + fs.readFileSync(path.join(dir, f), 'utf8')));
+  }
+  return measureHash;
+}
+
+/**
+ * Analyze the open photo (opened from `input`), from the cache when it can. Returns the summary
+ * with cached: true|false. Two keys: the whole analysis by all of src/ (a hit is instant), and the
+ * last one of this photo and setup by the measuring code alone (measureCode): after a change to
+ * the looks, Analyze keeps its measurements and the looks that did not change (reusedLooks).
+ */
 async function analyzeCached(call, input, opts = {}) {
   const dir = cacheDir();
   if (!dir || input == null) return { ...(await call('analyze')), cached: false };
   const info = await call('info');
-  const file = path.join(dir, sha(code(), inputId(input), JSON.stringify([await call('settings'), info.preview, info.measuredRelief])) + '.json');
+  const setup = [inputId(input), JSON.stringify([await call('settings'), info.preview, info.measuredRelief])];
+  const file = path.join(dir, sha(code(), ...setup) + '.json'), measured = path.join(dir, 'm-' + sha(measureCode(), ...setup) + '.json');
   if (!opts.fresh && fs.existsSync(file)) {
     try { return { ...(await call('setAnalysis', fs.readFileSync(file, 'utf8'))), cached: true }; } catch { /* stale or broken: analyze again */ }
   }
-  const out = await call('analyze');
-  try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify(await call('getAnalysis'))); } catch { /* read-only disk: no cache */ }
+  const reuse = !opts.fresh && fs.existsSync(measured) ? fs.readFileSync(measured, 'utf8') : undefined;
+  const out = await call('analyze', reuse ? { reuse } : undefined);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const saved = JSON.stringify(await call('getAnalysis'));
+    fs.writeFileSync(file, saved); fs.writeFileSync(measured, saved);
+  } catch { /* read-only disk: no cache */ }
   return { ...out, cached: false };
 }
 

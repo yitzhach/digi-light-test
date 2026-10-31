@@ -57,6 +57,12 @@ const rt=await page.evaluate(async()=>{const dl=window.digilight,c=JSON.parse(JS
   return {size,hm:'hm' in (c.analysis.strokes||{}),same:JSON.stringify(now.items.map(i=>i.settings))===JSON.stringify(was.items.map(i=>i.settings))&&now.rake===was.rake&&now.depth===was.depth,
     looks:s.looks.length,tiles:document.querySelectorAll('#autoLooks .autoLook canvas').length,thumbW:now.items[0].thumb.width,other};});
 assert.ok(rt.same&&!rt.hm&&rt.size<2e6&&rt.looks===A.n&&rt.tiles===A.n&&rt.thumbW===240&&/another photo or other settings/.test(rt.other),JSON.stringify(rt));assert.ok(A.depth>=.3&&A.depth<=6&&A.rake>=0&&A.rake<360,JSON.stringify(A));
+// Analyze again from a saved one (the tools' cache after a change to the looks): measurements kept, unchanged built-in looks kept, a changed one fitted again to the same result.
+const ru=await page.evaluate(async()=>{const dl=window.digilight,c=await dl.getAnalysis(),was=__studio.auto.analysis,exp=(A)=>A.items.map(i=>i.settings.exposure);
+  const all=await dl.analyze({reuse:c}),e1=exp(__studio.auto.analysis);const c2=JSON.parse(JSON.stringify(c));c2.analysis.items.find(i=>i.id==='gallery').pre+=' changed';
+  const one=await dl.analyze({reuse:c2}),now=__studio.auto.analysis;
+  return {builtIn:was.items.filter(i=>i.kind==='built-in').length,all:all.reusedLooks,one:one.reusedLooks,ms:[was.ms,all.ms,one.ms],same:JSON.stringify(e1)===JSON.stringify(exp(was))&&JSON.stringify(exp(now))===JSON.stringify(exp(was))&&now.depth===was.depth&&now.rake===was.rake};});
+assert.ok(ru.all===ru.builtIn&&ru.one===ru.builtIn-1&&ru.same&&ru.ms[1]<ru.ms[0]/2,'Analyze reusing a saved one '+JSON.stringify(ru));console.log('Analyze reuse',JSON.stringify(ru));
 const mine=A.items.find(i=>i.name==='Auto test preset');assert.ok(mine&&mine.kind==='preset'&&mine.depth===A.depth&&mine.g&&mine.angle===A.rake&&mine.width===JSON.parse(pre).paintingWidthCm,'preset adapted '+JSON.stringify(mine));
 // Goldens: each built-in look's recipe as Analyze makes it on this fixture (tests/goldens/looks.json), so a change to
 // any look shows as a diff. Exposure is fitted by rendering, so it may move 0.06; everything else must match.

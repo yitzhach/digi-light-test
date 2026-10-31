@@ -37,6 +37,10 @@ export const LOOK_BIAS = { 'gallery': -1.03, 'gallery-spot': -1.48, 'matched': -
 // keepers (deeper, lamp low near the edge), 3 round 3 keepers (raking 6°, finer detail, 10-20),
 // 4 round 4 (raking 6° with the old smoothing, 10-21), 5 round 5 (softer: side lamp graze detail
 // 0.03, from the left fine relief without the ×1.4, 10-21).
+// The photo's measurements (tone, texture depth, raking direction) as Analyze makes them. Tools
+// keep them across code changes to the looks (auto.js, presets.js: digilight-headless.cjs
+// analyzeCached); bump this whenever the measuring code in these two files changes.
+export const MEASURE_VERSION = 1;
 export const LOOK_VERSION = { 'favourite-left': 5, 'favourite-side-lamp': 5 };
 const THUMB_W = 240;
 // Settings the G-buffer is built from; a look that changes any of them rebuilds it.
@@ -254,57 +258,65 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
     return s;
   }
 
-  async function analyze() {
+  // reuse: an earlier analysis (save()) of this photo from these settings, made by the same
+  // measuring code: its measurements are taken as they are, and a built-in look whose settings
+  // before its exposure fit are the same keeps its fit and thumbnail (A.reused counts them).
+  async function analyze({ reuse: prior } = {}) {
     if (running || state.exporting || !api.source() || state.mode !== 'single') { if (state.mode !== 'single') status('Auto works on a single photograph.'); return; }
     running = true; setBatching(true); $('autoAnalyze').disabled = true;
     const base = snapshot(), t0 = performance.now();
     surfaceKey = '';
     try {
-      status('Reading the photo…'); await frame();
-      // Photo: tone and brightness across it from the preview's original view, clipping from the full photo.
-      put(base);
-      const ph = grab(api.canvas.width, 4), pool = lightPool(ph.data, ph.canvas.width, ph.canvas.height);
-      const d = ph.data, ys = [];
-      let sat = 0;
-      for (let i = 0; i < d.length; i += 16) { const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b); ys.push(0.2126 * r + 0.7152 * g + 0.0722 * b); sat += mx ? (mx - Math.min(r, g, b)) / mx : 0; }
-      ys.sort((a, b) => a - b);
-      const q = (p) => ys[Math.min(ys.length - 1, Math.floor(p * ys.length))] / 255;
-      const clip = clippingOf(api.source());
-      const photoScore = textureScore(ph.data, api.canvas.width, api.canvas.height, mmPerPx()).score;
-      // The key light goes to the side the user says the photo was lit from, else each look keeps its own.
-      const litDeg = base.photoDiffuse < 0.5 ? base.azimuthDeg : null, litFrom = litDeg == null ? 'even' : 'set';
-      const cx = litDeg == null ? 0 : Math.cos(litDeg * Math.PI / 180);
-      const side = Math.abs(cx) < 0.26 ? null : cx > 0 ? 'right' : 'left';
-      A = { mean: meanOf(4).mean, p05: q(0.05), p50: q(0.5), p95: q(0.95), sat: sat / ys.length, clip, pool, photoScore, litDeg, litFrom, side };
-
-      // Depth, under a plain gallery light on the base's texture settings.
+      // Depth is fitted under a plain gallery light on the base's texture settings.
       const ref = clone(base);
       neutral(ref); scene(ref, 'Gallery track'); Object.assign(ref, { exposure: 0, layers: [], originalTop: 0, physical: 1 });
       // Measuring (depth, raking, exposure) sees the lighting alone: the Colour tool and
       // overlays (grain would read as texture) off. Thumbnails show them.
       const plain = (x) => ({ ...x, adjust: x.adjust && { ...x.adjust, on: 0 }, overlays: x.overlays && { ...x.overlays, on: 0 } });
       const dressed = (x) => (x.adjust?.on && x.adjust.opacity > 0) || (x.overlays?.on && Object.values(x.overlays).some((o) => o?.on));
-      const m = api.measured?.get?.();
-      A.measured = !!(m?.on && m.w === api.canvas.width && m.h === api.canvas.height);
-      if (A.measured) { A.depth = base.textureDepthMm; A.depthWhy = 'measured relief (lamp photos)'; }
+      if (prior) A = clone({ ...prior, items: [], reused: 0 });
       else {
-        status('Fitting texture depth…'); await frame();
-        const at = (depth) => { put(plain({ ...ref, textureDepthMm: depth })); return contrast(); };
-        const flat = at(DEPTH_FLAT);
-        const fit = await fitDepth(async (depth) => at(depth) / (flat * RELIEF_GAIN), { lo: DEPTH_FLAT, hi: 8, steps: 3 });
-        A.depth = Math.round(Math.max(DEPTH_MIN, Math.min(DEPTH_MAX, fit.depth)) * 20) / 20;
-        A.depthWhy = fit.reached === 'yes' ? `relief adds ${Math.round((RELIEF_GAIN - 1) * 100)}% stroke contrast` : fit.reached === 'high' ? 'relief barely shows even deep; kept moderate' : 'relief shows strongly even shallow';
-        A.flatScore = flat;
+        status('Reading the photo…'); await frame();
+        // Photo: tone and brightness across it from the preview's original view, clipping from the full photo.
+        put(base);
+        const ph = grab(api.canvas.width, 4), pool = lightPool(ph.data, ph.canvas.width, ph.canvas.height);
+        const d = ph.data, ys = [];
+        let sat = 0;
+        for (let i = 0; i < d.length; i += 16) { const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b); ys.push(0.2126 * r + 0.7152 * g + 0.0722 * b); sat += mx ? (mx - Math.min(r, g, b)) / mx : 0; }
+        ys.sort((a, b) => a - b);
+        const q = (p) => ys[Math.min(ys.length - 1, Math.floor(p * ys.length))] / 255;
+        const clip = clippingOf(api.source());
+        const photoScore = textureScore(ph.data, api.canvas.width, api.canvas.height, mmPerPx()).score;
+        // The key light goes to the side the user says the photo was lit from, else each look keeps its own.
+        const litDeg = base.photoDiffuse < 0.5 ? base.azimuthDeg : null, litFrom = litDeg == null ? 'even' : 'set';
+        const cx = litDeg == null ? 0 : Math.cos(litDeg * Math.PI / 180);
+        const side = Math.abs(cx) < 0.26 ? null : cx > 0 ? 'right' : 'left';
+        A = { mean: meanOf(4).mean, p05: q(0.05), p50: q(0.5), p95: q(0.95), sat: sat / ys.length, clip, pool, photoScore, litDeg, litFrom, side };
+
+        const m = api.measured?.get?.();
+        A.measured = !!(m?.on && m.w === api.canvas.width && m.h === api.canvas.height);
+        if (A.measured) { A.depth = base.textureDepthMm; A.depthWhy = 'measured relief (lamp photos)'; }
+        else {
+          status('Fitting texture depth…'); await frame();
+          const at = (depth) => { put(plain({ ...ref, textureDepthMm: depth })); return contrast(); };
+          const flat = at(DEPTH_FLAT);
+          const fit = await fitDepth(async (depth) => at(depth) / (flat * RELIEF_GAIN), { lo: DEPTH_FLAT, hi: 8, steps: 3 });
+          A.depth = Math.round(Math.max(DEPTH_MIN, Math.min(DEPTH_MAX, fit.depth)) * 20) / 20;
+          A.depthWhy = fit.reached === 'yes' ? `relief adds ${Math.round((RELIEF_GAIN - 1) * 100)}% stroke contrast` : fit.reached === 'high' ? 'relief barely shows even deep; kept moderate' : 'relief shows strongly even shallow';
+          A.flatScore = flat;
+        }
+        ref.textureDepthMm = A.depth;
+        // Raking direction: across, along or diagonal to the strokes, whichever shows them most,
+        // on the key light's side.
+        status('Finding the raking direction…'); await frame();
+        put(plain(ref)); Object.assign(state.graze, grazePresets['Classic raking'], { grey: 0 }); delete state.graze.lamp;
+        const sideDeg = side === 'right' ? 45 : side === 'left' ? 135 : (base.graze?.angle ?? 135);
+        const rk = findRaking(sideDeg);
+        A.rake = rk ? rk.best.from : sideDeg; A.strokes = rk;
+        if (side && rk && (side === 'right') !== (Math.cos(A.rake * Math.PI / 180) > 0) && Math.abs(Math.cos(A.rake * Math.PI / 180)) > 0.26) A.rake = mirrorAngle(A.rake);
       }
       ref.textureDepthMm = A.depth;
-      // Raking direction: across, along or diagonal to the strokes, whichever shows them most,
-      // on the key light's side.
-      status('Finding the raking direction…'); await frame();
-      put(plain(ref)); Object.assign(state.graze, grazePresets['Classic raking'], { grey: 0 }); delete state.graze.lamp;
-      const sideDeg = side === 'right' ? 45 : side === 'left' ? 135 : (base.graze?.angle ?? 135);
-      const rk = findRaking(sideDeg);
-      A.rake = rk ? rk.best.from : sideDeg; A.strokes = rk;
-      if (side && rk && (side === 'right') !== (Math.cos(A.rake * Math.PI / 180) > 0) && Math.abs(Math.cos(A.rake * Math.PI / 180)) > 0.26) A.rake = mirrorAngle(A.rake);
+      const { side } = A;
 
       // Looks: built-in, then the user's presets and projects.
       const items = [];
@@ -340,8 +352,15 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
       // Gallery look's fit moved from 0 on this photo (how much brighter or darker it needs).
       const order = items.map((it, i) => [JSON.stringify(SURFACE.map((k) => it.settings[k])), it.kind !== 'built-in', i]).sort((a, b) => (a[1] - b[1]) || a[0].localeCompare(b[0]) || a[2] - b[2]);
       let shift = 0;
+      for (const it of items) it.pre = JSON.stringify([it.settings, it.bias ?? null]);
       for (const [n, [, , i]] of order.entries()) {
         const it = items[i], s = it.settings;
+        const old = it.kind === 'built-in' && prior?.items.find((o) => o.id === it.id && o.pre === it.pre);
+        if (old) {
+          s.exposure = old.settings.exposure; it.thumb = await canvasOf(old.thumb); A.reused++;
+          if (it.id === 'gallery') shift = s.exposure;
+          continue;
+        }
         status(`Making looks: ${n + 1} of ${items.length} · ${it.name}`); await frame();
         put(plain(s));
         if (it.kind === 'built-in') { it.thumb = fitExposure(it.bias); if (it.id === 'gallery') shift = state.exposure; }
@@ -461,13 +480,14 @@ const crispGraze = (s, angle, detail = 0.02) => Object.assign(s.graze, { enabled
     const strokes = A.strokes && (({ hm, ...rest }) => rest)(A.strokes);   // not the heightmap (tens of MB)
     return { ...clone({ ...A, strokes, items: [] }), items: A.items.map(({ thumb, ...it }) => ({ ...clone(it), thumb: thumb.toDataURL('image/jpeg', 0.8) })) };
   }
+  async function canvasOf(url) {
+    const im = new Image(); im.src = url; await im.decode();
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0);
+    return c;
+  }
   async function load(saved) {
     if (running) throw new Error('Analyze is running.');
-    const items = await Promise.all(saved.items.map(async ({ thumb, ...it }) => {
-      const im = new Image(); im.src = thumb; await im.decode();
-      const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0);
-      return { ...clone(it), thumb: c };
-    }));
+    const items = await Promise.all(saved.items.map(async ({ thumb, ...it }) => ({ ...clone(it), thumb: await canvasOf(thumb) })));
     A = { ...clone({ ...saved, items: [] }), items }; active = null;
     $('autoStrength').disabled = true; drawLooks(); readout();
   }

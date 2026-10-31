@@ -107,4 +107,7 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   was the tool search block's "#toolSearchInput not visible" (10-28).
 - Scene work: type `artwork` must stay bit for bit what it was (`node tests/exact.cjs`); a preset
   carries a look, never `scene` (studio.js presetKeys); `smooth` is a GLSL keyword.
+- Changing how Analyze measures the photo (tone, depth fit, raking direction) in auto.js or
+  presets.js: bump auto.js `MEASURE_VERSION`, or the tools' cache keeps the old measurements
+  (digilight-headless.cjs measureCode leaves those two files out so look tweaks reuse them).
 - Whenever you push to `main`, update HANDOFF.md (CLAUDE.md).
