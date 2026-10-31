@@ -607,7 +607,7 @@ assert.deepEqual(b.names,['A · Brighter','B · Graze','C · Deeper']);assert.eq
 assert.ok(Math.abs(b.depth[1]-Math.min(10,Math.round(b.depth[0]*1.5*1e4)/1e4))<1e-9,JSON.stringify(b.depth));assert.equal(b.from.title,'Test round');
 assert.ok(await page.locator('#batchViewer').isVisible());await page.click('#bvClose');
 assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before,'settings back');assert.equal(await page.evaluate(()=>__studio.history.entries.length),hist,'no undo steps');
-assert.match(await page.evaluate(()=>window.digilight.round('rounds/nope.json').then(()=>'',e=>e.message)),/HTTP 404/);
+assert.match(await page.evaluate(()=>window.digilight.round({title:'empty'}).then(()=>'',e=>e.message)),/A round is/);
 console.log('PASS round: a round file rendered in the batch viewer (set, preset, scale + exposureAdd), settings and history untouched');}
 // Colour & strokes: neutral values change nothing; Keep greys neutral takes a warm light's
 // tint off grey paint; Vibrance saturates the red half and leaves the grey half; Room light
