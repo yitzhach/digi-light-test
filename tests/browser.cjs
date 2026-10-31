@@ -363,7 +363,7 @@ const shown=()=>page.evaluate(()=>[...document.querySelectorAll('#sharp canvas')
 for(let i=1;i<=6;i++){await page.locator('#exposure').evaluate((el,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));},0.3+i*0.05);await page.waitForTimeout(60);assert.ok(await shown()>0,'shown during the drag');}
 await page.waitForFunction(()=>__bench.sharp());const b=await page.evaluate(()=>__bench.sharpStats());assert.equal(b.builds,a.builds,'live: no relief built');assert.ok(b.shades>a.shades+1,'shaded during the drag '+JSON.stringify([a,b]));
 const g=await compareSharp();assert.ok(g.diff<0.5,'live overlay vs export '+g.diff);
-await page.locator('#fineRelief').evaluate(el=>{el.value=1.0;el.dispatchEvent(new Event('input',{bubbles:true}));});await settle();assert.equal(await shown(),0,'a relief change hides it');
+await page.locator('#fineRelief').evaluate(el=>{el.value=1.0;el.dispatchEvent(new Event('input',{bubbles:true}));});await settle();assert.equal(await shown(),0,'a relief change hides it '+JSON.stringify(await page.evaluate(()=>[__bench.state.fineRelief,__bench.sharpLive(),__bench.sharpStats(),[...document.querySelectorAll('#sharp canvas')].map(c=>c.width+'x'+c.height+' '+c.style.cssText)])));
 await page.evaluate(()=>__bench.sharpLive(80));console.log('live overlay diff',+g.diff.toFixed(4),JSON.stringify(b));}
 await page.waitForFunction(()=>__bench.sharp());await page.click('#zoomFit');await page.waitForTimeout(400);assert.equal(await page.evaluate(()=>__bench.sharp()),null);
 console.log('PASS sharp zoom overlay matches full-resolution export',JSON.stringify({diff:+r.diff.toFixed(4),preview:+r.soft.toFixed(2),rect:r.rect}));}
