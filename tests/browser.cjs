@@ -598,6 +598,17 @@ await page.click('#bvPrev');await page.click('#bvApply');assert.equal(await sett
 const L=await setting('lights'),n=L.at(-1);
 const src=L.find(l=>l.kelvin===2700&&l!==n);assert.ok(src&&n.kelvin===2700&&n.power===3.3&&n.z===0.21&&n.lift===0.4&&(n.x!==src.x||n.y!==src.y),JSON.stringify(n));await page.click('#undo');await settle();}
 console.log('PASS batch preview: WebP looks, sharp previews, notes and Save ratings JSON, settings and history restored, zoom kept, picked export saved as a project, use this look; + Light starts from the selected light');}
+// A lighting round (rounds/*.json, ?round=) rendered on this machine into the batch viewer: each version dressed as the CLI dresses a job, nothing left changed.
+{const before=await page.evaluate(()=>JSON.stringify(__studio.snapshot())),hist=await page.evaluate(()=>__studio.history.entries.length);
+const r=await page.evaluate(()=>window.digilight.round({title:'Test round',guard:false,variants:[{id:'A',name:'Brighter',set:{exposure:0.4}},{id:'B',name:'Graze',preset:'graze:Classic raking'},{id:'C',name:'Deeper',scale:{textureDepthMm:1.5},exposureAdd:-0.2}]}));
+assert.deepEqual(r,{title:'Test round',versions:3});
+const b=await page.evaluate(()=>{const B=__batch.batch;return {names:B.items.map(i=>i.name),exp:[B.base.exposure,...B.items.map(i=>i.settings.exposure)],graze:B.items[1].settings.graze.enabled,depth:[B.base.textureDepthMm,B.items[2].settings.textureDepthMm],from:B.looksFrom};});
+assert.deepEqual(b.names,['A · Brighter','B · Graze','C · Deeper']);assert.equal(b.exp[1],0.4);assert.ok(b.graze);assert.ok(Math.abs(b.exp[3]-(Math.round((b.exp[0]-0.2)*100)/100))<1e-9,JSON.stringify(b));
+assert.ok(Math.abs(b.depth[1]-Math.min(10,Math.round(b.depth[0]*1.5*1e4)/1e4))<1e-9,JSON.stringify(b.depth));assert.equal(b.from.title,'Test round');
+assert.ok(await page.locator('#batchViewer').isVisible());await page.click('#bvClose');
+assert.equal(await page.evaluate(()=>JSON.stringify(__studio.snapshot())),before,'settings back');assert.equal(await page.evaluate(()=>__studio.history.entries.length),hist,'no undo steps');
+assert.match(await page.evaluate(()=>window.digilight.round('rounds/nope.json').then(()=>'',e=>e.message)),/HTTP 404/);
+console.log('PASS round: a round file rendered in the batch viewer (set, preset, scale + exposureAdd), settings and history untouched');}
 // Colour & strokes: neutral values change nothing; Keep greys neutral takes a warm light's
 // tint off grey paint; Vibrance saturates the red half and leaves the grey half; Room light
 // colour tints the room light; Stroke definition carves the relief and exports as previewed;

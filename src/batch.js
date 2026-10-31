@@ -130,10 +130,11 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
   // Run's progress goes to the batch section and, when Auto asked for the run, to Auto's note.
   let echo = null;
   const status = (m) => { $('batchStatus').textContent = m; echo?.(m); };
-  async function run() {
-    if (running || state.exporting || !api.source()) return;
+  // given: {looks, from} from elsewhere (a round, automation.js), in place of this section's choice.
+  async function run(given) {
+    if (running || state.exporting || !api.source()) return false;
     let list;
-    try { list = await looks(); } catch (e) { status(e.message); return; }
+    try { list = given?.looks || await looks(); } catch (e) { status(e.message); return false; }
     running = true; setBatching(true); $('batchRun').disabled = true;
     const base = snapshot(), items = [], src = api.source();
     const SW = src.width || src.naturalWidth, SH = src.height || src.naturalHeight;
@@ -148,7 +149,7 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
       const original = await encode(orig);
       for (const [i, look] of list.entries()) {
         status(`Rendering ${i + 1} of ${list.length}: ${look.name}…`);
-        restore(clone(base)); look.apply(state); api.dirty();
+        restore(clone(base)); await look.apply(state); api.dirty();
         if (look.guard) guard?.()?.preview();
         const settings = snapshot();
         await frame();
@@ -157,18 +158,19 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
       }
       if (batch) for (const it of [...batch.items, batch.original]) URL.revokeObjectURL(it.url);
       batch = { items, base, original: { blob: original, url: URL.createObjectURL(original) }, w: outW, h: outH, type: items[0].blob.type,
-        made: new Date(), looksFrom: describe(), detail: sharp ? 'sharp' : 'screen' };
+        made: new Date(), looksFrom: given?.from || describe(), detail: sharp ? 'sharp' : 'screen' };
       const kb = items.reduce((s, it) => s + it.blob.size, 0) / 1024;
       status(`${items.length} previews at ${outW}×${outH}, ${Math.round(kb)} KB in all (${batch.type === 'image/webp' ? 'WebP' : 'JPEG'}). Rate them, then export the ones you like.`);
       $('batchOpen').disabled = false;
-    } catch (e) { status('Batch failed: ' + e.message); }
+    } catch (e) { status('Batch failed: ' + e.message); if (given) throw e; }
     finally {
       restore(clone(base)); api.dirty(); api.render();
       setBatching(false); running = false; $('batchRun').disabled = false;
     }
     if (batch) viewer.open(0);
+    return !!batch;
   }
-  $('batchRun').onclick = run;
+  $('batchRun').onclick = () => run();
   // Auto's "Compare full screen": its looks, rendered and opened in the viewer.
   async function openAuto(say) {
     if (running) return;
@@ -269,7 +271,7 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
 
   const viewer = makeViewer({ get batch() { return batch; }, exportPicked, zipPreviews, applyLook, saveRatings });
   window.__batch = { run, get batch() { return batch; }, viewer, exportPicked, zipPreviews, applyLook, looks, ratings, saveRatings };
-  return { pickList, openAuto };
+  return { pickList, openAuto, run, MAX };
 }
 
 // ---- the review viewer: a fixed full-screen overlay

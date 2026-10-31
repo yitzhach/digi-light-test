@@ -66,7 +66,7 @@ export function parseSets(text) {
   return out;
 }
 
-export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, lamp, scene, $ }) {
+export function initAutomation({ state, api, snapshot, restore, checkpoint, validate, history, auto, project, openProject, presets, guard, lamp, scene, batch, setBatching, $ }) {
   // One call at a time: each waits for the one before (a render during an Analyze would see its trial looks).
   let queue = Promise.resolve();
   const serial = (fn) => (...args) => { const run = queue.then(() => fn(...args)); queue = run.catch(() => {}); return run; };
@@ -260,6 +260,78 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     table.apply(name); checkpoint();
     const g = guarded();
     return { kind, name, ...(g?.fixed ? { guard: g.note } : {}) };
+  }
+
+  // A lighting round (rounds/roundN.json, as tools/looks/make_round.py renders it) on this machine:
+  // {title?, guard?, fill?, variants: [{id, name, look?, strength?, preset?, set?, exposureAdd?,
+  // scale?, addLights?, fill?, guard?}]}, or a URL to one. Each version is dressed as the CLI
+  // dresses a batch job (preset, look, added lights, exposureAdd, scale, set, then the guard
+  // once) on the settings it started from, rendered by the batch preview and opened in its
+  // viewer to rate (Save ratings there). At most batch.MAX versions; the settings come back.
+  async function round(spec) {
+    needPhoto();
+    let from = null;
+    if (typeof spec === 'string') {
+      from = spec;
+      const r = await fetch(spec);
+      if (!r.ok) throw new Error(`round: HTTP ${r.status}`);
+      spec = await r.json();
+    }
+    if (!Array.isArray(spec?.variants) || !spec.variants.length) throw new Error('A round is {title, variants: [{id, name, look?, set?, ...}]}.');
+    const vs = spec.variants.slice(0, batch.MAX);
+    if (vs.some((v) => v.look != null) && !auto.analysis) await analyze();
+    const was = guard.enabled;
+    guard.enabled = false;   // guarded once per version, after all its changes
+    try {
+      await batch.run({
+        looks: vs.map((v) => ({ name: [v.id, v.name].filter(Boolean).join(' · ') || 'Version', apply: () => dress(v, spec) })),
+        from: { from: 'Round', title: spec.title || null, url: from, versions: spec.variants.length },
+      });
+    } finally {
+      guard.enabled = was;
+    }
+    return { title: spec.title || null, versions: vs.length, ...(vs.length < spec.variants.length ? { left: spec.variants.length - vs.length } : {}) };
+  }
+  // Each version of a round's spec (or a list of versions) dressed as round() dresses it, on the
+  // settings as they are: [{name, settings, guard}] (guard: what it moved, or null). Nothing changes
+  // and no undo step is made; exportMany renders the settings as they are.
+  async function versions(spec) {
+    needPhoto();
+    if (Array.isArray(spec)) spec = { variants: spec };
+    if (!Array.isArray(spec?.variants) || !spec.variants.length) throw new Error('versions takes a list of {name?, look?, set?, preset?, scale?, exposureAdd?, addLights?, guard?}.');
+    if (spec.variants.some((v) => v.look != null) && !auto.analysis) await analyze();
+    const base = snapshot(), was = guard.enabled, out = [];
+    setBatching(true); guard.enabled = false;
+    try {
+      for (const [i, v] of spec.variants.entries()) {
+        restore(clone(base));
+        const g = await dress(v, spec);
+        out.push({ name: [v.id, v.name].filter(Boolean).join(' · ') || `Version ${i + 1}`, settings: settings(), guard: g?.fixed ? g.note : null });
+      }
+    } finally {
+      restore(base); setBatching(false); guard.enabled = was; api.dirty(); api.render();
+    }
+    return out;
+  }
+  async function dress(v, spec) {
+    const list = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
+    for (const p of list(v.preset)) { const i = p.indexOf(':'); if (i < 1) throw new Error('preset is kind:name'); applyPreset(p.slice(0, i), p.slice(i + 1)); }
+    if (v.look != null) await applyLook(v.look, { strength: v.strength ?? 1 });
+    for (const l of [...list(v.addLights), ...(v.fill && spec.fill ? [spec.fill] : [])]) addLight(l.kind || 'light', l.fields || {});
+    if (v.exposureAdd != null) set({ exposure: Math.round((state.exposure + +v.exposureAdd) * 100) / 100 });
+    if (v.scale) {
+      // Kept inside each setting's range, so "20% deeper" stops at the top.
+      const ranges = Object.fromEntries(describe().map((d) => [d.path, d])), changes = {};
+      for (const [p, k] of Object.entries(v.scale)) {
+        const x = getPath(snapshot(), p), r = ranges[p] || {};
+        if (typeof x !== 'number') throw new Error(`scale: ${p} is not a number setting`);
+        changes[p] = Math.min(r.max ?? Infinity, Math.max(r.min ?? -Infinity, Math.round(x * +k * 1e4) / 1e4));
+      }
+      set(changes);
+    }
+    if (v.set) set(v.set);
+    const g = v.guard ?? spec.guard;
+    return g === false ? null : guard.run({ ...(typeof g === 'object' ? g : {}), fix: true, amend: false, record: false });
   }
 
   // Output.
@@ -497,6 +569,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     guard: serial(async (o = {}) => { needPhoto(); return guard.run({ ...o, fix: o.fix !== false, amend: false }); }),
     lastGuard: () => guard.last, setGuard: (on) => { guard.enabled = !!on; return guard.enabled; },
     record: serial(async (extra) => record(extra)),
+    round: serial(round), versions: serial(versions),
     measureRelief: serial(measureRelief),
     getProject: serial(getProject), setProject: serial(setProject),
   };
@@ -526,10 +599,10 @@ function bridge(dl) {
 }
 
 // URL parameters, run once on open: ?image=URL | ?project=URL | ?sample=id, then ?set=…,
-// then ?analyze / ?look=Name[&strength=0.8].
+// then ?analyze / ?look=Name[&strength=0.8], then ?round=URL (or the round's JSON itself).
 async function fromURL(dl) {
   const q = new URLSearchParams(location.search);
-  if (!['image', 'project', 'sample', 'set', 'look', 'analyze'].some((k) => q.has(k))) return;
+  if (!['image', 'project', 'sample', 'set', 'look', 'analyze', 'round'].some((k) => q.has(k))) return;
   const status = (t) => { const h = document.getElementById('hint'); if (h) { h.classList.remove('gone'); h.textContent = t; } };
   try {
     if (q.get('project')) { const r = await fetch(q.get('project')); if (!r.ok) throw new Error(`project: HTTP ${r.status}`); await dl.setProject(await r.json()); }
@@ -538,5 +611,8 @@ async function fromURL(dl) {
     if (q.get('set')) await dl.set(parseSets(q.get('set')));
     if (q.get('look')) await dl.applyLook(q.get('look'), { strength: q.has('strength') ? +q.get('strength') : 1 });
     else if (q.has('analyze')) await dl.analyze();
+    const r = q.get('round');
+    // A name (round5) is a round of this site's rounds/ folder; else a URL, or the JSON itself.
+    if (r) { status('Rendering the round on this computer…'); await dl.round(/^\s*\{/.test(r) ? JSON.parse(r) : /^[\w-]+$/.test(r) ? `rounds/${r}.json` : r); document.getElementById('hint')?.classList.add('gone'); }
   } catch (e) { status('Automation: ' + e.message); }
 }

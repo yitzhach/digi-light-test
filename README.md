@@ -302,7 +302,7 @@ use more than four shots with varied elevation when fitting ambient.
 Scripts and AI agents can drive the app: `window.digilight` in the page (load a photo,
 Analyze, apply a look, say what a photo shows and relight it with a light scene, set any
 setting by name, render or export, project get/set),
-URL parameters (`?image=`, `?set=`, `?look=`), a `postMessage` bridge (`?bridge`) and
+URL parameters (`?image=`, `?set=`, `?look=`, `?round=` to rate a lighting round rendered on your own computer), a `postMessage` bridge (`?bridge`) and
 a headless command line, `tools/digilight-cli.cjs`, and an MCP server,
 `tools/digilight-mcp.cjs`, so an AI assistant can relight a painting or a photo while you chat.
 See `docs/automation.md`.

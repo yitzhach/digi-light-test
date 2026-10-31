@@ -836,7 +836,7 @@ export function initStudio(api) {
     looks:{names:Object.keys(looks),apply:n=>{useLook(n);sync();}},
     // Light scenes for photos (scenelights.js), by id: the picture must show a scene (Photo, Portrait, Room, Object).
     scene:{names:LIGHT_SCENES.map(x=>x.id),apply:n=>{sceneUI.useScene(n,{quiet:true});sync();}}};
-  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,lamp,scene:sceneUI,
+  initAutomation({state,api,snapshot,restore,checkpoint,validate,history,auto,project,$,presets:presetTables,guard,oneTap,lamp,scene:sceneUI,batch,setBatching:v=>{batching=v;},
     openProject:p=>{const run=queue.then(async()=>{loading=true;try{await open(p);}finally{loading=false;}});queue=run.catch(()=>{});return run;}});
   window.__studio={guard,calibrate:cal,lamp,probe,auto,tools,scene:sceneUI,bestRaking,findRaking,snapshot,history,checkpoint,restore,autoSetup,validate,startSweep,stopSweep,get sweeping(){return !!sweep;},get sourceRevision(){return sourceRevision;}};
 

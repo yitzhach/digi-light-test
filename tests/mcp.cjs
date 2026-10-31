@@ -26,7 +26,7 @@ const full = process.argv.includes('--full');
   try {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     for (const n of ['open_image', 'open_project', 'info', 'analyze', 'list_looks', 'apply_look', 'list_presets', 'apply_preset', 'add_light', 'remove_light', 'describe_settings', 'get_settings', 'set_settings', 'undo', 'redo', 'render_preview', 'export_image', 'save_project', 'guard', 'set_guard', 'measure_relief',
-      'set_image_type', 'suggest_image_type', 'list_light_scenes', 'apply_light_scene', 'compare'])
+      'set_image_type', 'suggest_image_type', 'list_light_scenes', 'apply_light_scene', 'compare', 'batch_render'])
       assert.ok(names.includes(n), 'missing tool ' + n);
     assert.ok((await client.getInstructions?.() || '').includes('open_image'), 'server instructions');
     console.log('PASS mcp lists its tools');
@@ -74,6 +74,14 @@ const full = process.argv.includes('--full');
     assert.ok(ph.difference.changed > 0 && ph.metricsB && ph.region, 'B the photo, a region ' + JSON.stringify(ph.difference));
     assert.ok((await call('compare', { photo: true, look: 'gallery' })).r.isError, 'one B only');
     assert.equal((await ok('get_settings', { path: 'exposure' })).json(), before, 'compare changes nothing');
+    // Several versions in one pass: a contact sheet, each one's changes and metrics, files; nothing changed.
+    const undoBefore = (await ok('info')).json().undo, dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'dl-batch-'));
+    const br = (await ok('batch_render', { versions: [{ name: 'Brighter', set: { exposure: before + 0.3 } }, { name: 'Raking', preset: 'graze:Classic raking', guard: false }], width: 400, out_dir: dir, thumb: 160 })).r.content;
+    const bj = JSON.parse(br[1].text);
+    assert.ok(br[0].type === 'image' && bj.width === 400 && bj.versions.length === 2, 'contact sheet ' + br[1].text.slice(0, 300));
+    assert.ok(Math.abs(bj.versions[0].changed.exposure - (before + 0.3)) < 1e-9 && bj.versions[1].changed.graze?.enabled === true && bj.versions.every((v) => v.metrics && fs.existsSync(v.file)), JSON.stringify(bj.versions.map((v) => [v.name, v.changed, v.file])));
+    assert.equal((await ok('get_settings', { path: 'exposure' })).json(), before, 'batch_render changes nothing');
+    assert.equal((await ok('info')).json().undo, undoBefore, 'and makes no undo step');
     console.log('PASS render_preview region (full-detail loupe), compare (A | B | difference: the same, brighter, the photo)', JSON.stringify({ up, photo: ph.difference }));
 
     const set = (await ok('set_settings', { changes: { exposure: 0.4, 'graze.enabled': true, 'graze.opacity': 0.6 } })).json();

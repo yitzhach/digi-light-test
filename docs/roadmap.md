@@ -63,12 +63,13 @@ where in the code it lives. **Done 10-19** marks what the same session already b
     thumbnails 100 px minimum (three across on a phone).
   - **Done 10-30:** the sharp layer renders at fit-to-screen on dense screens; it keeps rendered
     patches across scrolls and zooms, and each patch's relief across light and tone changes.
-  - A `?round=` link so a round renders on your own GPU at about 1–2 s per look.
+  - **Done 10-31:** `?round=round5` renders a round (rounds/, deployed) on your own GPU into the
+    batch viewer (rate, Save ratings).
 - **Agent tools.**
   - `open_image` accepts data URLs (MCP line 100).
   - **Done 10-31:** `render_preview` takes `region` (a full-detail loupe, measured there); a
     `compare` tool returns A | B | difference with numbers (B: the photo, changed settings, a look).
-  - `batch_render`.
+  - **Done 10-31:** `batch_render` (a contact sheet of versions, their metrics and changes).
 - **Exact, traceable pictures, run end to end by an AI** (the user, 10-21: "mathematically pixel
   for pixel accurate images", never a regenerated look-alike). The app is already a calculation,
   not a generator: every output pixel is the photo's own pixel at that place times light computed

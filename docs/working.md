@@ -65,10 +65,10 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   fresh. Render from a snapshot (`git archive HEAD | tar -x -C DIR`, copy tools/node_modules).
 
 ## Lighting rounds (how the user reviews looks)
-1. Write `tools/looks/roundN.json` ({title, pageTitle, about, fill?, variants [{id, name, look,
+1. Write `rounds/roundN.json` ({title, pageTitle, about, fill?, variants [{id, name, look,
    set, scale, exposureAdd, addLights, fill, base}]}); look by id or name.
 2. `DIGILIGHT_BROWSER=/opt/pw-browsers/chromium python3 tools/looks/make_round.py
-   tools/looks/roundN.json --photo "p:Red panel:sample:painting" --photo "d:DSC_8382:sample:dsc8382"
+   rounds/roundN.json --photo "p:Red panel:sample:painting" --photo "d:DSC_8382:sample:dsc8382"
    --out DIR` (`--skip-existing` resumes; background it with a long timeout).
 3. Publish DIR/page with the Artifact tool (capabilities {"db": {}}, root DIR/page, files from
    the script's last line); the user marks Keep / Maybe / Drop + notes; read them with ArtifactData list,

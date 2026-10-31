@@ -367,6 +367,69 @@ server.registerTool('compare', {
     { type: 'text', text: JSON.stringify({ b: photo ? 'photo' : settings ? { settings } : { look }, ...(region ? { region } : {}), difference: r.stats, metricsA: A.metrics, metricsB: B.metrics }, null, 1) }] };
 }));
 
+// One version of a batch: the CLI's batch job options, without its file.
+const VERSION = z.object({
+  name: z.string().optional(),
+  look: z.union([z.string(), z.number().int()]).optional().describe('A look (list_looks), applied first after any preset'),
+  strength: z.number().min(0).max(1).optional(),
+  preset: z.union([z.string(), z.array(z.string())]).optional().describe('kind:name, e.g. "graze:Classic raking" (list_presets)'),
+  addLights: z.array(z.object({ kind: z.enum(['light', 'shade', 'negative']).optional(), fields: z.record(z.string(), z.any()).optional() })).optional(),
+  exposureAdd: z.number().optional().describe('Stops on top of the exposure the look set'),
+  scale: z.record(z.string(), z.number()).optional().describe('Each setting times a factor, e.g. {"textureDepthMm": 1.2}'),
+  set: z.record(z.string(), z.any()).optional().describe('Dotted paths, as set_settings'),
+  guard: z.boolean().optional().describe('false: render it as set, unguarded'),
+});
+server.registerTool('batch_render', {
+  title: 'Render several versions',
+  description: 'Renders 2–12 versions of the picture in one pass (the relief is built once for versions that share it) and returns a contact sheet (each version labelled, the photo first) plus each version\'s metrics, guard note and settings changes. Each version starts from the current settings and is dressed in this order: preset, look, added lights, exposureAdd, scale, set, then the guard. Nothing is changed: apply the one you pick with set_settings (its changes are listed) or apply_look. out_dir also writes each version as a file there (NN-name.jpg, or .png with format png).',
+  inputSchema: {
+    versions: z.array(VERSION).min(2).max(12),
+    width: z.number().int().min(128).max(4000).optional().describe('Render width, default 1000 (the photo\'s own at most)'),
+    out_dir: z.string().optional().describe('Folder (absolute) to write each version into'),
+    format: z.enum(['jpg', 'png']).optional(),
+    thumb: z.number().int().min(120).max(600).optional().describe('Contact sheet tile size, default 300'),
+  },
+}, tool(async ({ page: pg, call }, { versions, width, out_dir, format, thumb }) => {
+  await needOpen(call);
+  const base = await call('settings'), dressed = await call('versions', versions), fmt = format || 'jpg';
+  const W = Math.min((await call('info')).photo.width, width || 1000);
+  const items = [{ settings: { ...base, originalTop: 1 }, width: W, format: fmt === 'jpg' ? 'jpeg' : 'png' }, ...dressed.map((d) => ({ settings: d.settings, width: W, format: fmt === 'jpg' ? 'jpeg' : 'png', quality: 0.92 }))];
+  const out = await call('exportMany', items, { metrics: true });
+  const names = ['Photo', ...dressed.map((d) => d.name)];
+  const files = [];
+  if (out_dir) {
+    fs.mkdirSync(out_dir, { recursive: true });
+    out.slice(1).forEach((r, i) => {
+      const f = path.join(out_dir, `${String(i + 1).padStart(2, '0')}-${names[i + 1].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'version'}.${fmt}`);
+      fs.writeFileSync(f, fromDataURL(r.image)); files.push(f);
+    });
+  }
+  const sheet = await pg.evaluate(async ([urls, names, T]) => {
+    const ims = await Promise.all(urls.map(async (u) => { const im = new Image(); im.src = u; await im.decode(); return im; }));
+    const cols = Math.min(4, ims.length), rows = Math.ceil(ims.length / cols), label = 22, gap = 6;
+    const c = document.createElement('canvas'); c.width = cols * (T + gap) + gap; c.height = rows * (T + label + gap) + gap;
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high';
+    ims.forEach((im, i) => {
+      const x = gap + (i % cols) * (T + gap), y = gap + Math.floor(i / cols) * (T + label + gap), k = Math.min(T / im.width, T / im.height);
+      g.drawImage(im, x + (T - im.width * k) / 2, y + label + (T - im.height * k) / 2, im.width * k, im.height * k);
+      g.fillStyle = '#111'; g.font = '13px sans-serif'; g.fillText(`${i ? String(i).padStart(2, '0') : '—'} ${names[i]}`.slice(0, 44), x, y + 15);
+    });
+    return c.toDataURL('image/jpeg', 0.85);
+  }, [out.map((r) => r.image), names, thumb || 300]);
+  // What each version changed from the settings it started from (top level, objects one level down).
+  const changed = (s) => {
+    const o = {}, same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    for (const k of Object.keys(s)) {
+      if (same(base[k], s[k])) continue;
+      if (base[k] && s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) { o[k] = {}; for (const j of Object.keys(s[k])) if (!same(base[k][j], s[k][j])) o[k][j] = s[k][j]; } else o[k] = s[k];
+    }
+    return o;
+  };
+  const list = dressed.map((d, i) => ({ n: i + 1, name: d.name, ...(files[i] ? { file: files[i] } : {}), ...(d.guard ? { guard: d.guard } : {}),
+    warnings: out[i + 1].metrics?.warnings || [], metrics: out[i + 1].metrics, changed: changed(d.settings) }));
+  return { content: [{ type: 'image', data: sheet.split(',')[1], mimeType: 'image/jpeg' }, { type: 'text', text: JSON.stringify({ width: W, versions: list }, null, 1) }] };
+}));
+
 server.registerTool('export_image', {
   title: 'Export the image',
   description: 'Writes the relit painting to a file: full size (the photo\'s own resolution, tiled) or width px wide. The format comes from the extension (.png, .jpg, .webp). crop renders only part of it at full detail (a 100% loupe, much faster than the whole). Returns the file\'s metrics against the photo at the same size (as render_preview\'s, at full detail), and writes a record beside it (same name, .json: the settings, look, guard and metrics that made it, so it can be made again; record false skips it). Slow without a GPU for big photos: past about 45 s it keeps running in the background and says so; call export_image again with the same path to wait for it (other tools wait for it too).',

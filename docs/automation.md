@@ -38,6 +38,8 @@ one undo step. Calls run one at a time, in order; each returns a Promise.
 | `undo()` / `redo()` | `true` if there was a step |
 | `render({format, quality, as, metrics})` | the preview as a data URL (`as: 'blob'` for a Blob). `format` png (default), jpeg or webp. `metrics: true` returns `{image, metrics}` (see Metrics below); `change: true` (or `{map, range}`) adds `change: {image, stats}`, the change map (below) |
 | `exportMany(items, {metrics, format, quality})` | several pictures at once: `items` `[{settings, width?, crop?, format?, quality?}]` (settings from `settings()` or a record, taken as they are). Items that need the same relief (same surface settings, size and crop) share one tiled pass, so the relief is built once for all of them, not once per picture; returns what `export` returns for each, in order, and puts the settings back. The CLI `batch` uses it |
+| `round(spec)` | a lighting round (`{title, guard?, fill?, variants: [{id, name, look?, strength?, preset?, set?, exposureAdd?, scale?, addLights?, fill?, guard?}]}`, or a URL to one) rendered into the batch viewer; settings and undo history untouched |
+| `versions(spec or [versions])` | each version dressed as `round` dresses it, without rendering: `[{name, settings, guard}]` for `exportMany`; nothing changed |
 | `export({width, crop, format, quality, as})` | the full-size export (tiled, the photo's own resolution), or `width` px wide; `crop` `{x, y, w, h}` (or `"x,y,w,h"`) in that image's pixels, or all four 0–1 as fractions, renders only that part, with the same pixels a whole export has there; `metrics: true` and `change` as `render` |
 | `measureRelief({photos, widthCm, deepestMm, lineUp})` | relief measured from lamp or sun photos instead of estimated from the one photo (the app's Measure relief · lamp photos): `photos` `[{src, lamp: {left, above, out}}]` (cm from the painting's left and top edges, out from its face; one tripod) or `[{src, sun: {azimuthDeg, elevationDeg}}]` (where the sun came from: 0 right, 90 above, 180 left; its angle to the face), each cropped like the painting photo or handheld: a photo shaped unlike the painting photo is lined up on it first (src/lineup.js), as is one with `lineUp: true` (its own, or for all; `false` never). `deepestMm`, the artist's deepest relief (lowest to highest), sets the depth (one sun angle cannot: see [Measured relief from sunlight](#measured-relief-from-sunlight)). Returns `{depthMm, rangeMm, textureDepthMm, check, shots, ...info()}` (`shots[i].lineUp`: `{H, matches, inliers, patches, errorPx, covered}` when lined up); one undo step |
 | `getProject({name})` | the project (`.digilight.json` object: photo as data URL, settings, measured relief) |
@@ -293,6 +295,9 @@ node tools/digilight-cli.cjs measure flat.jpg --sun sun.jpg:40:10.3 --width-cm 5
 - `?image=URL` opens a photo, `?project=URL` a `.digilight.json`, `?sample=dsc8382` a sample
 - `?set=exposure=0.3;graze.opacity=0.5` (or URL-encoded JSON `{"exposure":0.3}`)
 - `?analyze` runs Analyze; `?look=Name&strength=0.8` runs Analyze and applies that look
+- `?round=round5` renders a lighting round (this site's `rounds/round5.json`; or a URL, or the
+  round's JSON itself) on this computer into the batch viewer, to rate and Save ratings: each
+  version dressed as the CLI's batch dresses a job, the settings left as they were
 
 Example: `https://digi-light-test.bobdylan2000.workers.dev/?sample=painting&look=Gallery`
 
@@ -489,6 +494,7 @@ in the repository, `DIGILIGHT_BROWSER` a different Chromium.
 | `undo` / `redo` | one step per change |
 | `guard` / `set_guard` | check (and fix) blown whites and crushed darks now; turn guarding off or on |
 | `render_preview` | the result as a picture the assistant can see (JPEG, `max_size` px, default 800), plus its metrics and warnings; `change_map` `light` / `colour` adds the change map as a second picture, with its numbers; `region` `{x, y, w, h}` (fractions) renders only that part at full detail (a loupe), measured there |
+| `batch_render` | 2–12 versions (`look`, `preset`, `set`, `scale`, `exposureAdd`, `addLights`, `guard`, as the CLI's batch jobs) rendered in one pass: a labelled contact sheet (the photo first) plus each version's metrics, guard note and changed settings; `out_dir` also writes each as a file. Changes nothing |
 | `compare` | the picture as it is (A) beside another version (B) and their difference, one image A \| B \| difference (×4), with numbers (mean / p99 difference in levels, share changed, shares brighter / darker) and both metrics. B: `photo: true`, `settings` (dotted paths changed from the current ones) or `look`; `region` for a full-detail part. Changes nothing |
 | `export_image` | writes the result to a `.png` / `.jpg` / `.webp` file, full size or `width` px; `crop` `{x, y, w, h}` (pixels, or fractions) writes only that part, at full detail; returns the file's metrics and writes its record beside it (`FILE.json`); `change_map` also writes `FILE-change.png` |
 | `measure_relief` | relief measured from lamp or sun photos (`photos` `[{path, sun: {from_deg, angle_deg}} or {path, lamp: {left_cm, above_cm, out_cm}}]`, each optionally `line_up` (a handheld photo; one shaped unlike the open photo is lined up anyway), `painting_width_cm`, `deepest_mm`) |

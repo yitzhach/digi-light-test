@@ -3,7 +3,7 @@
 
     python3 tools/looks/make_round.py SPEC.json --photo ID:LABEL:INPUT [--photo ...] --out DIR [--width 1600] [--skip-existing]
 
-SPEC is a round file like tools/looks/round4.json: {title, about, fill?, guard?, variants: [{id, name,
+SPEC is a round file like rounds/round4.json (deployed, so ?round=round4 renders it in the app): {title, about, fill?, guard?, variants: [{id, name,
 look?, set?, fill?, exposureAdd?, scale?, addLights?, guard?, base?}]} ("fill": true adds the
 spec's fill light; "base" is the version Hold compares against, default the photo). INPUT is
 what the CLI opens: sample:painting, a photo path or a .digilight.json project.
