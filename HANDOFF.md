@@ -42,6 +42,10 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   `batch_render` (2–12 versions dressed as CLI batch jobs: a labelled contact sheet, each one's
   metrics, guard note and changed settings; `out_dir` writes files). None changes anything;
   mcp.cjs checks them (compare's look case needs `--full`). API `digilight.versions(spec)`.
+- **Narrower Analyze cache** (roadmap): the tools' cache also keys the photo's measurements by
+  the measuring code alone (src/ but auto.js and presets.js, plus auto.js `MEASURE_VERSION`: bump
+  it when measuring changes there), and `analyze({reuse})` keeps the built-in looks whose settings
+  did not change. Lintel, one look's bias changed: 191 s → 28 s (10 of 11 looks kept).
 - **`?round=round5` renders a lighting round on the user's own computer** into the batch viewer
   (rate, Save ratings). Round files moved to `rounds/` (deployed; make_round.py takes them from
   there too); a URL or inline JSON also works. Each version is dressed as the CLI dresses a batch
@@ -77,7 +81,8 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
    the finest band's slopes, more sheen than the slider's top for the door.
 4. Sharp zoom, if still slow on the iMac: a quick half-size pass for fresh areas; a lower live
    limit or a live pass at half size if 80 ms drags.
-5. Roadmap NEXT: a narrower Analyze cache (docs/roadmap.md).
+5. Roadmap NEXT left: a flat-print control (no relief rims on a flat print, docs/roadmap.md);
+   LATER: colour pipeline (Display P3, HEIC upload, 16-bit), the shader items behind a flag.
 
 ## Quick test set (details: docs/working.md)
 Cloud: `export DIGILIGHT_BROWSER=/opt/pw-browsers/chromium`; `cd tools && npm install` once.
