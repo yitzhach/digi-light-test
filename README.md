@@ -225,7 +225,8 @@ the new is ready. A change to the picture shows the working copy until the view 
 still again; a change to lights, colour or tone comes back sooner, since the relief
 already worked out for the sharp view is kept and only lit again. Where the computer is
 quick enough (it times this itself), a light or slider drag keeps the sharp view on screen and
-re-lights it as you drag (single photographs only).
+re-lights it as you drag. Going back to a setting just seen (Before / After, undo, an effect
+switched off and on) shows the sharp view at once (single photographs only).
 **Light dots: on/off** shows or hides the dots; grabbing one leaves Before/After,
 Split and brush mode.
 

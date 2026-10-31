@@ -24,6 +24,12 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   never cancels one in flight). Slower machines keep the old way (soft while dragging, sharp
   100 ms after), so the drag stays smooth. A relief change still hides it at once.
   `__bench.sharpLive(ms)` reads the timing and sets the limit (browser.cjs forces it on).
+- **Before/After and toggles back are instant** (user: grain and Before/After took 5+ s). Grain
+  is only a few uniforms; the wait was the sharp view shading again on every change (grain cells
+  are ~1 photo pixel, so it shows properly only there). Each patch now keeps its last 3 shades by
+  a signature of the settings (`shadeSig`: state minus view keys and big buffers), so going back
+  to a setting seen before (Before/After, undo, an effect off and on) shows at once. The first
+  time grain goes on still costs one shade.
 - **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
   1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
   `__bench.sharpStats()` counts relief builds vs shades.
