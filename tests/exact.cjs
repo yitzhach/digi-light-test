@@ -63,7 +63,7 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       // 3. Resized, the photo goes through resample.js (the browser's own high-quality downscale
       // was not the same from one session to the next): exact means, any region the same pixels
       // as the whole, and a resized identity export is exactly that resample.
-      const { resampleRegion } = await import('/src/resample.js');
+      const { resampleRegion, resampleRegionAsync, resampleWorkerOn } = await import('/src/resample.js');
       const c2 = document.createElement('canvas'); c2.width = 1200; c2.height = 898;
       c2.getContext('2d').putImageData(g.getImageData(0, 0, 1200, 898), 0, 0);
       const half = resampleRegion(c2, 600, 449, 0, 0, 600, 449).data;
@@ -76,6 +76,11 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       const part = resampleRegion(c, RW, RH, 100, 50, 200, 150).data;
       let tile = 0;
       for (let y = 0; y < 150; y++) for (let x = 0; x < 200; x++) for (let k = 0; k < 4; k++) if (part[(y * 200 + x) * 4 + k] !== whole[((y + 50) * RW + x + 100) * 4 + k]) tile++;
+      // The worker (the sharp zoom's fresh tiles) gives the same pixels, and has run in one.
+      const wpart = (await resampleRegionAsync(c, RW, RH, 100, 50, 200, 150)).data;
+      let worker = 0;
+      for (let i = 0; i < part.length; i++) if (wpart[i] !== part[i]) worker++;
+      const workerUsed = resampleWorkerOn();
       await d.set({ originalTop: 1, exposure: 0, 'graze.enabled': false });
       const small = await pixels(await asURL(await d.export({ format: 'png', width: RW })));
       // 4. A JPEG: the app decodes it once (app.js pinPixels, a CPU canvas; a GPU-backed one
@@ -89,7 +94,7 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
       const jc = document.createElement('canvas'); jc.width = W; jc.height = H;
       const jx = jc.getContext('2d', { willReadFrequently: true }); jx.drawImage(im, 0, 0);
       return { size: [same.w, same.h], identity: differ(same.px, photo), repeat: differ(a.px, b.px), relit: differ(a.px, photo),
-        boxOff, tile, smallSize: [small.w, small.h], resized: differ(small.px, whole), jpeg: differ(jpegOut.px, jx.getImageData(0, 0, W, H).data),
+        boxOff, tile, worker, workerUsed, smallSize: [small.w, small.h], resized: differ(small.px, whole), jpeg: differ(jpegOut.px, jx.getImageData(0, 0, W, H).data),
         sameCh: sameCh.stats, mapSize: [sameMap.w, sameMap.h], notGrey, previewCh, relitCh, manyCh };
     });
     assert.deepEqual(r.size, [1201, 899]);
@@ -100,6 +105,7 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
     console.log('PASS repeatable: the same relit settings exported twice, identical pixels', JSON.stringify(r.relit));
     assert.equal(r.boxOff, 0, 'a near half-size resample is the mean of each 2 x 2 block');
     assert.equal(r.tile, 0, 'a region of a resample is the same pixels as the whole there');
+    assert.ok(r.workerUsed && r.worker === 0, 'the worker resamples the same pixels ' + JSON.stringify([r.workerUsed, r.worker]));
     assert.deepEqual(r.smallSize, [517, 387]);
     assert.equal(r.resized.n, 0, 'a resized identity export is the resample, bit for bit ' + JSON.stringify(r.resized));
     console.log('PASS resized: area-average resample (block means, regions = whole), and the export at 517 px is it bit for bit');

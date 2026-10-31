@@ -13,7 +13,7 @@
 import { makeTarget, bindTarget } from './gl.js';
 import { uploadShotArray } from './photometric.js';
 import { FORM_OUTER } from './gbuffer.js';
-import { drawResampled } from './resample.js';
+import { drawResampled, resampleRegionAsync } from './resample.js';
 import { fxMargin, postWanted } from './postfx.js';
 
 /**
@@ -55,8 +55,8 @@ export function requiredMargin(state, W = 0) {
  * tile's surface is then built once, from the first, and every variant is shaded on it
  * with its own smoothings, lights and tone, so a round of looks costs one relief build.
  *
- * `asyncRead` (the sharp zoom): each tile is read back without stalling the page while the
- * GPU finishes it, so scrolling and sliders stay live; the preview may draw meanwhile, which
+ * `asyncRead` (the sharp zoom): each tile's photo is resampled in a worker and read back
+ * without stalling the page while the GPU finishes it, so scrolling and sliders stay live; the preview may draw meanwhile, which
  * is why it needs reliefs of its own (`relief`). Exports read back at once.
  *
  * Kept reliefs (the sharp zoom): `relief` {get(key), make(key)} gives each padded tile
@@ -133,7 +133,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
 
         const key = `${px0},${py0},${pw},${ph}`;
         const kept = !photometric && relief ? relief.get(key) : null;
-        const g = kept || (!photometric && relief ? relief.make(key) : gbuf);
+        let g = kept || gbuf;
 
         let targets;
         if (kept) {
@@ -163,7 +163,11 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           cutx.clearRect(0, 0, pw, ph);
           // Resized: our own area average (resample.js), the same pixels in every session;
           // the browser's high-quality drawImage was not. At 1:1 drawImage is an exact copy.
-          if (resized) drawResampled(cutx, source, W, H, px0, py0, pw, ph);
+          if (resized && asyncRead) {
+            const img = await resampleRegionAsync(source, W, H, px0, py0, pw, ph);
+            if (cancelled && cancelled()) return false;
+            cutx.putImageData(img, 0, 0);
+          } else if (resized) drawResampled(cutx, source, W, H, px0, py0, pw, ph);
           else cutx.drawImage(source, ...from, 0, 0, pw, ph);
           gl.bindTexture(gl.TEXTURE_2D, tex);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, cut);
@@ -173,6 +177,8 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
           // Measured relief and a photo's scene: this tile's window of their preview-sized maps (v up).
           const inMap = [px0 / W, (H - py1) / H, px1 / W, (H - py0) / H];
+          // Made only now: a tile cancelled while its photo was resampled leaves no empty relief.
+          if (relief) g = relief.make(key);
           targets = g.build(tex, pw, ph, state.measuredTex || state.sceneMap
             ? { ...state, measured: state.measuredTex ? { tex: state.measuredTex, rect: inMap } : null, sceneMap: state.sceneMap ? { ...state.sceneMap, rect: inMap } : null }
             : state);

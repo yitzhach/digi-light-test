@@ -1333,7 +1333,7 @@ async function shadePatch(p, st, cancelled, sig) {
       sharpCount.builds++; built = true;
       const g = new GBuffer(glctx, gbuf);
       g.afterHeight = gbuf.afterHeight;   // the tests' known-relief seam
-      p.reliefs.set(key, g); used.add(key);
+      (p.reliefs ||= new Map()).set(key, g); used.add(key);
       return g;
     },
   };

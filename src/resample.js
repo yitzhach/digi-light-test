@@ -15,14 +15,15 @@
 
 /**
  * Pixels [ox, ox + ow) x [oy, oy + oh) of `source` (an image, bitmap or canvas, SW x SH)
- * resampled to W x H. Returns an ImageData (opaque).
+ * resampled to W x H. Returns an ImageData (opaque). `canvas` makes the scratch canvas (an
+ * OffscreenCanvas in the worker below).
  */
-export function resampleRegion(source, W, H, ox, oy, ow, oh) {
+export function resampleRegion(source, W, H, ox, oy, ow, oh, canvas = () => document.createElement('canvas')) {
   const SW = source.naturalWidth || source.width, SH = source.naturalHeight || source.height;
   const cols = weights(SW / W, SW, ox, ow), rows = weights(SH / H, SH, oy, oh);
   const sx0 = cols.lo, sw = cols.hi - cols.lo;
   const out = new ImageData(ow, oh), d = out.data;
-  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+  const c = canvas(), g = c.getContext('2d', { willReadFrequently: true });
   // A strip of output rows at a time, so a big tile never holds the whole photo region.
   for (let y0 = 0; y0 < oh; y0 += STRIP) {
     const y1 = Math.min(oh, y0 + STRIP);
@@ -65,6 +66,38 @@ export function resampleRegion(source, W, H, ox, oy, ow, oh) {
   return out;
 }
 const STRIP = 128;   // output rows per strip
+
+/**
+ * The same off the page's thread (resampleworker.js, the same code, so the same pixels): the
+ * sharp zoom's fresh tiles, so the page does not stall on them. The worker keeps a bitmap of
+ * the last source; anything it cannot do (no OffscreenCanvas, say) runs here instead.
+ */
+let worker = null, workerSource = null, workerJobs = 0;
+const pending = new Map();
+/** Whether the worker is up (tests). */
+export const resampleWorkerOn = () => !!worker;
+export async function resampleRegionAsync(source, W, H, ox, oy, ow, oh) {
+  try {
+    if (worker === null) {
+      worker = typeof OffscreenCanvas === 'function' ? new Worker(new URL('./resampleworker.js', import.meta.url), { type: 'module' }) : false;
+      if (worker) {
+        worker.onmessage = ({ data }) => { const job = pending.get(data.id); pending.delete(data.id); job?.(data); };
+        worker.onerror = () => { worker.terminate(); worker = false; for (const job of pending.values()) job({ error: 'worker failed' }); pending.clear(); };
+      }
+    }
+    if (!worker) throw new Error('no worker');
+    if (workerSource !== source) {
+      workerSource = source;
+      worker.postMessage({ bitmap: await createImageBitmap(source) });
+    }
+    const id = ++workerJobs;
+    const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, W, H, ox, oy, ow, oh }); });
+    if (res.error) throw new Error(res.error);
+    return new ImageData(new Uint8ClampedArray(res.data), ow, oh);
+  } catch {
+    return resampleRegion(source, W, H, ox, oy, ow, oh);
+  }
+}
 
 /** The same, drawn into a 2D context at (0, 0). */
 export function drawResampled(ctx, source, W, H, ox, oy, ow, oh) {
