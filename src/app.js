@@ -1089,7 +1089,7 @@ function renderNow() {
     state.sceneMap = sceneMapOf(state);
     const key = surfaceKey();
     if (key !== builtSurface) { builtSurface = key; dirtySurface = true; }
-    if (dirtySurface) surfaceGen++;
+    if (dirtySurface) { surfaceGen++; if (sharpGrid) hideSharp(); }   // shown live, they hold the old relief
     if (dirtySurface || surfaceClobbered) {
       surfaceBuilds++;
       if (state.mode === 'photometric') {
@@ -1169,6 +1169,7 @@ function renderNow() {
       shader.draw(drawTargets, state, imgH / imgW, imgW, imgH);
     }
     scheduleSharp();
+    if (sharpLiveOn()) liveShade();
   } catch (e) { fail(e); }
 }
 
@@ -1195,6 +1196,10 @@ const sharp = document.createElement('div');
 sharp.id = 'sharp';
 paper.appendChild(sharp);
 let sharpTimer = 0, sharpJob = 0, sharpLit = 0;
+// Live re-shading (liveShade): ms per patch pixel of the last shade from kept reliefs, the most
+// a view's shade may take to run during a drag, and the loop's state.
+const SHARP_LIVE_MS = 80;
+let sharpRate = 0, sharpLiveMs = SHARP_LIVE_MS, sharpLiveBusy = false, sharpLiveAgain = false, sharpLiveGen = 0;
 // The patches at the current size ({canvas, c0, r0, c1, r1 in cells, rect, margin, reliefs,
 // lit}), sharpGrid.covered counting the shown ones per cell, and the patches of an earlier zoom.
 let sharpGrid = null, sharpPatches = [], sharpStale = [];
@@ -1206,6 +1211,7 @@ function cancelSharp() {
   sharpJob++;
 }
 function dropReliefs(p) {
+  if (p.reliefs) sharpLiveGen++;   // a live shade may be using them
   for (const g of p.reliefs?.values() || []) g.dispose();
   p.reliefs = null;
 }
@@ -1213,18 +1219,23 @@ function dropPatches(list) { for (const p of list) { p.canvas?.remove(); dropRel
 /** Drop everything: the photo, the surface or the kind of view changed. */
 function hideSharp() {
   cancelSharp();
+  sharpLiveGen++;
   dropPatches(sharpPatches); dropPatches(sharpStale);
   sharpPatches = []; sharpStale = []; sharpGrid = null;
 }
-/** The picture is about to change: hide every patch; those with a relief are shaded again. */
+/**
+ * The picture is about to change: patches with a relief are shaded again, the others go.
+ * Live, they stay shown meanwhile (renderNow hides them if the surface changed).
+ */
 function dimSharp() {
   cancelSharp();
   sharpLit++;
   dropPatches(sharpStale); sharpStale = [];
   if (!sharpGrid) return;
   sharpGrid.covered.fill(0);
+  const live = sharpLiveOn();
   sharpPatches = sharpPatches.filter((p) => {
-    p.canvas.style.display = 'none';
+    if (!live) p.canvas.style.display = 'none';
     if (p.reliefs) return true;
     p.canvas.remove();
     return false;
@@ -1283,13 +1294,14 @@ const overlaps = (p, s) => p.c0 < s.c1 && s.c0 < p.c1 && p.r0 < s.r1 && s.r0 < p
  * Render patch `p` (its rect, with its margin) into its canvas: from its kept reliefs
  * where it has them, building and keeping any it lacks. False when it was cancelled.
  */
-async function shadePatch(p, st, job) {
-  const { outW, outH } = sharpGrid, used = new Set();
+async function shadePatch(p, st, cancelled) {
+  const { outW, outH } = sharpGrid, used = new Set(), lit = sharpLit, t0 = performance.now();
+  let built = false;
   p.reliefs ||= new Map();
   const relief = {
     get: (key) => { const g = p.reliefs.get(key); if (g) { sharpCount.shades++; used.add(key); } return g; },
     make: (key) => {
-      sharpCount.builds++;
+      sharpCount.builds++; built = true;
       const g = new GBuffer(glctx, gbuf);
       g.afterHeight = gbuf.afterHeight;   // the tests' known-relief seam
       p.reliefs.set(key, g); used.add(key);
@@ -1302,22 +1314,24 @@ async function shadePatch(p, st, job) {
   try {
     done = await renderTiles(glctx, { gbuf, photo, shader },
       { mode: 'single', source: fullSource, width: outW, height: outH }, st, p.rect,
-      out.getContext('2d'), { cancelled: () => job !== sharpJob || state.exporting, relief, margin: p.margin });
+      out.getContext('2d'), { cancelled, relief, margin: p.margin });
   } catch (e) {
     console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
     dropReliefs(p);   // one may be half built
     return false;
   }
-  for (const [key, g] of p.reliefs) {
+  for (const [key, g] of p.reliefs || []) {
     if (used.has(key)) g.keepForShading();
     else if (done) { g.dispose(); p.reliefs.delete(key); }   // tiled differently this time
   }
-  if (!done || job !== sharpJob) return false;
+  if (!done || cancelled()) return false;
+  if (!built) sharpRate = (performance.now() - t0) / (p.rect.w * p.rect.h);
   Object.assign(out.style, p.pos);
   if (p.canvas) p.canvas.replaceWith(out); else sharp.appendChild(out);
   p.canvas = out;
-  p.lit = sharpLit;
-  cover(p, 1);
+  // Shaded live with settings that have moved on since: shown, but shaded again once still.
+  p.lit = lit;
+  if (lit === sharpLit) cover(p, 1);
   return true;
 }
 
@@ -1327,7 +1341,7 @@ async function relightPatches(span, st, job) {
   for (const p of sharpPatches) {
     if (p.lit === sharpLit || !overlaps(p, span)) continue;
     if (p.margin < need) { dropReliefs(p); continue; }   // the lights reach further: built anew below
-    if (!await shadePatch(p, st, job)) return false;
+    if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting)) return false;
   }
   sharpPatches = sharpPatches.filter((p) => p.lit === sharpLit || p.reliefs || (p.canvas.remove(), false));
   return true;
@@ -1353,7 +1367,7 @@ async function fillSpan(span, st, job) {
   // A multiple of 8, so glow and background blur's alignment never changes the tiles.
   const margin = Math.ceil((requiredMargin(st, outW) + SHARP_SPARE) / 8) * 8;
   const p = { canvas: null, pos, c0, r0, c1, r1, rect, margin, reliefs: null, lit: -1 };
-  if (!await shadePatch(p, st, job)) { dropReliefs(p); return false; }
+  if (!await shadePatch(p, st, () => job !== sharpJob || state.exporting)) { dropReliefs(p); return false; }
   // A hidden patch wholly under the new one goes.
   sharpPatches = sharpPatches.filter((q) => q.lit === sharpLit || !(q.c0 >= c0 && q.c1 <= c1 && q.r0 >= r0 && q.r1 <= r1) || (dropPatches([q]), false));
   sharpPatches.push(p);
@@ -1379,9 +1393,44 @@ function trimSharp(view) {
   });
 }
 
+/**
+ * Live re-shading: whether the view's kept patches shade fast enough (as last timed on this
+ * machine) to follow a drag, and the loop that does it. One shade at a time, never cancelled
+ * by a newer change (it would never finish while the drag goes on): when it is done, a newer
+ * change starts the next. Only a new surface, size or photo (sharpLiveGen) stops it.
+ */
+function sharpLiveOn() {
+  const plan = sharpGrid && sharpRate && sharpPlan();
+  if (!plan || sharpGrid.surface !== surfaceGen || plan.outW !== sharpGrid.outW || plan.outH !== sharpGrid.outH) return false;
+  const view = cellSpan(plan.rect);
+  let px = 0;
+  for (const p of sharpPatches) if (overlaps(p, view)) { if (!p.reliefs) return false; px += p.rect.w * p.rect.h; }
+  return px > 0 && sharpRate * px <= sharpLiveMs;
+}
+async function liveShade() {
+  if (sharpLiveBusy) { sharpLiveAgain = true; return; }
+  sharpLiveBusy = true;
+  const gen = sharpLiveGen, cancelled = () => gen !== sharpLiveGen || state.exporting;
+  try {
+    do {
+      sharpLiveAgain = false;
+      const plan = sharpPlan();
+      if (!plan || !sharpLiveOn()) break;
+      const st = renderState(sharpGrid.outW), view = cellSpan(plan.rect), need = requiredMargin(st, sharpGrid.outW);
+      for (const p of sharpPatches.filter((q) => q.lit !== sharpLit && q.reliefs && q.margin >= need && overlaps(q, view))) {
+        if (!await shadePatch(p, st, cancelled)) return;
+      }
+    } while (sharpLiveAgain);
+  } finally {
+    sharpLiveBusy = false;
+  }
+}
+
 async function renderSharp() {
   const plan = sharpPlan();
   if (!plan) return;
+  // A live shade in flight finishes first: two passes must not swap the same patch.
+  if (sharpLiveBusy) { sharpTimer = setTimeout(renderSharp, SHARP_IDLE_MS); return; }
   const job = sharpJob, { outW, outH, rect } = plan;
   if (sharpGrid?.surface !== surfaceGen) {
     // A new surface: no relief holds. What is shown stays until the view is filled again.
@@ -1634,6 +1683,8 @@ async function boot() {
     // rectangle of an outW x outH render that it holds.
     sharp: sharpView,
     // The sharp zoom's work so far: tiles whose relief was built, or kept and only shaded; patches held.
+    // Live re-shading during drags: the measured ms per pixel, the limit (settable), whether it is on now.
+    sharpLive: (ms) => { if (ms != null) sharpLiveMs = ms; return { rate: sharpRate, ms: sharpLiveMs, on: sharpLiveOn() }; },
     sharpStats: () => ({ ...sharpCount, patches: sharpPatches.length, reliefs: sharpPatches.reduce((n, p) => n + (p.reliefs?.size || 0), 0) }),
     // --- diagnostics used by the test harness
     shots: () => shots,
