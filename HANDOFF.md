@@ -34,8 +34,12 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
   view is the whole picture, ~5.6 Mpx). Tiles are read back through a pixel buffer and a fence
   (export.js `readPixelsAsync`, sharp zoom only), so the page keeps drawing while the GPU works:
   longest freeze on a large photo 6.2 s → 0.38 s (346 frames drawn during the render, was 5). Each
-  tile also shows as it lands, so the sharp view fills in piece by piece over the preview. The
-  0.38 s left is the photo's resampling for a fresh tile (resample.js, on the main thread).
+  tile also shows as it lands, so the sharp view fills in piece by piece over the preview. Fresh
+  tiles' photo resampling now runs in a worker (resampleworker.js, the same code: exact.cjs checks
+  the pixels match bit for bit): longest freeze ~0.1 s.
+- **Agent tools** (roadmap): MCP `render_preview` `region` (a full-detail loupe, measured there) and
+  `compare` (A | B | difference image with numbers; B = the photo, changed settings or a look;
+  changes nothing). mcp.cjs checks both (the look case needs `--full`).
 - **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
   1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
   `__bench.sharpStats()` counts relief builds vs shades.
@@ -64,9 +68,9 @@ Everything is on `main` (10-30, faster sharp zoom and re-shading).
    elevation (the lintel's 10.3° is uncertain: 11.9-13.6° if its block sits lower).
 3. The sunlit gap's rest (docs/real-light-test.md "10-28, rough surface", Still open), if wanted:
    the finest band's slopes, more sheen than the slider's top for the door.
-4. Sharp zoom, if still slow on the iMac: async readback (no stall while it renders); a quick
-   half-size pass for fresh areas; a lower live limit or a live pass at half size if 80 ms drags.
-5. Roadmap NEXT in order: `?round=` link, agent tools
+4. Sharp zoom, if still slow on the iMac: a quick half-size pass for fresh areas; a lower live
+   limit or a live pass at half size if 80 ms drags.
+5. Roadmap NEXT in order: `?round=` link, agent tools left (`batch_render`)
    (`render_preview` region + stats, `compare`), narrower Analyze cache.
 
 ## Quick test set (details: docs/working.md)
