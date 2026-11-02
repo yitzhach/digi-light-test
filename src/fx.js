@@ -14,6 +14,7 @@
 // and run after it (postfx.js), each export tile with a margin wide enough for them.
 import { eyeButton } from './adjust.js';
 import { sunDirection } from './presets.js';
+import { encodedToWorking } from './colour.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const widths = (v) => `${(v * 100).toFixed(1)}%`;
@@ -95,7 +96,8 @@ vec3 rays(vec3 col, vec2 P, float subject) {
   return 1.0 - (1.0 - col) * (1.0 - clamp(add, 0.0, 1.0));
 }`;
 
-const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+// A picked colour (encoded sRGB) in the photo's working space (colour.js).
+const rgb = (hex) => encodedToWorking([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
 
 /** The key light's travel across the picture (unit, toward where its light goes) and where it
  *  comes in, from the strongest lamp; a sun's is its direction. */

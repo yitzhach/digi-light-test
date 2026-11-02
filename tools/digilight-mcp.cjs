@@ -126,7 +126,7 @@ const server = new McpServer({ name: 'digilight', version: '1.0.0' }, {
 
 server.registerTool('open_image', {
   title: 'Open a photo',
-  description: 'Opens a photo of a painting (replacing the current one) and runs auto setup. source: an absolute path to a .jpg/.png/.webp on this computer, an http(s) image URL, a data:image/jpeg|png|webp;base64 URL (a photo you were given inline), a .digilight.json project, or sample:painting / sample:dsc8382 (built-in samples). Returns the photo and preview sizes.',
+  description: 'Opens a photo of a painting (replacing the current one) and runs auto setup. source: an absolute path to a .jpg/.png/.webp/.heic on this computer (a wide-gamut photo, such as an iPhone photo in Display P3, is kept in Display P3 through to the export), an http(s) image URL, a data:image/jpeg|png|webp;base64 URL (a photo you were given inline), a .digilight.json project, or sample:painting / sample:dsc8382 (built-in samples). Returns the photo and preview sizes.',
   inputSchema: { source: z.string().describe('Photo path, URL, data: image URL, .digilight.json project, or sample:painting / sample:dsc8382') },
 }, changing(async ({ call }, { source }) => {
   const input = /^(sample:|https?:|data:)/.test(source) ? source : filePath(source);

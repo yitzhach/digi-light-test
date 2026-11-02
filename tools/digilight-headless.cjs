@@ -15,8 +15,8 @@ const http = require('http');
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' };
-const PHOTO = /\.(jpe?g|png|webp)$/i;
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' };
+const PHOTO = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 function serve(port) {
   const server = http.createServer((req, res) => {
@@ -103,11 +103,11 @@ async function openInput(call, input) {
   input = String(input || '').trim();
   if (!input) throw new Error('Give an input: a photo, a .digilight.json project, or sample:painting.');
   if (/^sample:/.test(input)) return call('load', { sample: input.slice(7) });
-  if (/^data:image\/(jpeg|png|webp);base64,/i.test(input)) return call('load', input);
+  if (/^data:image\/(jpeg|png|webp|heic|heif);base64,/i.test(input)) return call('load', input);
   if (/^https?:/.test(input)) return /\.json(\?|$)/i.test(input) ? call('setProject', await (await fetch(input)).text()) : call('load', input);
   if (!fs.existsSync(input)) throw new Error(`No such file: ${input}`);
   if (/\.json$/i.test(input)) return call('setProject', fs.readFileSync(input, 'utf8'));
-  if (!PHOTO.test(input)) throw new Error(`${path.basename(input)}: open a .jpg, .png or .webp photo, or a .digilight.json project.`);
+  if (!PHOTO.test(input)) throw new Error(`${path.basename(input)}: open a .jpg, .png, .webp or .heic photo, or a .digilight.json project.`);
   return call('load', dataURL(input));
 }
 

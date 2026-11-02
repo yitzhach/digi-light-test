@@ -11,6 +11,7 @@ import { synthesizePainting, synthesizeCaptureSet, normalsToImageData } from './
 import { Photometric, buildSolver, uploadShotArray, MAX_SHOTS } from './photometric.js';
 import { chromaSignal } from './measure.js';
 import { exportFullRes, renderTiles, downloadCanvas, requiredMargin } from './export.js';
+import { useSpace, ctx2d, canvas2d, spaceOf, isHeif, decodeHeif } from './colour.js';
 import { registerFrames, resample } from './register.js';
 import { estimateLight } from './sphere.js';
 import { initStudio } from './studio.js';
@@ -226,14 +227,19 @@ async function loadSynthetic() {
   return c;
 }
 
-function loadFile(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
+// A photo file as an image (or, for a HEIC the browser cannot open, a canvas), tagged with the
+// colour space to work it in (colour.js).
+async function loadFile(file) {
+  const space = await spaceOf(file);
+  const img = await new Promise((resolve, reject) => {
+    const im = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not decode that image. Please use JPEG, PNG or WebP.')); };
-    img.src = url;
-  });
+    im.onload = () => { URL.revokeObjectURL(url); resolve(im); };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not decode that image. Please use JPEG, PNG, WebP or HEIC.')); };
+    im.src = url;
+  }).catch((e) => (isHeif(file) ? decodeHeif(file, space) : Promise.reject(e)));
+  img.dataset.space = space;
+  return img;
 }
 
 /**
@@ -292,13 +298,24 @@ function pinPixels(src) {
   if (src instanceof HTMLCanvasElement) return src;
   const c = document.createElement('canvas');
   c.width = src.naturalWidth || src.width; c.height = src.naturalHeight || src.height;
-  c.getContext('2d', { willReadFrequently: true }).drawImage(src, 0, 0);
+  ctx2d(c, { willReadFrequently: true }).drawImage(src, 0, 0);
   if (src.dataset?.sample) c.dataset.sample = src.dataset.sample;
   return c;
 }
 
+// The colour space of an image that came without its loader's tag: read from its URL (a data or
+// same-origin URL; anything unreadable is taken as sRGB, as the browser would show it).
+async function spaceFrom(src) {
+  const url = src instanceof HTMLImageElement && (src.currentSrc || src.src);
+  if (!url || url.startsWith('blob:')) return 'srgb';
+  try { return await spaceOf(await (await fetch(url)).blob()); } catch { return 'srgb'; }
+}
+
 async function setSource(src, keep = false) {
   const { gl } = glctx;
+  // The photo's colour space (colour.js): tagged by its loader, else read from where it came from.
+  hideSharp();
+  useSpace(src.dataset?.space || await spaceFrom(src), gl);
   src = pinPixels(src);
   const w = src.width;
   const h = src.height;
@@ -316,7 +333,7 @@ async function setSource(src, keep = false) {
 
   const c = document.createElement('canvas');
   c.width = imgW; c.height = imgH;
-  c.getContext('2d').drawImage(src, 0, 0, imgW, imgH);
+  ctx2d(c).drawImage(src, 0, 0, imgW, imgH);
   previewSource = c;
 
   // Measure the working image, not the original file: this reports what the
@@ -324,7 +341,7 @@ async function setSource(src, keep = false) {
   // has any signal to act on, never whether recovery will succeed. Five
   // statistics claiming the latter have been built and deleted.
   try {
-    const px = c.getContext('2d').getImageData(0, 0, imgW, imgH);
+    const px = ctx2d(c).getImageData(0, 0, imgW, imgH);
     state.chroma = chromaSignal(px.data, imgW, imgH);
   } catch (e) {
     state.chroma = null;   // a cross-origin source taints the canvas; not fatal
@@ -1337,8 +1354,7 @@ async function shadePatch(p, st, cancelled, sig) {
       return g;
     },
   };
-  const out = document.createElement('canvas');
-  out.width = p.rect.w; out.height = p.rect.h;
+  const [out, outx] = canvas2d(p.rect.w, p.rect.h);
   Object.assign(out.style, p.pos);
   // Nothing shown there (not live): each tile shows as it lands, over the preview.
   const early = !p.canvas || p.canvas.style.display === 'none';
@@ -1347,7 +1363,7 @@ async function shadePatch(p, st, cancelled, sig) {
   try {
     done = await renderTiles(glctx, { gbuf, photo, shader },
       { mode: 'single', source: fullSource, width: outW, height: outH }, st, p.rect,
-      out.getContext('2d'), { cancelled, relief, margin: p.margin, asyncRead: true });
+      outx, { cancelled, relief, margin: p.margin, asyncRead: true });
   } catch (e) {
     console.warn('Sharp zoom skipped:', e);   // the preview stays; nothing is lost
     dropReliefs(p);   // one may be half built
@@ -1505,9 +1521,7 @@ function sharpView() {
   if (!plan || !sharpGrid || sharpGrid.outW !== plan.outW || sharpGrid.outH !== plan.outH) return null;
   const { rect } = plan, { covered, cols } = sharpGrid, span = cellSpan(rect);
   for (let r = span.r0; r < span.r1; r++) for (let c = span.c0; c < span.c1; c++) if (!covered[r * cols + c]) return null;
-  const out = document.createElement('canvas');
-  out.width = rect.w; out.height = rect.h;
-  const g = out.getContext('2d');
+  const [out, g] = canvas2d(rect.w, rect.h);
   for (const p of sharpPatches) if (p.lit === sharpLit) g.drawImage(p.canvas, p.rect.x - rect.x, p.rect.y - rect.y);
   return { outW: plan.outW, outH: plan.outH, rect: { ...rect }, canvas: out };
 }

@@ -7,6 +7,7 @@
 // `state.overlays`; all off by default, and saves made before them open with them off.
 import { blendModes } from './presets.js';
 import { eyeButton } from './adjust.js';
+import { encodedToWorking } from './colour.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const deg = (v) => `${Math.round(v)}°`;
@@ -124,7 +125,8 @@ vec3 overlays(vec3 col, vec2 g) {
 
 // Grain cell: Size 1 is 1/1500 of the painting's width (a pixel of a 1500 px wide photo).
 export const GRAIN_CELL = 1 / 1500;
-const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+// A picked colour (encoded sRGB) in the photo's working space (colour.js).
+const rgb = (hex) => encodedToWorking([1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255));
 
 export function setOverlayUniforms(gl, u, state, off) {
   const o = state.overlays || overlayDefaults(), show = (k) => !off && o.on && o[k]?.on;

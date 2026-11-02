@@ -6,7 +6,11 @@
 //  4. a JPEG is decoded once (one decoder path), and exports as decoded with nothing changed;
 //  5. the change map (changemap.js) of the identity export is no change at all (plain grey), of
 //     the preview with nothing changed too, and of a relit picture the same from export and
-//     exportMany.
+//     exportMany;
+//  6. a wide-gamut photo (Display P3, as an iPhone's: testdata/colour/) is worked in Display P3:
+//     its identity export is the photo bit for bit in P3 and says so (its profile), colours sRGB
+//     cannot hold kept; a P3 HEIC opens (libheif where the browser cannot) and is kept likewise;
+//     an sRGB photo after it is sRGB again.
 // The photo is random noise at an odd size, the hardest case: every pixel sits beside unrelated
 // ones, so any filtering, shift or rounding on the way through linear light shows. (The user,
 // 10-21: "mathematically pixel for pixel accurate images", not a look-alike. Before the fix,
@@ -119,6 +123,32 @@ const { launch } = require(path.join(__dirname, '..', 'tools', 'digilight-headle
     assert.ok(r.relitCh.same < 0.5 && r.relitCh.light.brighter > 0.3, 'a relit picture changes ' + JSON.stringify(r.relitCh));
     assert.deepEqual({ ...r.manyCh, crop: null }, { ...r.relitCh, crop: null }, 'exportMany gives export\'s change map');
     console.log('PASS change map: none on the identity export (grey map) and the preview; relit', JSON.stringify(r.relitCh));
+
+    const fs = require('fs'), dir = path.join(__dirname, '..', 'testdata', 'colour'), url = (f) => `data:image/${f.endsWith('heic') ? 'heic' : f.split('.').pop() === 'png' ? 'png' : 'jpeg'};base64,` + fs.readFileSync(path.join(dir, f)).toString('base64');
+    const p3 = await s.page.evaluate(async (files) => {
+      const d = window.digilight, out = {};
+      // A picture file read as the browser shows it: into a P3 canvas, or the default sRGB one.
+      const read = async (u, w, h, colorSpace = 'display-p3') => { const im = new Image(); im.src = u; await im.decode(); const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d', { colorSpace }); g.drawImage(im, 0, 0); return g.getImageData(0, 0, w, h).data; };
+      for (const [name, u] of Object.entries(files)) {
+        const info = await d.load(u); await d.set({ originalTop: 1, exposure: 0 });
+        // Bit for bit: the export's pixels before encoding against the photo's as decoded (both in the working space).
+        const e = await d.export({ format: 'png', hash: true }), { width: w, height: h } = info.photo, photo = (await d.record()).photo.pixelsSha256;
+        const px = await read(e.image, w, h), at = (x, y) => [...px.slice((y * w + x) * 4, (y * w + x) * 4 + 3)];
+        // And the PNG as a viewer shows it: its profile says P3 (an sRGB read clips the red band), within a level of the photo.
+        const ref = name.endsWith('heic') ? null : await read(u, w, h);
+        let most = 0; if (ref) for (let i = 0; i < px.length; i++) most = Math.max(most, Math.abs(px[i] - ref[i]));
+        out[name] = { space: info.colourSpace, same: e.pixels.sha256 === photo, iccp: atob(e.image.split(',')[1]).includes('iCCP'), most, red: at(10, 10), green: at(10, 200), redInSrgb: [...(await read(e.image, w, h, 'srgb')).slice((10 * w + 10) * 4, (10 * w + 10) * 4 + 3)] };
+      }
+      return out;
+    }, { 'p3-test.jpg': url('p3-test.jpg'), 'p3-test.heic': url('p3-test.heic'), 'srgb-test.heic': url('srgb-test.heic') });
+    const after = await s.page.evaluate(async () => (await window.digilight.load({ sample: 'painting' })).colourSpace);
+    const j = p3['p3-test.jpg'], h = p3['p3-test.heic'], sh = p3['srgb-test.heic'];
+    assert.ok(j.space === 'display-p3' && j.same && j.iccp && j.most <= 1, 'P3 JPEG worked in P3, its export the photo bit for bit, profiled ' + JSON.stringify(j));
+    // The red and green bands sit outside sRGB (250, 20, 25 and 30, 235, 40 in P3): kept, where sRGB clips the red to 255, 0, 0.
+    assert.ok(j.red[0] > 240 && j.red[1] < 40 && j.green[1] > 220 && j.green[0] < 50 && j.redInSrgb[0] === 255 && j.redInSrgb[1] === 0, 'out-of-sRGB colours kept ' + JSON.stringify(j));
+    assert.ok(h.space === 'display-p3' && h.same && h.iccp && Math.abs(h.red[0] - j.red[0]) < 8 && Math.abs(h.green[1] - j.green[1]) < 8, 'P3 HEIC opened and kept ' + JSON.stringify(h));
+    assert.ok(sh.space === 'srgb' && sh.same && after === 'srgb', 'sRGB stays sRGB ' + JSON.stringify([sh, after]));
+    console.log('PASS colour: a Display P3 photo (JPEG, HEIC) worked and exported in P3 with its profile, bit for bit; sRGB unchanged', JSON.stringify({ jpg: j, heic: h }));
     assert.deepEqual(s.errors, []);
   } finally { await s.close(); }
 })().catch((e) => { console.error(e); process.exit(1); });

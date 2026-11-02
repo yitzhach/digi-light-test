@@ -6,6 +6,7 @@
 // presets, the user's saved presets, or steps of one setting (the way the automated test rounds
 // vary one thing at a time). Pin as A: Hold flips to that look instead of the photo.
 import { makeZip } from './testbundle.js';
+import { ctx2d } from './colour.js';
 
 const MIN = 2, MAX = 10;
 // Sharp previews are drawn from the full photo, long side capped here (memory on phones).
@@ -116,7 +117,7 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     try {
       api.renderNow();
       const c = document.createElement('canvas'); c.width = api.canvas.width; c.height = api.canvas.height;
-      c.getContext('2d').drawImage(api.canvas, 0, 0);
+      ctx2d(c).drawImage(api.canvas, 0, 0);
       return c;
     } finally { Object.assign(state, keep); }
   }
@@ -145,7 +146,7 @@ export function initBatch({ state, api, after, snapshot, restore, setBatching, u
     const outH = sharp ? Math.max(1, Math.round(SH * outW / SW)) : api.canvas.height;
     try {
       let orig;
-      if (sharp) { orig = document.createElement('canvas'); orig.width = outW; orig.height = outH; orig.getContext('2d').drawImage(src, 0, 0, outW, outH); } else orig = grab(4);
+      if (sharp) { orig = document.createElement('canvas'); orig.width = outW; orig.height = outH; ctx2d(orig).drawImage(src, 0, 0, outW, outH); } else orig = grab(4);
       const original = await encode(orig);
       for (const [i, look] of list.entries()) {
         status(`Rendering ${i + 1} of ${list.length}: ${look.name}…`);

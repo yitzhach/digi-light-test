@@ -15,6 +15,7 @@
 import { program, bindTextures, drawFullscreen, bindTarget } from './gl.js';
 import { blendModes, layerSources, MAX_LAYERS, GRAZE_DISTANCE, grazeSize, GRAZE_AMBIENT, GRAZE_FINE_DEG, GRAZE_CLEAN_MAX, grazePower, lampPosition, lampAngles, ROOM_NEUTRAL_K, STROKE_STOPS, LIGHT_KINDS, SHADE_SHAPES, isLamp, sunDirection } from './presets.js';
 import { kelvinToLinearRGB, roomLightRGB } from './kelvin.js';
+import { toWorking } from './colour.js';
 import { ADJUST_GLSL, setAdjustUniforms, curveLUT, smoothFactor, smoothGraze, SMOOTH } from './adjust.js';
 import { OVERLAY_GLSL, setOverlayUniforms } from './overlays.js';
 import { SCENE_APPLY } from './scene.js';
@@ -734,7 +735,8 @@ export class Shader {
       // the remaining light a little cooler (the whole opposite turned pale paint cyan).
       if (kind[i] > 0) {
         const lum = Math.max(1e-4, 0.2126 * l.rgb[0] + 0.7152 * l.rgb[1] + 0.0722 * l.rgb[2]);
-        for (let c = 0; c < 3; c++) { const t = l.rgb[c] / lum; col[i * 3 + c] = kind[i] === 1 ? t : Math.max(0, 1.5 - 0.5 * t); }
+        const w = toWorking(l.rgb.map((v) => v / lum));   // in a P3 photo's primaries (colour.js)
+        for (let c = 0; c < 3; c++) col[i * 3 + c] = kind[i] === 1 ? w[c] : Math.max(0, 1.5 - 0.5 * w[c]);
       }
     });
     // Long shadows belong to the key light. Each extra light marches a share of the
@@ -785,7 +787,7 @@ export class Shader {
     // neutral, Room light colour, Stroke definition) toward neutral.
     const ad = state.adjust, colourShare = !ad ? 1 : ad.on ? Math.min(1, Math.max(0, ad.opacity ?? 1)) : 0;
     const room = state.roomKelvin != null ? roomLightRGB(ROOM_NEUTRAL_K + (state.roomKelvin - ROOM_NEUTRAL_K) * colourShare, ROOM_NEUTRAL_K) : state.ambientColor;
-    gl.uniform3fv(u.uAmbientColor, new Float32Array(room));
+    gl.uniform3fv(u.uAmbientColor, new Float32Array(toWorking(room)));
     gl.uniform1f(u.uRoughness, state.roughness);
     gl.uniform1f(u.uSpecular, state.specular);
     gl.uniform1f(u.uReliefAmount, state.reliefAmount);
@@ -839,7 +841,7 @@ export class Shader {
     gl.uniform1f(u.uGrazeLift, g?.lift ?? 0);
     // The plain graze light stands for a distant one, so its lift is even; a calibrated lamp's fades.
     gl.uniform1f(u.uGrazeLiftFall, g?.lamp ? 2 : 0);
-    gl.uniform3f(u.uGrazeColor, GRAZE_RGB[0] * gPow, GRAZE_RGB[1] * gPow, GRAZE_RGB[2] * gPow);
+    gl.uniform3fv(u.uGrazeColor, toWorking(GRAZE_RGB).map((v) => v * gPow));
     gl.uniform1f(u.uGrazeOpacity, gOn ? (reliefView ? 1 : g.opacity) : 0);
     gl.uniform1f(u.uGrazeGrey, reliefView ? 1 : Math.min(1, Math.max(0, g?.grey ?? 0)));
     // Finer relief than Detail keeps the contrast it has at GRAZE_FINE_DEG: shading
@@ -860,13 +862,13 @@ export class Shader {
     const wb = Math.min(1, Math.max(0, state.neutralWB ?? 0)) * colourShare;
     const balance = (white) => white.map((v) => 1 + wb * (v - 1));
     const amb = room.map((v) => v * state.ambient);
-    gl.uniform3fv(u.uWhiteBalance, balance(sceneWhite(lights, aspect, amb)));
+    gl.uniform3fv(u.uWhiteBalance, balance(toWorking(sceneWhite(lights, aspect, amb))));
     const grazeLight = { x: gPos[0], y: gPos[1], z: gPos[2], rgb: GRAZE_RGB, power: wbPow, enabled: true, cone: 0, falloff: 2 };
     // graze.wb (Light like this with a sun photo): the camera balanced to the graze light and its
     // room light, as a phone balances a sunlit photo, whatever Keep greys neutral says.
     const gWb = Math.max(wb, Math.min(1, Math.max(0, g?.wb ?? 0)));
     const gWhite = sceneWhite([grazeLight], aspect, room.map((v) => v * (g?.fill ?? GRAZE_AMBIENT)));
-    gl.uniform3fv(u.uGrazeWhiteBalance, new Float32Array(gWhite.map((v) => 1 + gWb * (v - 1))));
+    gl.uniform3fv(u.uGrazeWhiteBalance, new Float32Array(toWorking(gWhite).map((v) => 1 + gWb * (v - 1))));
     setAdjustUniforms(gl, u, state, (curves) => this.curveLUT(curves), reliefView);
     setOverlayUniforms(gl, u, state, reliefView);
     setFxUniforms(gl, u, state, aspect, reliefView);

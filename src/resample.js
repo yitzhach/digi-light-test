@@ -13,17 +13,20 @@
 // Every output pixel depends only on where it sits in the whole picture, never on the region
 // asked for: a tile of a W x H picture has exactly the pixels a whole W x H resample has there.
 
+import { workingSpace } from './colour.js';
+
 /**
  * Pixels [ox, ox + ow) x [oy, oy + oh) of `source` (an image, bitmap or canvas, SW x SH)
- * resampled to W x H. Returns an ImageData (opaque). `canvas` makes the scratch canvas (an
+ * resampled to W x H. Returns an ImageData (opaque) in colour space `space` (colour.js: the
+ * photo's), read from the source in that space. `canvas` makes the scratch canvas (an
  * OffscreenCanvas in the worker below).
  */
-export function resampleRegion(source, W, H, ox, oy, ow, oh, canvas = () => document.createElement('canvas')) {
+export function resampleRegion(source, W, H, ox, oy, ow, oh, canvas = () => document.createElement('canvas'), space = workingSpace()) {
   const SW = source.naturalWidth || source.width, SH = source.naturalHeight || source.height;
   const cols = weights(SW / W, SW, ox, ow), rows = weights(SH / H, SH, oy, oh);
   const sx0 = cols.lo, sw = cols.hi - cols.lo;
-  const out = new ImageData(ow, oh), d = out.data;
-  const c = canvas(), g = c.getContext('2d', { willReadFrequently: true });
+  const out = new ImageData(ow, oh, { colorSpace: space }), d = out.data;
+  const c = canvas(), g = c.getContext('2d', { willReadFrequently: true, colorSpace: space });
   // A strip of output rows at a time, so a big tile never holds the whole photo region.
   for (let y0 = 0; y0 < oh; y0 += STRIP) {
     const y1 = Math.min(oh, y0 + STRIP);
@@ -90,10 +93,10 @@ export async function resampleRegionAsync(source, W, H, ox, oy, ow, oh) {
       workerSource = source;
       worker.postMessage({ bitmap: await createImageBitmap(source) });
     }
-    const id = ++workerJobs;
-    const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, W, H, ox, oy, ow, oh }); });
+    const id = ++workerJobs, space = workingSpace();
+    const res = await new Promise((resolve) => { pending.set(id, resolve); worker.postMessage({ id, W, H, ox, oy, ow, oh, space }); });
     if (res.error) throw new Error(res.error);
-    return new ImageData(new Uint8ClampedArray(res.data), ow, oh);
+    return new ImageData(new Uint8ClampedArray(res.data), ow, oh, { colorSpace: space });
   } catch {
     return resampleRegion(source, W, H, ox, oy, ow, oh);
   }

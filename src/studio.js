@@ -19,6 +19,7 @@ import { fxDefaults, validateFx } from './fx.js';
 import { initSceneUI } from './sceneui.js';
 import { LIGHT_SCENES } from './scenelights.js';
 import { LIGHT_TARGETS } from './shade.js';
+import { ctx2d } from './colour.js';
 
 export function initStudio(api) {
   const { state, refresh, render, applyColor } = api;
@@ -696,7 +697,7 @@ export function initStudio(api) {
   function status(message){$('projectStatus').textContent=message;}
   async function project(){
     if(state.mode!=='single')throw new Error('Project saving currently supports single photographs. Export capture results as PNG.');
-    const source=api.source();const c=document.createElement('canvas');c.width=source.naturalWidth||source.width;c.height=source.naturalHeight||source.height;c.getContext('2d').drawImage(source,0,0);
+    const source=api.source();const c=document.createElement('canvas');c.width=source.naturalWidth||source.width;c.height=source.naturalHeight||source.height;ctx2d(c).drawImage(source,0,0);
     const image=await new Promise((resolve,reject)=>c.toBlob(b=>{if(!b)return reject(new Error('Image too large to save.'));const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(b);},'image/png'));
     const p={format:'digilight',version:1,id:projectId||crypto.randomUUID(),name:$('projectName').value.trim()||'Untitled painting',updated:Date.now(),image,settings:snapshot()};
     // Relief measured from lamp photos goes with the project (the photos do not).

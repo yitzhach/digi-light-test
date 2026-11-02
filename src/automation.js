@@ -14,6 +14,7 @@ import { ADJUSTMENTS } from './adjust.js';
 import { OVERLAYS } from './overlays.js';
 import { imageMetrics, pictureStats } from './measure.js';
 import { drawResampled } from './resample.js';
+import { ctx2d, spaceOf, isHeif, decodeHeif, workingSpace } from './colour.js';
 import { changeMap } from './changemap.js';
 import { SCENE_TYPES, SCENE_FIELDS, SCENE_APPLY } from './scene.js';
 import { FX } from './fx.js';
@@ -73,14 +74,19 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   const idle = async () => { await frame(); await frame(); };
   const needPhoto = () => { if (!api.source()) throw new Error('No photo open. Call digilight.load(...) first.'); };
 
-  function asImage(src) {
-    return new Promise((resolve, reject) => {
+  // An image from a URL, data URL or Blob; a Blob is tagged with its colour space (colour.js), and
+  // a HEIC Blob the browser cannot open is decoded by libheif. (A URL's space is read by app.js.)
+  async function asImage(src) {
+    const blob = src instanceof Blob, space = blob ? await spaceOf(src) : null;
+    const im = await new Promise((resolve, reject) => {
       const im = new Image(); im.crossOrigin = 'anonymous';
-      const url = src instanceof Blob ? URL.createObjectURL(src) : String(src);
-      im.onload = () => { if (src instanceof Blob) URL.revokeObjectURL(url); resolve(im); };
+      const url = blob ? URL.createObjectURL(src) : String(src);
+      im.onload = () => { if (blob) URL.revokeObjectURL(url); resolve(im); };
       im.onerror = () => reject(new Error('The image could not be opened (is the URL reachable, and does it allow cross-origin use?).'));
       im.src = url;
-    });
+    }).catch((e) => (blob && isHeif(src) ? decodeHeif(src, space) : Promise.reject(e)));
+    if (space) im.dataset.space = space;
+    return im;
   }
   async function load(src) {
     if (src && typeof src === 'object' && !(src instanceof Blob) && src.sample) {
@@ -92,6 +98,8 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
       if (api.source() === was && api.canvas.width === w && api.canvas.height === h) throw new Error('The sample did not open.');
     } else {
       if (src == null || src === '') throw new Error('load() needs an image URL, data URL, Blob or {sample}.');
+      // A data URL as the Blob it holds: its colour space read, a HEIC opened (asImage).
+      if (typeof src === 'string' && src.startsWith('data:')) src = await (await fetch(src)).blob();
       await api.openSource(await asImage(src));
     }
     await idle(); api.renderNow();
@@ -100,7 +108,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
   function info() {
     const s = api.source();
     return { version: API_VERSION, photo: s ? { width: s.naturalWidth || s.width, height: s.naturalHeight || s.height } : null,
-      preview: { width: api.canvas.width, height: api.canvas.height }, sample: api.sample?.() || null, mode: state.mode,
+      preview: { width: api.canvas.width, height: api.canvas.height }, sample: api.sample?.() || null, mode: state.mode, colourSpace: workingSpace(),
       measuredRelief: !!api.measured?.get?.()?.on, undo: history.index > 0, redo: history.index < history.entries.length - 1 };
   }
 
@@ -364,7 +372,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const s = api.source();
     if (photoPixels?.src === s) return photoPixels.value;
     const c = document.createElement('canvas'); c.width = s.naturalWidth || s.width; c.height = s.naturalHeight || s.height;
-    c.getContext('2d').drawImage(s, 0, 0);
+    ctx2d(c).drawImage(s, 0, 0);
     photoPixels = { src: s, value: await pixelsOf(c) };
     return photoPixels.value;
   }
@@ -383,7 +391,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     const pv = api.previewSource?.(), usePv = !rect && pv && pv.width === w && pv.height === h && whole[0] === w;
     if (!photoCache || photoCache.src !== (usePv ? pv : s) || photoCache.key !== key) {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
-      const g = c.getContext('2d'), kx = fw / whole[0], ky = (s.naturalHeight || s.height) / whole[1], r = rect || { x: 0, y: 0, w, h };
+      const g = ctx2d(c), kx = fw / whole[0], ky = (s.naturalHeight || s.height) / whole[1], r = rect || { x: 0, y: 0, w, h };
       if (usePv) g.drawImage(pv, 0, 0);
       else if (kx !== 1 || ky !== 1) drawResampled(g, s, whole[0], whole[1], r.x, r.y, w, h);
       else g.drawImage(s, r.x, r.y, r.w, r.h, 0, 0, w, h);
@@ -422,7 +430,7 @@ export function initAutomation({ state, api, snapshot, restore, checkpoint, vali
     await idle();
     api.renderNow();
     const c = document.createElement('canvas'); c.width = api.canvas.width; c.height = api.canvas.height;
-    c.getContext('2d').drawImage(api.canvas, 0, 0);
+    ctx2d(c).drawImage(api.canvas, 0, 0);
     return output(c, [c.width, c.height], undefined, opts);
   }
   async function exportImage(opts = {}) {

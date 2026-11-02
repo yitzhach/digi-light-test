@@ -15,6 +15,7 @@ import { uploadShotArray } from './photometric.js';
 import { FORM_OUTER } from './gbuffer.js';
 import { drawResampled, resampleRegionAsync } from './resample.js';
 import { fxMargin, postWanted } from './postfx.js';
+import { ctx2d } from './colour.js';
 
 /**
  * How far outside a tile the surface passes reach, in pixels. Getting this wrong
@@ -105,7 +106,7 @@ export async function renderTiles(glctx, builders, job, state, rect, out, { onPr
 
   // Scratch canvas for cutting padded regions out of the source.
   const cut = document.createElement('canvas');
-  const cutx = cut.getContext('2d', { willReadFrequently: false });
+  const cutx = ctx2d(cut, { willReadFrequently: false });
 
   const tex = photometric ? null : gl.createTexture();
   let shotArray = null;
@@ -280,7 +281,7 @@ export async function exportFullRes(glctx, builders, job, state, onProgress) {
   const rect = job.rect || { x: 0, y: 0, w: W, h: H };
   const many = Array.isArray(state), states = many ? state : [state];
   const outs = states.map(() => { const c = document.createElement('canvas'); c.width = rect.w; c.height = rect.h; return c; });
-  const ctxs = outs.map((c) => c.getContext('2d', { willReadFrequently: false }));
+  const ctxs = outs.map((c) => ctx2d(c, { willReadFrequently: false }));
 
   // An export leaves out what only the screen shows: the split and the mask tint.
   const prevExporting = states.map((s) => s.exporting);
