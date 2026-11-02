@@ -7,6 +7,57 @@ the current state, what waits on the user and what is next are in HANDOFF.md. He
 
 ---
 
+## HANDOFF, 11-02 ("Now" bullets of 10-30 to 11-02, moved out when iPhone colour went in)
+Everything is on `main` (10-30, faster sharp zoom and re-shading).
+- **Sharp zoom keeps what it rendered** (app.js "sharp zoom"). Rendered parts stay as patches on
+  a 64 px grid: scrolling back is sharp at once (4.1 s → ~10 ms), only newly exposed strips render,
+  a 256 px band renders ahead after a 0.3 s pause, a new zoom shows the old detail stretched until
+  the new is ready (user: "zoomed scrolling fixed").
+- **Light, colour and tone changes only re-shade.** Each patch keeps its relief (its own GBuffers,
+  build-only targets freed, padded 32 px beyond the lights' reach so a moved light rarely
+  rebuilds; ~256 MB budget, the view's always kept). Large photo at 300% in software GL: light or
+  exposure change 5.8 s → 3.0 s back to sharp (relief build skipped; on a GPU the share saved is
+  larger). The sharp layer no longer borrows the preview's relief, so the first edit after it no
+  longer rebuilds the preview's. A surface change (relief sliders, new photo) still rebuilds.
+- **Live re-shade during drags.** The app times its own re-shades of the view (ms per pixel); if
+  the view's would take ≤80 ms (`SHARP_LIVE_MS`), a light, colour or tone change keeps the sharp
+  view shown and re-shades it as you drag, one shade at a time (a newer change starts the next,
+  never cancels one in flight). Slower machines keep the old way (soft while dragging, sharp
+  100 ms after), so the drag stays smooth. A relief change still hides it at once.
+  `__bench.sharpLive(ms)` reads the timing and sets the limit (browser.cjs forces it on).
+- **Before/After and toggles back are instant** (user: grain and Before/After took 5+ s). Grain
+  is only a few uniforms; the wait was the sharp view shading again on every change (grain cells
+  are ~1 photo pixel, so it shows properly only there). Each patch now keeps its last 3 shades by
+  a signature of the settings (`shadeSig`: state minus view keys and big buffers), so going back
+  to a setting seen before (Before/After, undo, an effect off and on) shows at once. The first
+  time grain goes on still costs one shade.
+- **No page freeze while the sharp view renders** (user's iMac is a Retina 5K: at fit the sharp
+  view is the whole picture, ~5.6 Mpx). Tiles are read back through a pixel buffer and a fence
+  (export.js `readPixelsAsync`, sharp zoom only), so the page keeps drawing while the GPU works:
+  longest freeze on a large photo 6.2 s → 0.38 s (346 frames drawn during the render, was 5). Each
+  tile also shows as it lands, so the sharp view fills in piece by piece over the preview. Fresh
+  tiles' photo resampling now runs in a worker (resampleworker.js, the same code: exact.cjs checks
+  the pixels match bit for bit): longest freeze ~0.1 s.
+- **Agent tools** (roadmap): MCP `render_preview` `region` (a full-detail loupe, measured there),
+  `compare` (A | B | difference image with numbers; B = the photo, changed settings or a look) and
+  `batch_render` (2–12 versions dressed as CLI batch jobs: a labelled contact sheet, each one's
+  metrics, guard note and changed settings; `out_dir` writes files). None changes anything;
+  mcp.cjs checks them (compare's look case needs `--full`). API `digilight.versions(spec)`.
+- **Narrower Analyze cache** (roadmap): the tools' cache also keys the photo's measurements by
+  the measuring code alone (src/ but auto.js and presets.js, plus auto.js `MEASURE_VERSION`: bump
+  it when measuring changes there), and `analyze({reuse})` keeps the built-in looks whose settings
+  did not change. Lintel, one look's bias changed: 191 s → 28 s (10 of 11 looks kept).
+- **`?round=round5` renders a lighting round on the user's own computer** into the batch viewer
+  (rate, Save ratings). Round files moved to `rounds/` (deployed; make_round.py takes them from
+  there too); a URL or inline JSON also works. Each version is dressed as the CLI dresses a batch
+  job; settings and undo history untouched (browser.cjs checks). Tried end to end on the sample:
+  Analyze + 10 sharp versions at 1932×2576 in 875 s in software GL (a GPU is far faster).
+- **Sharp at fit-to-screen** on dense (Retina) screens when the photo has more pixels than the
+  1400 px preview (roadmap item). All checks: browser.cjs 65, mcp.cjs, exact.cjs pass;
+  `__bench.sharpStats()` counts relief builds vs shades.
+- Photos as spaces (Scene tool), browser.cjs flakes fixed, plaster not a sky, undo steps derived:
+  docs/history.md "HANDOFF, 10-30".
+
 ## HANDOFF, 10-30 ("Now" bullets moved out when the sharp zoom cache went in)
 Everything is on `main` (10-29, photos relit as spaces).
 - **Photos, people, rooms and booths relit as spaces** (new Scene tool; README "Scene"). Say what

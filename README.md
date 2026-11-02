@@ -286,7 +286,9 @@ one of these files. Imported presets receive a new local identity, so they do no
 overwrite a same-named preset. A downloaded file is the durable backup if browser
 site data is cleared.
 
-Open your painting (JPEG, PNG or WebP). Drag a light, or use Horizontal/Vertical.
+Open your painting (JPEG, PNG, WebP or HEIC, straight from an iPhone). A wide-gamut photo (an
+iPhone's Display P3, a camera's Adobe RGB) is worked and exported in Display P3, so its reds,
+oranges and greens are not clipped to sRGB; the exported file says so (its colour profile). Drag a light, or use Horizontal/Vertical.
 Power changes intensity; Distance controls height above the painting; Cone varies
 from flood to spot. Add up to eight lights, choose Kelvin or custom colours.
 Tune Source azimuth to the original photo's lighting direction, then adjust surface

@@ -11,6 +11,23 @@ one-tap looks → export. Scripts and AI agents drive the same app through `wind
 The user's taste so far: lamp low on the left near the edge, a crisp low raking light, deeper
 and crisper texture, brighter with lifted darks; never blur/smear, blown whites or crushed blacks.
 
+## New chat prompt
+Paste this to start a new chat (fill in or delete the two bracketed lines):
+
+```
+Read CLAUDE.md and HANDOFF.md in yitzhach/digi-light-test (branch main) and continue.
+HANDOFF.md is the current state; open docs/working.md only for the parts you need, search
+docs/history.md for background, and use the test photos in testdata/photos/.
+
+Answers to "Waiting on the user": [none yet, or e.g. "7. stays responsive; 8. colours match Photos"]
+This phase: [e.g. "Next up item 1", or describe what you want]
+
+I'm on a Retina 5K iMac (2014). Keep the code clean, efficient and easy to work in, and keep
+replies brief. Run long tests in the background and keep working meanwhile. Before pushing to
+main (it deploys the site): node tests/browser.cjs run alone for UI or shader changes, plus
+tests/mcp.cjs and tests/exact.cjs; then update HANDOFF.md and push it too.
+```
+
 ## Map (src/)
 - `app.js` — main bench: load image, build the G-buffer (relief rebuilt only when `surfaceKey()`
   changes), re-shade on interaction, sharp zoom (patches kept per zoom size, `sharpView` for tests), exports (`exportFull`, `renderAt`, `exportStates`)
@@ -37,6 +54,10 @@ and crisper texture, brighter with lifted darks; never blur/smear, blown whites 
   `scenelights.js` the light scenes (pure data); `sceneui.js` the tool; `fx.js` haze and rays
   (in the shading pass) and the effects' settings; `postfx.js` glow and background blur (after
   it; export tiles get `fxMargin`, aligned to 8 px); `glsl.js` GLSL shared by both passes
+- `colour.js` — the photo's colour space (`spaceOf` reads its profile; `useSpace`, `ctx2d`,
+  `canvas2d`, `imageData` for every canvas that holds the photo's or the render's pixels,
+  `toWorking` for light colours) and HEIC (`decodeHeif`, vendor/libheif). sRGB photos run
+  exactly as before; a wide-gamut one in Display P3 end to end (exact.cjs checks both)
 - `gl.js` (WebGL2, `caps.software` for SwiftShader), `kelvin.js`, `photocheck.js`, `probe.js`,
   `texscore.js`, `lampphotos.js` + `lampui.js` (measured relief), `lineup.js` (a handheld photo
   lined up: features + homography), `photometric.js`,

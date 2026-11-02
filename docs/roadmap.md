@@ -146,7 +146,7 @@ where in the code it lives. **Done 10-19** marks what the same session already b
   - A tone curve on luminance that keeps hue, with a straight toe and an adjustable shoulder. The per-channel ACES curve pulls dark level 25 to about 17 and turns reds salmon.
 - Fill set as a stop ratio to the key, not a flat amount. Sheen taken from the stroke-smoothed normals, plus a gloss mask.
 - "Even out the light" as an optional setting, not a default: your low-left keepers want the drama.
-- **Colour pipeline:** ICC and Display P3 handling (iPhone photos are P3), HEIC upload, 16-bit PNG/TIFF, dither.
+- **Colour pipeline:** Done 11-02: wide-gamut photos (ICC / nclx primaries wider than sRGB) worked and exported in Display P3, HEIC upload (libheif where the browser cannot), light colours in the photo's primaries (colour.js). Left: 16-bit PNG/TIFF out, dither.
 - Faster blurs: must match today's output within 0.5 levels, because of your no-blur line. Split `shade.js` into a lighting pass and a grading pass.
 - A hosted MCP endpoint for agents on the website.
 - Look families and a separate look layer, only if hand-made looks get unwieldy.
